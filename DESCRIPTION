@@ -7,7 +7,9 @@ Authors@R:
            role = c("aut", "cre"),
            email = "dkoch@ualberta.ca",
            comment = c(ORCID = "0000-0002-8849-859X"))
-Description: Build geostatistical models with separable covariance functions.
+Description: This package is a collection of functions for fitting geostatistical models with
+separable covariance functions. It uses kronecker product representations of the covariance
+matrix and its submatrices to speed up calculations related to likelihood and conditional mean.
 License: `use_mit_license()`
 Encoding: UTF-8
 LazyData: true
