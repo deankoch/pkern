@@ -11,6 +11,6 @@ exploited in this package for fast and memory-efficient computations.
 This package will accompany a paper on fast and efficient downscaling of weather grids so the focus is on a particular
 application of kriging, but the underlying methods are applicable much more generally. See [[1](https://doi.org/10.7939/r3-g6qb-bq70)],
 where I use product kernels to study directions of anisotropy in a nonstationary random fields, and
-[[2](https://doi.org/10.1007/s11538-021-00899-z)], [3](https://doi.org/10.1098/rsif.2020.0434)], where I apply it to fit a
+[[2](https://doi.org/10.1007/s11538-021-00899-z), [3](https://doi.org/10.1098/rsif.2020.0434)], where I apply it to fit a
 covariance structure, and to speed up calculations of dispersal kernel convolutions.
 
