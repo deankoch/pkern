@@ -55,6 +55,7 @@ pkern_fromRaster = function(r, omode='list')
   if( omode == 'vector' ) { return( rvec ) }
 }
 
+
 #' Convert column-vectorized grid to RasterLayer
 #'
 #' @param rvec either the data vector or a list with elements "data" and "dims"
