@@ -1,0 +1,19 @@
+{
+"type": "FeatureCollection",
+"name": "tmin_big_creek",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::32612" } },
+"features": [
+{ "type": "Feature", "properties": { "tmin": 2.6887111663818359 }, "geometry": { "type": "Point", "coordinates": [ 492655.381151679146569, 5021142.096530414186418 ] } },
+{ "type": "Feature", "properties": { "tmin": 2.4116621017456055 }, "geometry": { "type": "Point", "coordinates": [ 497551.793707171222195, 5021138.297168930992484 ] } },
+{ "type": "Feature", "properties": { "tmin": 2.3463091850280762 }, "geometry": { "type": "Point", "coordinates": [ 502448.206292828777805, 5021138.297168930992484 ] } },
+{ "type": "Feature", "properties": { "tmin": 3.6435699462890625 }, "geometry": { "type": "Point", "coordinates": [ 507344.618848320853431, 5021142.096530414186418 ] } },
+{ "type": "Feature", "properties": { "tmin": 2.4725313186645508 }, "geometry": { "type": "Point", "coordinates": [ 492647.304000043601263, 5014198.7572818165645 ] } },
+{ "type": "Feature", "properties": { "tmin": 1.9830183982849121 }, "geometry": { "type": "Point", "coordinates": [ 497549.101325409370475, 5014194.957843823358417 ] } },
+{ "type": "Feature", "properties": { "tmin": 2.2256355285644531 }, "geometry": { "type": "Point", "coordinates": [ 502450.898674590629525, 5014194.957843823358417 ] } },
+{ "type": "Feature", "properties": { "tmin": 3.9355983734130859 }, "geometry": { "type": "Point", "coordinates": [ 507352.695999956398737, 5014198.7572818165645 ] } },
+{ "type": "Feature", "properties": { "tmin": 2.0501737594604492 }, "geometry": { "type": "Point", "coordinates": [ 492639.235657076875214, 5007255.494321622885764 ] } },
+{ "type": "Feature", "properties": { "tmin": 2.0770153999328613 }, "geometry": { "type": "Point", "coordinates": [ 497546.411879875289742, 5007251.694825204089284 ] } },
+{ "type": "Feature", "properties": { "tmin": 2.9391708374023438 }, "geometry": { "type": "Point", "coordinates": [ 502453.588120124710258, 5007251.694825204089284 ] } },
+{ "type": "Feature", "properties": { "tmin": 4.8601589202880859 }, "geometry": { "type": "Point", "coordinates": [ 507360.764342923124786, 5007255.494321622885764 ] } }
+]
+}
