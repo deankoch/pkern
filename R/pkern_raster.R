@@ -22,11 +22,18 @@ pkern_checkRaster = function()
 #' Vectorize a RasterLayer in column-vectorized order
 #'
 #' Calls to raster::values or raster::getValues produce the data in row-vectorized
-#' order. This function reorders them to column-vectorized order, optionally returning
-#' the dimensions in (ny, nx) format (the reverse of what you get with dim(raster))
+#' order. This function reorders them to column-vectorized order so they can be
+#' passed to other pkern_* functions
+#'
+#' The return value depends on argument `what`:
+#'
+#' "dim": returns `c(ny, nx)`, the length-2 vector of dimensions (in reverse order)
+#' "xy": returns `list(x, y)`, a list of vectors containing the x and y grid line positions
+#' "values": returns a vector containing the raster data in column-vectorized order
+#' "all": returns a named list containing the above three objects
 #'
 #' @param r a RasterLayer to vectorize
-#' @param omode character indicating return value type, either 'list' or 'vector'
+#' @param what character, the requested info, either 'dim', 'xy', 'values' or 'all'
 #'
 #' @return either the data vector or a list containing it along with the dimensions
 #' @export
@@ -37,22 +44,27 @@ pkern_checkRaster = function()
 #' pkern.in = pkern_fromRaster(r.in)
 #' pkern.in$data |> matrix(ncol=pkern.in$dims[1]) |> image()
 #' pkern_toRaster(pkern.in, template=r.in)
-#' pkern_toRaster(pkern_fromRaster(r.in, omode='vector'), template=r.in)
-pkern_fromRaster = function(r, omode='list')
+#' pkern_toRaster(pkern_fromRaster(r.in, what='values'), template=r.in)
+pkern_fromRaster = function(r, what='all')
 {
   # stop with an error message if raster package is unavailable
   pkern_checkRaster()
 
-  # extract dimensions and indexing vector to get column-vectorized version
-  dims = dim(r)[2:1] |> stats::setNames(c('ny', 'nx'))
+  # extract dimensions and return if requested
+  dims = dim(r)[2:1] |> stats::setNames(c('nx', 'ny'))
+  if( what == 'dim' ) return(dims)
+
+  # extract grid line positions (as needed)
+  if( what != 'values' ) gxy = list(x=xFromCol(dem, seq(dims[1])), y=yFromRow(dem, seq(dims[2])) )
+  if( what == 'xy' ) return(gxy)
+
+  # indexing vector to get column-vectorized version of values
   cvec.idx = pkern_r2c(dims)
 
-  # extract vectorized data in column-vectorized order
+  # extract vectorized data and finish
   rvec = raster::values(r)[cvec.idx]
-
-  # output type depends on omode
-  if( omode == 'list' ) { return( list(dims=dims, data=rvec) ) }
-  if( omode == 'vector' ) { return( rvec ) }
+  if(what == 'values') return(rvec)
+  return( list(dim=dims, xy=gxy, values=rvec) )
 }
 
 

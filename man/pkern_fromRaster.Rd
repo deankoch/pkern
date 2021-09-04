@@ -4,20 +4,28 @@
 \alias{pkern_fromRaster}
 \title{Vectorize a RasterLayer in column-vectorized order}
 \usage{
-pkern_fromRaster(r, omode = "list")
+pkern_fromRaster(r, what = "all")
 }
 \arguments{
 \item{r}{a RasterLayer to vectorize}
 
-\item{omode}{character indicating return value type, either 'list' or 'vector'}
+\item{what}{character, the requested info, either 'dim', 'xy', 'values' or 'all'}
 }
 \value{
 either the data vector or a list containing it along with the dimensions
 }
 \description{
 Calls to raster::values or raster::getValues produce the data in row-vectorized
-order. This function reorders them to column-vectorized order, optionally returning
-the dimensions in (ny, nx) format (the reverse of what you get with dim(raster))
+order. This function reorders them to column-vectorized order so they can be
+passed to other pkern_* functions
+}
+\details{
+The return value depends on argument \code{what}:
+
+"dim": returns \code{c(ny, nx)}, the length-2 vector of dimensions (in reverse order)
+"xy": returns \code{list(x, y)}, a list of vectors containing the x and y grid line positions
+"values": returns a vector containing the raster data in column-vectorized order
+"all": returns a named list containing the above three objects
 }
 \examples{
 require(raster)
@@ -25,5 +33,5 @@ r.in = system.file('external/rlogo.grd', package='raster') |> raster(band=1)
 pkern.in = pkern_fromRaster(r.in)
 pkern.in$data |> matrix(ncol=pkern.in$dims[1]) |> image()
 pkern_toRaster(pkern.in, template=r.in)
-pkern_toRaster(pkern_fromRaster(r.in, omode='vector'), template=r.in)
+pkern_toRaster(pkern_fromRaster(r.in, what='values'), template=r.in)
 }

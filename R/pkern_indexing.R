@@ -148,3 +148,119 @@ pkern_r2c = function(dims, in.byrow=TRUE, out.byrow=FALSE, flipx=FALSE, flipy=FA
   return(as.vector(idx.mat))
 }
 
+
+#' Snap a set of (possibly irregular) points to a larger grid
+#'
+#' @param pts, input coordinates to snap
+#' @param g, grid lines of larger grid
+#' @param regular
+#'
+#' @return list
+#' @export
+#'
+#' @examples
+#' resx = 10
+#' resy = 10
+#' nx = 25
+#' ny = 30
+#' xy = list(resx*seq(nx), resy*seq(ny))
+#' coords = expand.grid(xy) + rnorm(nx*ny)
+#' gxy.snap = pkern_snap(pts=coords, g=xy, regular=F)
+#' plot(coords)
+#' abline(v = gxy.snap$x$gval)
+#' abline(h = gxy.snap$y$gval)
+pkern_snap = function(pts, g, regular=FALSE)
+{
+
+  # convert sf type input for pts to a matrix of coordinates, standardize column names
+  if( any( c('sf', 'sfc', 'sfg') %in% class(pts) ) ) pts = sf::st_coordinates(pts)
+  if( is.data.frame(pts) ) pts = as.matrix(pts)
+
+  # convert RasterLayer type input for g to list of grid line positions
+  if( 'RasterLayer' %in% class(g) ) g = pkern_fromRaster(g, 'xy')
+
+  # handle matrix input for pts
+  if( is.matrix(pts) )
+  {
+    # a single matrix column or row is interpreted as a vector
+    if( any(dim(pts) == 1) ) return( pkern_snap(as.vector(pts), g, regular=regular) )
+
+    # otherwise assume 2 sets of coordinates with matching arguments in xy
+    result.x = pkern_snap(pts=as.vector(pts[,1]), g=g[[1]], regular=regular)
+    result.y = pkern_snap(pts=as.vector(pts[,2]), g=g[[2]], regular=regular)
+    return( list(x=result.x, y=result.y) )
+  }
+
+  # unpack input
+  n = length(pts)
+  ng = length(g)
+
+  # snap the points to nearest grid line number and sort into ascending order
+  g.snap = Rfast::Outer(pts, as.numeric(g), '-') |> abs() |> apply(2, which.min)
+  g.order = order(g.snap)
+  g.snap.order = g.snap[g.order]
+
+  # k-means clustering (k=2) of adjacent grid line separation numbers
+  g.kmeans = stats::kmeans(diff(g.snap.order), 2, nstart=nstart)
+
+  # the cluster with the smaller mean should represent points on the same grid line
+  idx.lowest = which.min(g.kmeans$centers)
+
+  # separation distances not belonging to the lowest group imply a new grid line has started
+  cluster.endpoints = c(which(g.kmeans$cluster != idx.lowest), n)
+  cluster.n = length(cluster.endpoints)
+  n.bycluster = c(cluster.endpoints[1], diff(cluster.endpoints))
+
+  # map (sorted) input data onto grid line numbers
+  cluster.ids = do.call(c, lapply(seq(cluster.n), function(id) rep(id, n.bycluster[id])))
+
+  # find the median position within each group and snap to nearest grid line number
+  cluster.snap = sapply(split(g.snap.order, cluster.ids), function(x) round(stats::median(x)) )
+
+  # if requested, find a regularized version
+  if(regular)
+  {
+    # use median separation distance (in terms of grid line numbers)
+    g.sep = round( stats::median(diff(cluster.snap)) )
+
+    # candidate grid lines for all possible origins
+    g.test = lapply(seq(g.sep), function(x) seq(x, ng, by=g.sep))
+    ng.test = sapply(g.test, length)
+
+    # storage for the loop
+    ss.test = rep(NA, g.sep)
+    map.test = vector(mode='list', length=g.sep)
+
+    # exhaustive search for best origin
+    for(idx.test in seq(g.sep))
+    {
+      # map snapped points to candidate grid lines
+      map.test[[idx.test]] = Rfast::Outer(cluster.snap, as.numeric(g.test[[idx.test]]), '-') |>
+        abs() |> apply(2, which.min)
+
+      # compute a sum of squares over grid line snapping distance
+      ss.test[idx.test] = sum( ( g.test[[idx.test]][ map.test[[idx.test]] ] - cluster.snap )^2 )
+    }
+
+    # select alignment with least sum of squares
+    idx.best = which.min(ss.test)
+
+    # trim outer grid lines which aren't mapped to anything
+    g.start = min(map.test[[idx.best]])
+    g.end = max(map.test[[idx.best]])
+
+    # update the grid line index and points map
+    cluster.snap = g.test[[idx.best]][g.start:g.end]
+    cluster.ids = match(cluster.ids, ( map.test[[idx.best]] - g.start + 1 ))
+  }
+
+  # compute mapping to points in their original order and return list
+  pts.map = cluster.ids[ match(seq(n), g.order) ]
+  return(list(gval=g[cluster.snap], gid=cluster.snap, id=pts.map))
+}
+
+
+
+
+
+
