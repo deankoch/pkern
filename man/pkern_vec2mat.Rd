@@ -15,9 +15,9 @@ pkern_vec2mat(idx, m)
 a two column matrix of integers (row and column numbers) with length(idx) rows
 }
 \description{
-Column vectorization (as in base::as.vector) builds a length(m\emph{n) vector by stacking
+Column vectorization (as in base::as.vector) builds a length(mn) vector by stacking
 the columns of an m X n matrix. The (i,j)th element of the matrix is mapped to the
-(i + m}(j-1))th element of the vector. This function is the inverse of that mapping.
+\code{(i + m*(j-1))}th element of the vector. This function is the inverse of that mapping.
 It finds the (i,j) associated with a given element after column-vectorization
 }
 \examples{

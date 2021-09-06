@@ -2,12 +2,10 @@
 
 export(pkern_checkRaster)
 export(pkern_detect_grid)
-export(pkern_fromRaster)
 export(pkern_idx_sg)
 export(pkern_kmeans)
 export(pkern_r2c)
 export(pkern_snap)
 export(pkern_snap_grid)
-export(pkern_toRaster)
 export(pkern_unwhich)
 export(pkern_vec2mat)

@@ -41,11 +41,11 @@ pkern_checkRaster = function()
 #' @examples
 #' require(raster)
 #' r.in = system.file('external/rlogo.grd', package='raster') |> raster(band=1)
-#' pkern.in = pkern_fromRaster(r.in)
+#' pkern.in = pkern_fromraster(r.in)
 #' pkern.in$data |> matrix(ncol=pkern.in$dims[1]) |> image()
-#' pkern_toRaster(pkern.in, template=r.in)
-#' pkern_toRaster(pkern_fromRaster(r.in, what='values'), template=r.in)
-pkern_fromRaster = function(r, what='all')
+#' pkern_toraster(pkern.in, template=r.in)
+#' pkern_toraster(pkern_fromraster(r.in, what='values'), template=r.in)
+pkern_fromraster = function(r, what='all')
 {
   # stop with an error message if raster package is unavailable
   pkern_checkRaster()
@@ -85,10 +85,10 @@ pkern_fromRaster = function(r, what='all')
 #' @examples
 #' require(raster)
 #' r.in = system.file('external/rlogo.grd', package='raster') |> raster(band=1)
-#' pkern.in = pkern_fromRaster(r.in)
-#' pkern_toRaster(pkern.in, template=r.in)
+#' pkern.in = pkern_fromraster(r.in)
+#' pkern_toraster(pkern.in, template=r.in)
 #' r.in
-pkern_toRaster = function(rvec=NA, dims=NULL, template=NULL)
+pkern_toraster = function(rvec=NA, dims=NULL, template=NULL)
 {
 
   # stop with an error message if raster package is unavailable
@@ -130,3 +130,22 @@ pkern_toRaster = function(rvec=NA, dims=NULL, template=NULL)
   # convert to raster, using template if provided
   return( raster::raster(matrix(rvec, ncol=dims[1]), template=template) )
 }
+
+
+#' Snap points to a subgrid in a RasterLayer
+#'
+#' @param pts, numeric vector or n x 2 matrix (with columns for x and y) of point coordinates
+#' @param g, RasterLayer
+#' @param regular, logical, indicating to select a regular set of grid lines
+#'
+#' @return a RasterLayer containing the data from `pts`
+#' @export
+#'
+#' @examples
+pkern_rasterize = function(pts, g, regular)
+{
+
+
+
+}
+

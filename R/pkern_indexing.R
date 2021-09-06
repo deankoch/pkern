@@ -5,15 +5,65 @@
 #
 
 
+#' Column-vectorization indices
+#'
+#' Column vectorization (as in base::as.vector) builds a length(mn) vector by stacking
+#' the columns of an m X n matrix. The (i,j)th element of the matrix is mapped to the
+#' `(i + m*(j-1))`th element of the vector. This function returns the index in the vector
+#' associated with the supplied i, j values
+#'
+#' If `ij` has named columns 'x' and 'y', these are interpreted as 'j' and 'i'. If column
+#' names 'i' and 'j' also appear, these supercede the columns 'x' and 'y'. If no column names
+#' are supplied, the function assumes they are in order 'j', 'i'
+#'
+#' @param ij n x 2 matrix of column (x) and row (y) indices
+#' @param ny number of rows in the matrix
+#'
+#' @return a vector of indices in the vectorized system
+#' @export
+#'
+#' @examples
+pkern_mat2vec = function(ij, ny)
+{
+  # coerce list and other types to matrix
+  if( is.list(ij) )
+  {
+    if( !all( diff(sapply(ij, length)) == 0 ) ) stop('list ij must have equal length entries')
+    ij = do.call(cbind, ij)
+  }
+
+  # coerce input to matrix and extract any column names
+  ij = as.matrix(ij)
+  ij.nm = colnames(ij)
+
+  # identify column of 'j' values (default is first column)
+  j.col = ifelse('x' %in% ij.nm, which('x' == ij.nm), 1)
+  j.col = ifelse('j' %in% ij.nm, which('j' == ij.nm), j.col)
+
+  # identify column of 'i' values (default is second column)
+  i.col = ifelse('y' %in% ij.nm, which('y' == ij.nm), 2)
+  i.col = ifelse('i' %in% ij.nm, which('i' == ij.nm), i.col)
+
+  # check for conflicts due to incomplete naming
+  if(i.col == j.col) stop('ij should have named columns "x" and "y" or "i" and "j"')
+
+  # check for invalid input ny
+  if( any(ij[,i.col] > ny) ) stop('ij contains "i" indices exceeding ny')
+
+  # return the vectorized index
+  return( ij[,i.col] + ( ny * ( ij[,j.col] - 1 ) ) )
+
+}
+
 #' Inverse column-vectorization indices
 #'
-#' Column vectorization (as in base::as.vector) builds a length(m*n) vector by stacking
+#' Column vectorization (as in base::as.vector) builds a length(mn) vector by stacking
 #' the columns of an m X n matrix. The (i,j)th element of the matrix is mapped to the
-#' (i + m*(j-1))th element of the vector. This function is the inverse of that mapping.
+#' `(i + ny*(j-1))`th element of the vector. This function is the inverse of that mapping.
 #' It finds the (i,j) associated with a given element after column-vectorization
 #'
 #' @param idx a vector of positive integers
-#' @param m number of rows in the matrix
+#' @param ny number of rows in the matrix
 #'
 #' @return a two column matrix of integers (row and column numbers) with length(idx) rows
 #' @export
@@ -26,11 +76,11 @@
 #' as.vector(matrix.indexing)
 #' pkern_vec2mat(2, m) # finds the matrix indices for the second component
 #' pkern_vec2mat(6:10, m) # the function is vectorized
-pkern_vec2mat = function(idx, m)
+pkern_vec2mat = function(idx, ny)
 {
   # compute column and row numbers
-  cnum = ceiling( idx / m )
-  rnum = idx - ( m * (cnum - 1) )
+  cnum = ceiling( idx / ny )
+  rnum = idx - ( ny * (cnum - 1) )
 
   # return as matrix
   rbind(i=rnum, j=cnum)
@@ -140,8 +190,8 @@ pkern_r2c = function(dims, in.byrow=TRUE, out.byrow=FALSE, flipx=FALSE, flipy=FA
   idx.mat = seq(prod(dims)) |> matrix(ny, byrow=in.byrow)
 
   # apply any requested flips
-  if(flipx) idx.mat = idx.mat[rev(seq(nx)), ]
-  if(flipy) idx.mat = idx.mat[, rev(seq(ny))]
+  if(flipx) idx.mat = idx.mat[rev(seq(ny)), ]
+  if(flipy) idx.mat = idx.mat[, rev(seq(nx))]
   if(out.byrow) idx.mat = t(idx.mat)
 
   # vectorize and finish
@@ -151,9 +201,30 @@ pkern_r2c = function(dims, in.byrow=TRUE, out.byrow=FALSE, flipx=FALSE, flipy=FA
 
 #' Snap a set of (possibly irregular) points to a larger grid
 #'
-#' @param pts, input coordinates to snap
-#' @param g, grid lines of larger grid
-#' @param regular
+#' A heuristics-based method of snapping points in `pts` to the grid `g`.
+#'
+#' If `pts` is a vector of x coordinates, the function first snaps them to `g`, the computes
+#' the lag-1 differences in their their ordered indices in `g` and passes this vector to
+#' base::kmeans for a k=2 clustering. The cluster having lower mean is interpreted as a
+#' within-column group, whereas the higher mean group delineates jump points between columns.
+#' This information is used to group `pts` into columns, which are then snapped to the
+#' nearest grid line in `g` by least median distance.
+#'
+#' If `pts` is a vector, the function returns in a list: the grid line values ('gval'),
+#' their index in the full grid ('gid'), and an indexing vector mapping elements (or rows)
+#' of `pts` to the snapped grid line ('id'). If `pts` is a 2D set of points (matrix or sf
+#' object), the the function is applied to each dimension separately with the results
+#' returned as list elements 'x' and 'y'. In the 1D case, `g` should be a vector supplying
+#' the grid line locations, and in the 2D case, a list of two vectors (the x and y grid
+#' lines) or a RasterLayer.
+#'
+#' If `regular=TRUE`, the function regularizes the output grid lines (see `pkern_regular`)
+#'
+#' @param pts, numeric vector or n x 2 matrix (with columns for x and y) of point coordinates
+#' @param g, RasterLayer, or list of x, y grid lines, or length-2 vector of dimensions (nx, ny)
+#' @param regular, logical, indicating to select a regular set of grid lines
+#' @param nstart, passed to base:kmeans
+#' @param makeplot, logical, indicating to plot the ordered coordinates and assigned grid lines
 #'
 #' @return list
 #' @export
@@ -169,15 +240,20 @@ pkern_r2c = function(dims, in.byrow=TRUE, out.byrow=FALSE, flipx=FALSE, flipy=FA
 #' plot(coords)
 #' abline(v = gxy.snap$x$gval)
 #' abline(h = gxy.snap$y$gval)
-pkern_snap = function(pts, g, regular=FALSE)
+pkern_snap = function(pts, g, regular=FALSE, nstart=25, makeplot=TRUE)
 {
-
   # convert sf type input for pts to a matrix of coordinates, standardize column names
   if( any( c('sf', 'sfc', 'sfg') %in% class(pts) ) ) pts = sf::st_coordinates(pts)
   if( is.data.frame(pts) ) pts = as.matrix(pts)
 
   # convert RasterLayer type input for g to list of grid line positions
-  if( 'RasterLayer' %in% class(g) ) g = pkern_fromRaster(g, 'xy')
+  g.crs = NA
+  if( 'RasterLayer' %in% class(g) )
+  {
+    # copying crs in case makeraster=TRUE
+    g.crs = crs(g)
+    g = pkern_fromraster(g, 'xy')
+  }
 
   # handle matrix input for pts
   if( is.matrix(pts) )
@@ -185,9 +261,27 @@ pkern_snap = function(pts, g, regular=FALSE)
     # a single matrix column or row is interpreted as a vector
     if( any(dim(pts) == 1) ) return( pkern_snap(as.vector(pts), g, regular=regular) )
 
+    # order grid lines (x ascending, y descending)
+    g[[1]] = sort(g[[1]], decreasing=FALSE)
+    g[[2]] = sort(g[[2]], decreasing=TRUE)
+
     # otherwise assume 2 sets of coordinates with matching arguments in xy
-    result.x = pkern_snap(pts=as.vector(pts[,1]), g=g[[1]], regular=regular)
-    result.y = pkern_snap(pts=as.vector(pts[,2]), g=g[[2]], regular=regular)
+    if( makeplot )
+    {
+      par(mfrow=c(1,2))
+      result.x = pkern_snap(pts=as.vector(pts[,1]), g=g[[1]], regular, nstart, makeplot)
+      if( makeplot ) title('x')
+      result.y = pkern_snap(pts=as.vector(pts[,2]), g=g[[2]], regular, nstart, makeplot)
+      title('y')
+      par(mfrow=c(1,1))
+
+    } else {
+
+      result.x = pkern_snap(pts=as.vector(pts[,1]), g=g[[1]], regular, nstart, makeplot)
+      result.y = pkern_snap(pts=as.vector(pts[,2]), g=g[[2]], regular, nstart, makeplot)
+    }
+
+    # return the results from the two dimensions in a list
     return( list(x=result.x, y=result.y) )
   }
 
@@ -195,7 +289,7 @@ pkern_snap = function(pts, g, regular=FALSE)
   n = length(pts)
   ng = length(g)
 
-  # snap the points to nearest grid line number and sort into ascending order
+  # snap points to nearest grid line number and sort into ascending order
   g.snap = Rfast::Outer(pts, as.numeric(g), '-') |> abs() |> apply(2, which.min)
   g.order = order(g.snap)
   g.snap.order = g.snap[g.order]
@@ -211,55 +305,90 @@ pkern_snap = function(pts, g, regular=FALSE)
   cluster.n = length(cluster.endpoints)
   n.bycluster = c(cluster.endpoints[1], diff(cluster.endpoints))
 
-  # map (sorted) input data onto grid line numbers
+  # grid line numbers of sorted input coordinates
   cluster.ids = do.call(c, lapply(seq(cluster.n), function(id) rep(id, n.bycluster[id])))
 
   # find the median position within each group and snap to nearest grid line number
-  cluster.snap = sapply(split(g.snap.order, cluster.ids), function(x) round(stats::median(x)) )
+  gid = sapply(split(g.snap.order, cluster.ids), function(x) round(stats::median(x)) )
+  gval = g[gid]
 
-  # if requested, find a regularized version
-  if(regular)
+  # replace the grid line index with a regularized version if requested
+  if(regular) gid = pkern_regular(gid, ng)
+
+  # make a diagnostic plot if requested
+  if( makeplot )
   {
-    # use median separation distance (in terms of grid line numbers)
-    g.sep = round( stats::median(diff(cluster.snap)) )
-
-    # candidate grid lines for all possible origins
-    g.test = lapply(seq(g.sep), function(x) seq(x, ng, by=g.sep))
-    ng.test = sapply(g.test, length)
-
-    # storage for the loop
-    ss.test = rep(NA, g.sep)
-    map.test = vector(mode='list', length=g.sep)
-
-    # exhaustive search for best origin
-    for(idx.test in seq(g.sep))
-    {
-      # map snapped points to candidate grid lines
-      map.test[[idx.test]] = Rfast::Outer(cluster.snap, as.numeric(g.test[[idx.test]]), '-') |>
-        abs() |> apply(2, which.min)
-
-      # compute a sum of squares over grid line snapping distance
-      ss.test[idx.test] = sum( ( g.test[[idx.test]][ map.test[[idx.test]] ] - cluster.snap )^2 )
-    }
-
-    # select alignment with least sum of squares
-    idx.best = which.min(ss.test)
-
-    # trim outer grid lines which aren't mapped to anything
-    g.start = min(map.test[[idx.best]])
-    g.end = max(map.test[[idx.best]])
-
-    # update the grid line index and points map
-    cluster.snap = g.test[[idx.best]][g.start:g.end]
-    cluster.ids = match(cluster.ids, ( map.test[[idx.best]] - g.start + 1 ))
+    plot(seq(n), pts, xlab='input order', ylab='coordinate', pch=16)
+    abline(h = g[gid])
   }
 
-  # compute mapping to points in their original order and return list
-  pts.map = cluster.ids[ match(seq(n), g.order) ]
-  return(list(gval=g[cluster.snap], gid=cluster.snap, id=pts.map))
+  # compute mapping to points in their original order
+  id = cluster.ids[ match(seq(n), g.order) ]
+
+  # return everything in a list
+  return(list(gval=gval, gid=gid, id=id))
 }
 
 
+#' Snap an irregular subgrid to nearest regular version
+#'
+#' grid line numbers `gid` should be a subset of `seq(ng)`. The function finds the
+#' nearest regular subset, in terms of the sum of squared differences. ie it maps
+#' the input `gid` to a new subset of `seq(ng)` in which subsequent elements are all
+#' separated by an equal number of grid lines (`sep`). If `sep` is not supplied, it
+#' is estimated as the median of the differences among the `gid`.
+#'
+#' Note that input grid lines will be merged when doing so results in a smaller sum of
+#' squares.
+#'
+#' @param gid grid line numbers of the subgrid (sorted in ascending order)
+#' @param ng positive integer no less than `max(gid)`, the number of grid lines in full grid
+#' @param sep integer between 1 and `(ng-1)`, desired resolution, in number of grid lines
+#'
+#' @return vector of same length as `gid` containing the new (snapped) grid line numbers
+#' @export
+#'
+#' @examples
+#' ng = 100
+#' gid = ( seq(1, ng, 5) + rnorm(20, 0, 1) ) |> ceiling() |> sort()
+#' diff(gid)
+#' gid.snap = pkern_regular(gid)
+#' diff(gid.snap)
+pkern_regular = function(gid, ng=max(gid), sep=NA)
+{
+  # default separation distance is the median among all pairs of adjacent grid line numbers
+  if( is.na(sep) ) sep = round(stats::median(diff(gid)))
+
+  # check that sep is valid
+  sep = round(sep)
+  if( ( sep > (ng-1) ) | (sep < 1) ) stop('invalid separation distance sep')
+
+  # candidate grid lines for all possible origins
+  g.test = lapply(seq(sep), function(x) seq(x, ng, by=sep))
+  ng.test = sapply(g.test, length)
+
+  # storage for the loop
+  ss.test = rep(NA, sep)
+  map.test = vector(mode='list', length=sep)
+
+  # exhaustive search for best origin
+  for(idx.test in seq(sep))
+  {
+    # map snapped points to candidate grid lines
+    map.test[[idx.test]] = Rfast::Outer(gid, as.numeric(g.test[[idx.test]]), '-') |>
+      abs() |> apply(2, which.min)
+
+    # compute a sum of squares over grid line snapping distance
+    ss.test[idx.test] = sum( ( g.test[[idx.test]][ map.test[[idx.test]] ] - gid )^2 )
+  }
+
+  # select alignment with least sum of squares
+  idx.best = which.min(ss.test)
+  map.test[[idx.best]]
+
+  # return the grid line numbers after snapping
+  return( g.test[[idx.best]][ map.test[[idx.test]] ] )
+}
 
 
 

@@ -4,20 +4,40 @@
 \alias{pkern_snap}
 \title{Snap a set of (possibly irregular) points to a larger grid}
 \usage{
-pkern_snap(pts, g, regular = FALSE)
+pkern_snap(pts, g, regular = FALSE, nstart = 25, makeplot = TRUE)
 }
 \arguments{
-\item{pts, }{input coordinates to snap}
+\item{pts, }{numeric vector or n x 2 matrix (with columns for x and y) of point coordinates}
 
-\item{g, }{grid lines of larger grid}
+\item{g, }{RasterLayer, or list of x, y grid lines, or length-2 vector of dimensions (nx, ny)}
 
-\item{regular}{}
+\item{regular, }{logical, indicating to select a regular set of grid lines}
+
+\item{nstart, }{passed to base:kmeans}
+
+\item{makeplot, }{logical, indicating to plot the ordered coordinates and assigned grid lines}
 }
 \value{
 list
 }
 \description{
-Snap a set of (possibly irregular) points to a larger grid
+A heuristics-based method of snapping points in \code{pts} to the grid \code{g}.
+}
+\details{
+If \code{pts} is a vector of x coordinates, the function first snaps them to \code{g}, the computes
+the lag-1 differences in their their ordered indices in \code{g} and passes this vector to
+base::kmeans for a k=2 clustering. The cluster having lower mean is interpreted as a
+within-column group, whereas the higher mean group delineates jump points between columns.
+This information is used to group \code{pts} into columns, which are then snapped to the
+nearest grid line in \code{g} by least median distance.
+
+If \code{pts} is a vector, the function returns in a list: the grid line values ('gval'),
+their index in the full grid ('gid'), and an indexing vector mapping elements (or rows)
+of \code{pts} to the snapped grid line ('id'). If \code{pts} is a 2D set of points (matrix or sf
+object), the the function is applied to each dimension separately with the results
+returned as list elements 'x' and 'y'. In the 1D case, \code{g} should be a vector supplying
+the grid line locations, and in the 2D case, a list of two vectors (the x and y grid
+lines) or a RasterLayer.
 }
 \examples{
 resx = 10
