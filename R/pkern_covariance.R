@@ -17,19 +17,40 @@
 #' "gex": gamma-exponential. `kp = c(rho, p)`
 #' "mat": Whittle-Matern ((Handcock and Wallis parameterization). `kp = c(rho, kap)`
 #'
-#' @param d numeric vector of length n, the distances to evaluate
-#' @param pars list with elements "k", the kernel name, and "p" the parameter vector
+#' If any element of `d` is NA, the function ignores `d` and instead returns a list
+#' containing the parameter names, along with suggested initial values and bounds to
+#' use in optimization.
 #'
-#' @return the length-n vector of correlations
+#' If instead of a list, `pars` is one of the kernel name strings, the function returns
+#' an example of the parameter list format for the kernel, with suggested initial values
+#' (and `d` is ignored)
+#'
+#' @param pars list with elements "k", the kernel name, and "p" the parameter vector
+#' @param d numeric vector of length n, the distances to evaluate
+#'
+#' @return length-n vector, or a matrix of parameter bounds, or a parameter list (see details)
 #' @export
 #'
 #' @examples
-#' pkern_corr(d=1:10, pars=list(k='exp', kp=5))
-#' pkern_corr(d=1:10, pars=list(k='mat', kp=c(5, 3)))
-pkern_corr = function(d, pars)
+#' pars.mat = pkern_corr('mat')
+#' pars.mat
+#' pkern_corr(pars.mat)
+#' pkern_corr(pars.mat, d=1:10)
+pkern_corr = function(pars, d=NA)
 {
   # if `d` is (or contains) NA, return suggested bounds for supplied pars
-  #makebounds = anyNA(d)
+  makebounds = anyNA(d)
+  bds.rho = c(min=0, ini=1, max=1e5)
+  bds.p = c(min=0.01, ini=1.99, max=2)
+  bds.kap = c(min=0.01, ini=1, max=50)
+
+  # handle character input to pars
+  if( is.character(pars) )
+  {
+    pars = list(k=pars, kp=NULL)
+    kp.suggested = pkern_corr(pars)[,'ini']
+    return( modifyList(pars, list(kp=kp.suggested)) )
+  }
 
   # handle invalid pars
   if( !all( c('k', 'kp') %in% names(pars) ) ) stop('pars must be list with elements "k" and "kp"')
@@ -37,6 +58,9 @@ pkern_corr = function(d, pars)
   # exponential
   if(pars$k == 'exp')
   {
+    # return suggested bounds and initial value if requested
+    if(makebounds) return(rbind(rho=bds.rho))
+
     # unpack names (or assume rho is first element of pars$kp)
     kp.idx = match('rho', names(pars$kp))
     if( is.na(kp.idx) ) kp.idx = 1
@@ -44,12 +68,15 @@ pkern_corr = function(d, pars)
 
     # new parameter list for recursive call
     pars = list(k='gxp', kp=c(rho=rho, p=1))
-    return( pkern_corr(abs(d), pars) )
+    return( pkern_corr(pars, abs(d)) )
   }
 
   # gaussian/stable
   if(pars$k == 'gau')
   {
+    # return suggested bounds and initial value if requested
+    if(makebounds) return(rbind(rho=bds.rho))
+
     # unpack names (or assume rho is first element of pars$kp)
     kp.idx = match('rho', names(pars$kp))
     if( is.na(kp.idx) ) kp.idx = 1
@@ -57,12 +84,15 @@ pkern_corr = function(d, pars)
 
     # new parameter list for recursive call
     pars = list(k='gxp', kp=c(rho=rho, p=2))
-    return( pkern_corr(d, pars) )
+    return( pkern_corr(pars, d) )
   }
 
   # spherical
   if(pars$k == 'sph')
   {
+    # return suggested bounds and initial value if requested
+    if(makebounds) return(rbind(rho=bds.rho))
+
     # unpack names (or assume rho is first element of pars$kp)
     kp.idx = match('rho', names(pars$kp))
     if( is.na(kp.idx) ) kp.idx = 1
@@ -81,6 +111,9 @@ pkern_corr = function(d, pars)
   # gamma-exponential
   if(pars$k == 'gxp')
   {
+    # return suggested bounds and initial value if requested
+    if(makebounds) return(rbind(rho=bds.rho, p=bds.p))
+
     # unpack names (or assume default order rho, p)
     kp.idx = match(c('rho', 'p'), names(pars$kp))
     if( anyNA(kp.idx) ) kp.idx = c(1,2)
@@ -95,6 +128,9 @@ pkern_corr = function(d, pars)
   # Matern
   if(pars$k == 'mat')
   {
+    # return suggested bounds and initial value if requested
+    if(makebounds) return(rbind(rho=bds.rho, kap=bds.kap))
+
     # unpack names (or assume default order rho, p)
     kp.idx = match(c('rho', 'kap'), names(pars$kp))
     if( anyNA(kp.idx) ) kp.idx = c(1,2)
@@ -118,25 +154,64 @@ pkern_corr = function(d, pars)
     cvals[idx.eval] = sc * (ds[idx.eval]^kap) * bk[idx.eval]
     return(cvals)
   }
+
+  # if we got this far, input `pars$k` didn't match anything
+  stop(paste('kernel name', pars$k, 'not recognized'))
 }
 
 
 #' Vectorize x and y component parameters
 #'
-#' @param x list of x component
-#' @param y
-#' @param p
-#' @param sig
+#' when `p` is NULL, the function concatenates the two (x and y) component kernel parameter
+#' sets into a single vector. When this vector is passed back as `p`, the function does the
+#' inverse, copying parameter values from a vector to the corresponding list entry in `xpars`
+#' or `ypars`, and returning them in a list
 #'
-#' @return
+#' If `p` is set to "min", "ini", or "max", the function returns a vector of suggested
+#' minima, inital values, or maxima for the parameters.
+#'
+#' @param xpars list of x component covariance paramaters (in the form accepted by `pkern_corr`)
+#' @param ypars list of y component covariance paramaters (in the form accepted by `pkern_corr`)
+#' @param p (optional) vector of combined kernel parameters, or one of "min", "ini", "max"
+#'
+#' @return numeric vector of parameters, or `list(xpars, ypars)` modified appropriately
 #' @export
 #'
 #' @examples
-pkern_unpack = function(x, y, p=NULL)
+#' pars.mat = pkern_corr('mat')
+#' pars.exp = pkern_corr('exp')
+#' p = pkern_unpack(pars.exp, pars.mat)
+#' p
+#' p[2:3] = 1
+#' pkern_unpack(pars.exp, pars.mat, p)
+#' pkern_unpack(pars.exp, pars.mat, 'min')
+pkern_unpack = function(xpars, ypars, p=NULL)
 {
+  # vectorization in order x, y
+  if( is.null(p) ) return( c(xpars$kp, ypars$kp) )
 
+  # determine number of parameters from each kernel
+  npx = length(xpars$kp)
+  npy = length(ypars$kp)
 
+  # differentiate special parameter set requests
+  if( any( p %in% c('min', 'ini', 'max') ) )
+  {
+    # fetch the hard-coded parameter sets from another function
+    kp.suggested = rbind( pkern_corr(xpars), pkern_corr(Nypars) )
+    return( kp.suggested[, p] )
 
+  } else {
+
+    # unpack values from numeric vector p
+    kpx = p[seq(npx)]
+    kpy = p[npx + seq(npy)]
+  }
+
+  # generate x and y kernel parameter lists
+  xpars = modifyList(xpars, list(kp=kpx))
+  ypars = modifyList(ypars, list(kp=kpy))
+  return( list(xpars=xpars, ypars=ypars) )
 }
 
 
@@ -145,8 +220,8 @@ pkern_unpack = function(x, y, p=NULL)
 #' An effient implementation that uses symmetry and Toeplitz structure arising
 #' from assumption of stationarity.
 #'
-#' @param n positive integer, the number of points on the 1D line
 #' @param pars list or parameters (in the form accepted by `pkern_corr`)
+#' @param n positive integer, the number of points on the 1D line
 #' @param ds positive numeric, the distance between adjacent grid lines
 #' @param i vector, a subset of `seq(n)` indicating rows to return
 #' @param j vector, a subset of `seq(n)` indicating columns to return
@@ -155,16 +230,16 @@ pkern_unpack = function(x, y, p=NULL)
 #' @export
 #'
 #' @examples
-#' pars = list(k='exp', kp=5)
+#' pars = pkern_corr('exp')
 #' pkern_corrmat(10, pars)
 #' pkern_corrmat(10, pars, c(1,2), c(3:4))
-pkern_corrmat = function(n, pars, ds=1, i=seq(n), j=seq(n))
+pkern_corrmat = function(pars, n, ds=1, i=seq(n), j=seq(n))
 {
   # compute the set of distances over which we need to evaluate kernel
   du = ds * ( seq(n) - 1 )
 
   # compute kernel values for these distances
-  dcorr = pkern_corr(du, pars)
+  dcorr = pkern_corr(pars, du)
 
   # build large vector to shift through in building the (Toeplitz) output matrix
   bigvec = c(dcorr[n:2], dcorr)
@@ -174,4 +249,45 @@ pkern_corrmat = function(n, pars, ds=1, i=seq(n), j=seq(n))
 }
 
 
+#' Make a heatmap of covariances around a grid's central point
+#'
+#' This function visualizes a separable kernel by building a grid of size `dims`
+#' and coloring cells according to their covariance with the central cell.
+#'
+#' if either entry of `dims` is an even number, it incremented by 1 in order to
+#' make the definition of "central" unambigious.
+#'
+#' @param pars list of two parameter lists recognized by `pkern_corr` and named entry "v"
+#' @param dims c(nx, ny), the number of x and y lags to include
+#'
+#' @return returns the RasterLayer plotted by the function
+#' @export
+#'
+#' @examples
+#' pars = list(x=pkern_corr('mat'), y=pkern_corr('mat'))
+#' pkern_kplot(pars)
+#' pkern_kplot(pars, dims=c(10,10))
+pkern_kplot = function(pars, dims=c(101, 101) )
+{
+  # increment dims as needed and find the row, column of central cell
+  dims = dims + 1 - (dims %% 2)
+  ij.central = setNames(rev( 1 + ( (dims - 1) / 2 ) ), c('i', 'j'))
+
+  # set default variance of 1 if not supplied and select appropriate legend title
+  leg = 'covariance'
+  if( is.null(pars[['v']]) )
+  {
+    leg = 'correlation'
+    pars[['v']] = 1
+  }
+
+  # compute the required component kernel values and their kronecker product
+  kx = pkern_corrmat(pars[['x']], dims[1], j=ij.central['j'])
+  ky = pkern_corrmat(pars[['y']], dims[2], i=ij.central['i'])
+  rout = pkern_toraster(pars[['v']] * kronecker(kx, ky), dims)
+
+  # plot and return the raster
+  raster::plot(rout, legend.args=list(text=leg, line=2, side=2))
+  return(rout)
+}
 

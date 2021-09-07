@@ -4,12 +4,12 @@
 \alias{pkern_corrmat}
 \title{Construct 1D stationary correlation matrices for regularly spaced data}
 \usage{
-pkern_corrmat(n, pars, ds = 1, i = seq(n), j = seq(n))
+pkern_corrmat(pars, n, ds = 1, i = seq(n), j = seq(n))
 }
 \arguments{
-\item{n}{positive integer, the number of points on the 1D line}
-
 \item{pars}{list or parameters (in the form accepted by \code{pkern_corr})}
+
+\item{n}{positive integer, the number of points on the 1D line}
 
 \item{ds}{positive numeric, the distance between adjacent grid lines}
 
@@ -25,7 +25,7 @@ An effient implementation that uses symmetry and Toeplitz structure arising
 from assumption of stationarity.
 }
 \examples{
-pars = list(k='exp', kp=5)
+pars = pkern_corr('exp')
 pkern_corrmat(10, pars)
 pkern_corrmat(10, pars, c(1,2), c(3:4))
 }

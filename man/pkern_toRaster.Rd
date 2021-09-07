@@ -7,7 +7,7 @@
 pkern_toraster(rvec = NA, dims = NULL, template = NULL)
 }
 \arguments{
-\item{rvec}{either the data vector or a list with elements "data" and "dims"}
+\item{rvec}{either the column-vectorized data or a list with elements "data" and "dims"}
 
 \item{dims}{c(nx, ny), the number of x and y grid lines in the full grid}
 

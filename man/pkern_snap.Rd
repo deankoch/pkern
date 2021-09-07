@@ -40,6 +40,9 @@ the grid line locations, and in the 2D case, a list of two vectors (the x and y 
 lines) or a RasterLayer.
 
 If \code{regular=TRUE}, the function regularizes the output grid lines (see \code{pkern_regular})
+
+In the 1D case, \code{makeplot} can be passed a character string instead of \code{TRUE}, to set a
+title for the plot.
 }
 \examples{
 resx = 10

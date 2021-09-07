@@ -4,16 +4,34 @@
 \alias{pkern_unpack}
 \title{Vectorize x and y component parameters}
 \usage{
-pkern_unpack(x, y, p = NULL)
+pkern_unpack(xpars, ypars, p = NULL)
 }
 \arguments{
-\item{x}{list of x component}
+\item{xpars}{list of x component covariance paramaters (in the form accepted by \code{pkern_corr})}
 
-\item{sig}{}
+\item{ypars}{list of y component covariance paramaters (in the form accepted by \code{pkern_corr})}
+
+\item{p}{(optional) vector of combined kernel parameters, or one of "min", "ini", "max"}
 }
 \value{
-
+numeric vector of parameters, or \code{list(xpars, ypars)} modified appropriately
 }
 \description{
-Vectorize x and y component parameters
+when \code{p} is NULL, the function concatenates the two (x and y) component kernel parameter
+sets into a single vector. When this vector is passed back as \code{p}, the function does the
+inverse, copying parameter values from a vector to the corresponding list entry in \code{xpars}
+or \code{ypars}, and returning them in a list
+}
+\details{
+If \code{p} is set to "min", "ini", or "max", the function returns a vector of suggested
+minima, inital values, or maxima for the parameters.
+}
+\examples{
+pars.mat = pkern_corr('mat')
+pars.exp = pkern_corr('exp')
+p = pkern_unpack(pars.exp, pars.mat)
+p
+p[2:3] = 1
+pkern_unpack(pars.exp, pars.mat, p)
+pkern_unpack(pars.exp, pars.mat, 'min')
 }

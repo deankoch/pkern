@@ -4,15 +4,15 @@
 \alias{pkern_corr}
 \title{Stationary 1D correlation kernels}
 \usage{
-pkern_corr(d, pars)
+pkern_corr(pars, d = NA)
 }
 \arguments{
-\item{d}{numeric vector of length n, the distances to evaluate}
-
 \item{pars}{list with elements "k", the kernel name, and "p" the parameter vector}
+
+\item{d}{numeric vector of length n, the distances to evaluate}
 }
 \value{
-the length-n vector of correlations
+length-n vector, or a matrix of parameter bounds, or a parameter list (see details)
 }
 \description{
 Computes stationary correlation function values for (nonegative) 1-dimensional
@@ -25,8 +25,18 @@ where \code{pars$k} is one of the following kernel names
 "sph": spherical (AKA stable/Gaussian for p=2). \code{kp = rho}
 "gex": gamma-exponential. \code{kp = c(rho, p)}
 "mat": Whittle-Matern ((Handcock and Wallis parameterization). \code{kp = c(rho, kap)}
+
+If any element of \code{d} is NA, the function ignores \code{d} and instead returns a list
+containing the parameter names, along with suggested initial values and bounds to
+use in optimization.
+
+If instead of a list, \code{pars} is one of the kernel name strings, the function returns
+an example of the parameter list format for the kernel, with suggested initial values
+(and \code{d} is ignored)
 }
 \examples{
-pkern_corr(d=1:10, pars=list(k='exp', kp=5))
-pkern_corr(d=1:10, pars=list(k='mat', kp=c(5, 3)))
+pars.mat = pkern_corr('mat')
+pars.mat
+pkern_corr(pars.mat)
+pkern_corr(pars.mat, d=1:10)
 }

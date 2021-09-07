@@ -70,7 +70,7 @@ pkern_fromraster = function(r, what='all')
 
 #' Convert column-vectorized grid to RasterLayer
 #'
-#' @param rvec either the data vector or a list with elements "data" and "dims"
+#' @param rvec either the column-vectorized data or a list with elements "data" and "dims"
 #' @param dims c(nx, ny), the number of x and y grid lines in the full grid
 #' @param template optional RasterLayer to use as template (for setting crs, resolution etc)
 #'

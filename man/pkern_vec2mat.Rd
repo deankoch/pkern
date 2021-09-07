@@ -21,7 +21,6 @@ the columns of an m X n matrix. The (i,j)th element of the matrix is mapped to t
 It finds the (i,j) associated with a given element after column-vectorization
 }
 \examples{
-
 m = 5
 n = 6
 matrix.indexing = matrix(1:prod(m, n), m)

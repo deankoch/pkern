@@ -25,3 +25,8 @@ If \code{ij} has named columns 'x' and 'y', these are interpreted as 'j' and 'i'
 names 'i' and 'j' also appear, these supercede the columns 'x' and 'y'. If no column names
 are supplied, the function assumes they are in order 'j', 'i'
 }
+\examples{
+ny = 10
+g = expand.grid(i=seq(1, ny), j=seq(1:5))
+pkern_mat2vec(g, ny)
+}
