@@ -38,6 +38,8 @@ object), the the function is applied to each dimension separately with the resul
 returned as list elements 'x' and 'y'. In the 1D case, \code{g} should be a vector supplying
 the grid line locations, and in the 2D case, a list of two vectors (the x and y grid
 lines) or a RasterLayer.
+
+If \code{regular=TRUE}, the function regularizes the output grid lines (see \code{pkern_regular})
 }
 \examples{
 resx = 10

@@ -83,7 +83,7 @@ pkern_vec2mat = function(idx, ny)
   rnum = idx - ( ny * (cnum - 1) )
 
   # return as matrix
-  rbind(i=rnum, j=cnum)
+  cbind(i=rnum, j=cnum)
 }
 
 
@@ -332,7 +332,7 @@ pkern_snap = function(pts, g, regular=FALSE, nstart=25, makeplot=TRUE)
 
 #' Snap an irregular subgrid to nearest regular version
 #'
-#' grid line numbers `gid` should be a subset of `seq(ng)`. The function finds the
+#' Grid line numbers `gid` should be a subset of `seq(ng)`. The function finds the
 #' nearest regular subset, in terms of the sum of squared differences. ie it maps
 #' the input `gid` to a new subset of `seq(ng)` in which subsequent elements are all
 #' separated by an equal number of grid lines (`sep`). If `sep` is not supplied, it
@@ -390,6 +390,138 @@ pkern_regular = function(gid, ng=max(gid), sep=NA)
   return( g.test[[idx.best]][ map.test[[idx.test]] ] )
 }
 
+
+#' Sample semivariogram for regular 2D gridded data along x direction
+#'
+#' The function identifies and computes the semivariance (in `vec`) of point pairs on a
+#' regular grid of dimensions `dims` at the supplied x grid line lags, `sep`. Elements of
+#' `set` must be a subset of `1:(dims[1]-1)` (the default setting).
+#'
+#' Results are returned in a named list containing the lags ("sep"), the number of point
+#' pairs ("n") and sample semivariances ("semivariance") at each lag, and optionally (if
+#' `simple` is FALSE) a list of matrices containing the indices of point pairs sampled and
+#' their absolute difference ("pairs").
+#'
+#' method "mean" is the classical method of Matheron (1962), "median" and "ch" are the
+#' median and robust methods described in Cressie and Hawkins (1980).
+#'
+#' references:
+#'
+#' Cressie and Hawkins (1980): https://doi.org/10.1007/BF01035243
+#'
+#'
+#' @param dims vector c(nx, ny) of positive integers, the number of grid lines in full grid
+#' @param vec numeric vector of data, in column vectorized order (length `prod(dims)`)
+#' @param sep positive integer vector, the grid line lags to sample
+#' @param simple logical, if FALSE the function returns a list of point pair indices
+#' @param method character, one of "mean", "median", "ch"
+#'
+#' @return a list with named elements "sep", "vario", and "pairs"
+#' @export
+#'
+#' @examples
+pkern_xvario = function(dims, vec, sep=NA, simple=TRUE, method='median')
+{
+  # set default sample lags
+  if( is.na(sep) ) sep = seq( dims[1] - 1 )
+
+  # identify missing values
+  miss = is.na(vec)
+
+  # sample along different grid line lags in a loop
+  plist = vector(mode='list', length=length(sep))
+  svx = rep(NA, length(sep))
+  n = rep(0, length(sep))
+  for( idx.dj in seq_along(sep) )
+  {
+    dj = sep[idx.dj]
+
+    # total number of eligible point pairs
+    idx.max = dims[2] * ( dims[1] - dj )
+
+    # TODO: take a random sample of these
+    idx.sample = seq( idx.max )
+
+    # vectorization trick to convert this to samples of i,j indices
+    ij.sample = pkern_vec2mat(idx.sample, dims[2])
+
+    # translate sample points index into index of vec
+    idx1 = ij.sample[,1] + ( dims[2] * (ij.sample[,2] - 1) )
+    idx2 = idx1 + ( dims[2] * dj )
+
+    # omit point pairs containing NAs
+    idx.omit = miss[idx1] | miss[idx2]
+    n[idx.dj] = sum(!idx.omit)
+    plist[[idx.dj]] = cbind(idx1=idx1[!idx.omit], idx1=idx2[!idx.omit])
+
+    # estimate semivariance
+    if(n[idx.dj] > 0)
+    {
+      absdiff = apply(plist[[idx.dj]], 1, \(idx) abs(diff(vec[idx])) ) |> as.vector()
+      plist[[idx.dj]] = cbind(plist[[idx.dj]], absdiff=absdiff)
+      if(method=='mean') svx[idx.dj] = mean( absdiff^2 ) / 2
+      if(method=='median') svx[idx.dj] = median( sqrt(absdiff) )^4 / (2 * 0.457)
+      if(method=='ch')
+      {
+        ch.factor = 0.457 + ( 0.494 / n[idx.dj] ) + ( 0.494 / ( n[idx.dj]^2 ) )
+        svx[idx.dj] = mean( sqrt(absdiff) )^4 / (2 * ch.factor)
+      }
+    }
+  }
+
+  if( simple ) return( list(sep=sep, n=n, semivariance=svx) )
+  return( list(sep=sep, n=n, semivariance=svx, pairs=plist) )
+}
+
+
+#' Directional sample semivariograms for regular 2D gridded data
+#'
+#' A wrapper for two calls to `pkern_xvario` to get the directional sample semivariograms
+#' along the x and y dimensions, on regular lattice data. Note that `sep` is given in terms
+#' of grid line indices (integers), not distances (their product with the x or y resolution)
+#'
+#' @param vec numeric vector of data, in column vectorized order (length `prod(dims)`)
+#' @param dims vector c(nx, ny) of positive integers, the number of grid lines
+#' @param sep list c(dx, dy) of positive integer vectors, grid line lags to sample
+#' @param nmin positive integer, the minimum number of point pairs needed to include an estimate
+#' @param makeplot logical, if TRUE the function displays the semivariogram scatterplots
+#' @param simple logical, if FALSE the function returns a list of point pair indices
+#' @param method character, one of "mean", "median", "ch", passed to `pkern_xvario`
+#'
+#' @return list with elements "x" and "y", the list output of the appropriate calls to `pkern_xvario`
+#' @export
+#'
+#' @examples
+pkern_vario = function(dims, vec, sep=NA, nmin=2, makeplot=TRUE, simple=TRUE, method='median')
+{
+  # set default sample lags
+  if( anyNA(sep) ) sep = lapply(dims, \(d) seq(d-1))
+
+  # for y separations, switch to row vectorized order and relabel dimensions
+  xout = pkern_xvario(dims, vec, simple=simple, method=method)
+  yout = pkern_xvario(rev(dims), vec[pkern_r2c(dims, FALSE, TRUE)], simple=simple, method=method)
+
+  # index of lags with more points than the threshold
+  idx.x = xout$n > nmin
+  idx.y = yout$n > nmin
+
+  # plot the results if requested
+  if(makeplot)
+  {
+    # warning if we aren't plotting at least two lags along each dimension
+    if( sum(idx.x) < 2 | sum(idx.y) < 2 ) warning('Not enough lags. Try decreasing nmin')
+
+    # make the plot
+    old.par = par(no.readonly=TRUE)
+    par(mfrow=c(1,2))
+    plot(xout$sep[idx.x], xout$semivariance[idx.x], xlab='lag', ylab='semivariance', main='x')
+    plot(yout$sep[idx.y], yout$semivariance[idx.y], xlab='lag', ylab='semivariance', main='y')
+    par(old.par)
+  }
+
+  # return results in a list
+  return(list(x=xout, y=yout))
+}
 
 
 

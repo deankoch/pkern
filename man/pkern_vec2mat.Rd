@@ -4,12 +4,12 @@
 \alias{pkern_vec2mat}
 \title{Inverse column-vectorization indices}
 \usage{
-pkern_vec2mat(idx, m)
+pkern_vec2mat(idx, ny)
 }
 \arguments{
 \item{idx}{a vector of positive integers}
 
-\item{m}{number of rows in the matrix}
+\item{ny}{number of rows in the matrix}
 }
 \value{
 a two column matrix of integers (row and column numbers) with length(idx) rows
@@ -17,7 +17,7 @@ a two column matrix of integers (row and column numbers) with length(idx) rows
 \description{
 Column vectorization (as in base::as.vector) builds a length(mn) vector by stacking
 the columns of an m X n matrix. The (i,j)th element of the matrix is mapped to the
-\code{(i + m*(j-1))}th element of the vector. This function is the inverse of that mapping.
+\code{(i + ny*(j-1))}th element of the vector. This function is the inverse of that mapping.
 It finds the (i,j) associated with a given element after column-vectorization
 }
 \examples{
