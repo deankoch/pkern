@@ -27,7 +27,7 @@ pkern_r2c(
 a reordering for the vectorized grid. ie a permutation of seq(prod(dims))
 }
 \description{
-"pkern" uses column-vectorization with y decreasing, to mirror standard mathematical
+\code{pkern} uses column-vectorization with y decreasing, to mirror standard mathematical
 notation for matrices. This utility function is for converting to and from this ordering.
 }
 \details{

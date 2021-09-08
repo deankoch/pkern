@@ -4,7 +4,7 @@
 \alias{pkern_unwhich}
 \title{Inverse for base::which}
 \usage{
-pkern_unwhich(idx, n)
+pkern_unwhich(idx, n, asinteger = FALSE)
 }
 \arguments{
 \item{idx}{vector of positive integers no greater than n}

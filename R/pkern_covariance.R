@@ -42,7 +42,7 @@ pkern_corr = function(pars, d=NA)
   makebounds = anyNA(d)
   bds.rho = c(min=0, ini=1, max=1e5)
   bds.p = c(min=0.01, ini=1.99, max=2)
-  bds.kap = c(min=0.01, ini=1, max=50)
+  bds.kap = c(min=1, ini=5, max=50)
 
   # handle character input to pars
   if( is.character(pars) )
@@ -99,7 +99,7 @@ pkern_corr = function(pars, d=NA)
 
     # assign parameter and identify truncations
     rho = pars$kp[kp.idx]
-    ds = d/rho
+    ds = d / rho
     cvals = rep(0, length(d))
     idx.nz = ds < 1
 
@@ -122,7 +122,7 @@ pkern_corr = function(pars, d=NA)
     # assign parameters and evaluate
     rho = pars$kp[kp.idx[1]]
     p = pars$kp[kp.idx[2]]
-    return( exp( -( (d^p) / rho ) ) )
+    return( exp( -( ( d / rho )^p  ) ) )
   }
 
   # Matern
@@ -143,7 +143,7 @@ pkern_corr = function(pars, d=NA)
 
     # preprocessing to fix numerical precision issues
     cvals = rep(0, length(d))
-    ds = d/rho
+    ds = d / rho
     idx.z = ds == 0
     cvals[idx.z] = 1
     bk = besselK(ds, kap)
@@ -245,49 +245,81 @@ pkern_corrmat = function(pars, n, ds=1, i=seq(n), j=seq(n))
   bigvec = c(dcorr[n:2], dcorr)
 
   # build and return the matrix
-  return(sapply(i, function(x) bigvec[ (n-x) + j ]))
+  return(sapply(j, function(x) bigvec[ (n-x) + i ]))
 }
 
 
-#' Make a heatmap of covariances around a grid's central point
+#' Make a heatmap of covariances/correlations around a grid's central point
 #'
 #' This function visualizes a separable kernel by building a grid of size `dims`
-#' and coloring cells according to their covariance with the central cell.
+#' and coloring cells according to their covariance (or correlation) with the central
+#' cell.
 #'
 #' if either entry of `dims` is an even number, it incremented by 1 in order to
-#' make the definition of "central" unambigious.
+#' make the definition of "central" unambigious. If `v` is not supplied, it is set to
+#' the default 1, and the legend label is changed to "correlation". For convenience, `v`
+#' can be supplied as a third element in `pars`; However, arguments to `v` take precedence,
+#' so when both are supplied, `pars$v` is ignored with a warning.
 #'
-#' @param pars list of two parameter lists recognized by `pkern_corr` and named entry "v"
+#' @param pars list of two parameter lists "x" and "y", each recognized by `pkern_corr`
 #' @param dims c(nx, ny), the number of x and y lags to include
+#' @param v numeric, the pointwise variance
 #'
-#' @return returns the RasterLayer plotted by the function
+#' @return returns nothing but prints a heatmap plot
 #' @export
 #'
 #' @examples
-#' pars = list(x=pkern_corr('mat'), y=pkern_corr('mat'))
+#' pars = list(x=pkern_corr('mat'), y=pkern_corr('sph'))
 #' pkern_kplot(pars)
-#' pkern_kplot(pars, dims=c(10,10))
-pkern_kplot = function(pars, dims=c(101, 101) )
+#' pkern_kplot(pars, v=1)
+#' pkern_kplot(pars, dims=c(10,5))
+#' pkern_kplot = function(pars, dims=c(11, 11), v=NA)
+#' pars$v = 2
+#' pkern_kplot(pars, v=3)
+pkern_kplot = function(pars, dims=c(11,11), v=NA)
 {
+  # copy v from pars list if available
+  if( !is.null(pars[['v']]) )
+  {
+    if( !is.na(v) )
+    {
+      pars[['v']] = v
+      warning('ignoring element v in pars')
+    }
+
+    v = pars[['v']]
+  }
+
+  # set default v = 1 as needed (interpret as correlation plot)
+  ktype = 'covariance'
+  if( is.na(v) )
+  {
+    v = 1
+    ktype = 'correlation'
+  }
+
+  # generate the kernel name string
+  kname = sapply(pars[c('x', 'y')], \(x) x$k ) |> paste(collapse=' x ')
+
+  # set the plot title
+  ptitle = paste0(ktype, ' about central grid point (', kname, ')')
+
   # increment dims as needed and find the row, column of central cell
   dims = dims + 1 - (dims %% 2)
   ij.central = setNames(rev( 1 + ( (dims - 1) / 2 ) ), c('i', 'j'))
 
-  # set default variance of 1 if not supplied and select appropriate legend title
-  leg = 'covariance'
-  if( is.null(pars[['v']]) )
-  {
-    leg = 'correlation'
-    pars[['v']] = 1
-  }
-
   # compute the required component kernel values and their kronecker product
   kx = pkern_corrmat(pars[['x']], dims[1], j=ij.central['j'])
   ky = pkern_corrmat(pars[['y']], dims[2], i=ij.central['i'])
-  rout = pkern_toraster(pars[['v']] * kronecker(kx, ky), dims)
+  z = v * as.vector( kronecker(kx, ky) )
 
-  # plot and return the raster
-  raster::plot(rout, legend.args=list(text=leg, line=2, side=2))
-  return(rout)
+  # compute coordinates and reshape z into a matrix oriented for `graphics::image` and friends
+  x = seq(dims[1]) - ij.central['j']
+  y = seq(dims[2]) - ij.central['i']
+  z.mat = matrix(z[pkern_r2c(dims, in.byrow=FALSE, out.byrow=TRUE)], dims[1])
+
+  # make the plot and finish
+  graphics::filled.contour(x, y, z.mat, xlab='dx', ylab='dy', frame.plot=T, asp=1, main=ptitle)
+  return(invisible())
 }
 

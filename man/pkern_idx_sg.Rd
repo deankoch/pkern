@@ -4,32 +4,60 @@
 \alias{pkern_idx_sg}
 \title{Find column-vectorized index of a subgrid}
 \usage{
-pkern_idx_sg(dims, gx = NULL, gy = NULL)
+pkern_idx_sg(dims, i = NULL, j = NULL, type = "index")
 }
 \arguments{
 \item{dims}{c(nx, ny), the number of x and y grid lines in the full grid}
 
-\item{gx}{vector of positive integers no greater than nx, the x grid lines of the subgrid}
+\item{i}{vector of positive integers no greater than ny, the y grid lines of the subgrid}
 
-\item{gy}{vector of positive integers no greater than ny, the y grid lines of the subgrid}
+\item{j}{vector of positive integers no greater than nx, the x grid lines of the subgrid}
+
+\item{type}{character specifying the type of output, either "index", "logical", or "01"}
 }
 \value{
-integer vector indexing the subgrid points with respect to the full grid
+A logical or integer vector, with length and type depending on \code{type} (see details)
 }
 \description{
-A grid with nx columns and ny rows has grid lines gx=1:nx and gy=1:ny.
+A grid with nx columns and ny rows has grid lines and i=1:ny, j=1:nx.
 A subgrid includes only a subset of these grid lines. This function
-uses the grid line numbers to identifies points on the subgrid by their
-column-vectorized index with respect to the full grid
+returns the column-vectorized index of a subgrid with respect to the
+full grid, based on the supplied grid line numbers. This is often
+helpful when extracting a subset of a dataframe or sub-matrix of a
+covariance matrix for gridded data.
 }
 \details{
-This is Useful when taking a subset of a dataframe or submatrix of a
-covariance matrix for gridded data in column-vectorized order.
+NA \code{i} or \code{j} indicates to use all grid lines. For convenience, \code{i} and \code{j}
+can passed in a list to argument \code{i}, in which case argument \code{j} is ignored
+(a warning is issued if \code{j} is non-NULL in this case).
 
-gx or gy NA indicates to use all grid lines. For convenience, list(gx, gy)
-can supplied in argument gx, but only when gy is NA
+With \code{type="index"}, the function returns a subset of \code{seq(prod(dims))} indexing
+the grid points whose i,j indices appear in both \code{i} and \code{j}; With \code{type="logical"},
+the function returns the corresponding logical vector of length \code{prod(dims)}; and
+with \code{type="01"} the 0, 1 representation of the logical vector. These
+alternative modes can help with code optimization when the output is large.
+
+In default \code{type="index"} mode, the function returns indices in column-vectorized
+order, assuming its arguments \code{i} and \code{j} are themselves ordered. This means that
+if \verb{j = c(j1, j2, ..., in)} and \code{i = c(i1, i2, ...im)} then the output has the order
+
+(j1, i1), (j1, i2), ... (j1, im), (j2, i1), (j2, i2), ..., (j3, i1), ... (jm, in).
+
+However the function does not check the internal order of \code{i} or \code{j} prior to this
+mapping, so different output orderings can be induced by reordering \code{i} and/or \code{j}.
+For example providing \code{i} in descending order results in a vertically flipped grid.
+Note that in "01" and "logical" modes the order has no effect on the output.
 }
 \examples{
 dims = c(5,6)
-pkern_idx_sg(dims, c(1,3,5), c(2, 4))
+pkern_idx_sg(dims)
+i = c(2,4)
+j = c(1,3,5)
+idx = pkern_idx_sg(dims, i, j)
+idx
+pkern_idx_sg(dims, i, j, type='01')
+logic = pkern_idx_sg(dims, i, j, type='logical')
+logic
+identical(logic, pkern_idx_sg(dims, rev(i), j, type='logical'))
+identical(idx, pkern_idx_sg(dims, rev(i), j))
 }

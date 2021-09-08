@@ -2,28 +2,38 @@
 % Please edit documentation in R/pkern_covariance.R
 \name{pkern_kplot}
 \alias{pkern_kplot}
-\title{Make a heatmap of covariances around a grid's central point}
+\title{Make a heatmap of covariances/correlations around a grid's central point}
 \usage{
-pkern_kplot(pars, dims = c(101, 101))
+pkern_kplot(pars, dims = c(11, 11), v = NA)
 }
 \arguments{
-\item{pars}{list of two parameter lists recognized by \code{pkern_corr} and named entry "v"}
+\item{pars}{list of two parameter lists "x" and "y", each recognized by \code{pkern_corr}}
 
 \item{dims}{c(nx, ny), the number of x and y lags to include}
+
+\item{v}{numeric, the pointwise variance}
 }
 \value{
-returns the RasterLayer plotted by the function
+returns nothing but prints a heatmap plot
 }
 \description{
 This function visualizes a separable kernel by building a grid of size \code{dims}
-and coloring cells according to their covariance with the central cell.
+and coloring cells according to their covariance (or correlation) with the central
+cell.
 }
 \details{
 if either entry of \code{dims} is an even number, it incremented by 1 in order to
-make the definition of "central" unambigious.
+make the definition of "central" unambigious. If \code{v} is not supplied, it is set to
+the default 1, and the legend label is changed to "correlation". For convenience, \code{v}
+can be supplied as a third element in \code{pars}; However, arguments to \code{v} take precedence,
+so when both are supplied, \code{pars$v} is ignored with a warning.
 }
 \examples{
-pars = list(x=pkern_corr('mat'), y=pkern_corr('mat'))
+pars = list(x=pkern_corr('mat'), y=pkern_corr('sph'))
 pkern_kplot(pars)
-pkern_kplot(pars, dims=c(10,10))
+pkern_kplot(pars, v=1)
+pkern_kplot(pars, dims=c(10,5))
+pkern_kplot = function(pars, dims=c(11, 11), v=NA)
+pars$v = 2
+pkern_kplot(pars, v=3)
 }
