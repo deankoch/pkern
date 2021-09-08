@@ -109,7 +109,7 @@ pkern_vec2mat = function(idx, ny)
 #' foo = sample(c(TRUE, FALSE), size=n, replace=TRUE)
 #' idx.foo = which(foo)
 #' pkern_unwhich(idx.foo, n)
-pkern_unwhich = function(idx, n)
+pkern_unwhich = function(idx, n, asinteger=FALSE)
 {
   outvec = rep(FALSE, n)
   outvec[idx] = TRUE
@@ -119,47 +119,57 @@ pkern_unwhich = function(idx, n)
 
 #' Find column-vectorized index of a subgrid
 #'
-#' A grid with nx columns and ny rows has grid lines gx=1:nx and gy=1:ny.
+#' A grid with nx columns and ny rows has grid lines and i=1:ny, j=1:nx.
 #' A subgrid includes only a subset of these grid lines. This function
-#' uses the grid line numbers to identifies points on the subgrid by their
-#' column-vectorized index with respect to the full grid
+#' uses the grid line numbers to identify points on the subgrid, returning
+#' their column-vectorized index with respect to the full grid. This is often
+#' helpful when extracting a subset of a dataframe or sub-matrix of a
+#' covariance matrix for gridded data.
 #'
-#' This is Useful when taking a subset of a dataframe or submatrix of a
-#' covariance matrix for gridded data in column-vectorized order.
+#' The function returns indices in column-vectorized order, relative to the order of the
+#' elements in its arguments `j` and `i`. This means that if `j = c(j1, j2, ..., in)`
+#' and `i = c(i1, i2, ...im)` then the output may has the order
 #'
-#' gx or gy NA indicates to use all grid lines. For convenience, list(gx, gy)
-#' can supplied in argument gx, but only when gy is NA
+#' (j1, i1), (j1, i2), ... (j1, im), (j2, i1), ... (jm, in).
+#'
+#' However the function does not order `i` or `j` prior to this mapping, so different
+#' output orderings can be induced by changing the ordering of the `i` and `j`. For
+#' example providing `i` in descending order results in a vertically flipped grid.
+#'
+#' NA `i` or `j` indicates to use all grid lines. For convenience, list(i,j)
+#' can supplied in argument i. If
 #'
 #' @param dims c(nx, ny), the number of x and y grid lines in the full grid
-#' @param gx vector of positive integers no greater than nx, the x grid lines of the subgrid
-#' @param gy vector of positive integers no greater than ny, the y grid lines of the subgrid
+#' @param j vector of positive integers no greater than nx, the x grid lines of the subgrid
+#' @param i vector of positive integers no greater than ny, the y grid lines of the subgrid
 #'
-#' @return integer vector indexing the subgrid points with respect to the full grid
+#' @return An integer vector indexing the subgrid points with respect to the full grid
 #' @export
 #'
 #' @examples
 #' dims = c(5,6)
 #' pkern_idx_sg(dims, c(1,3,5), c(2, 4))
-pkern_idx_sg = function(dims, gx=NULL, gy=NULL)
+pkern_idx_sg = function(dims, i=NULL, j=NULL)
 {
   # handle input as list
-  if( length(gx) == 2 )
+  if( length(i) == 2 )
   {
-    if( !is.null(gy)  ) warning('argument gy ignored since gx had length 2')
-    gy = gx[[2]]
-    gx = gx[[1]]
+    if( !is.null(j)  ) warning('argument i ignored since j had length 2')
+    j = i[[2]]
+    i = i[[1]]
   }
 
-  # handle default gx, gy (select all grid lines on a dimension)
-  if( is.null(gx) ) gx = 1:dims[1]
-  if( is.null(gy) ) gy = 1:dims[2]
+  # handle default j, i (select all grid lines on a dimension)
+  if( is.null(i) ) i = 1:dims[2]
+  if( is.null(j) ) j = 1:dims[1]
+
 
   # count desired subgrid dimensions and compute result
-  ngx = length(gx)
-  ngy = length(gy)
+  ni = length(i)
+  nj = length(j)
 
   # y coords cycle from highest to lowest in blocks, x coords increase blockwise
-  return( rep(gy, ngx) + rep(dims[2] * ( gx - 1 ), each=ngy) )
+  return( rep(i, nj) + rep(dims[2] * ( j - 1 ), each=ni) )
 }
 
 
