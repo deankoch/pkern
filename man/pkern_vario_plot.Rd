@@ -9,7 +9,7 @@ pkern_vario_plot(vario, pars = NULL, nmin = 1, ptitle = NULL, shade = TRUE)
 \arguments{
 \item{vario}{list of semivariance data, the return value of \code{pkern_vario} or \code{pkern_xvario}}
 
-\item{pars}{list of kernel parameters including variance in named element "v"}
+\item{pars}{list of kernel parameters "x" and/or "y", variance "v", and optionally nugget "nug"}
 
 \item{nmin}{positive integer, the minimum number of point pairs needed to include in plot}
 
@@ -21,5 +21,7 @@ pkern_vario_plot(vario, pars = NULL, nmin = 1, ptitle = NULL, shade = TRUE)
 prints a plot and returns nothing
 }
 \description{
-Plot 1-dimensional empirical semivariograms for a separable model
+\code{pars} should be a list containing named elements: "x" and "y", lists of x and y kernel
+parameters in form recognized by \code{pkern_corr}; "v", the numeric variance; and, optionally,
+"nug", a numeric providing the size of the nugget effect.
 }

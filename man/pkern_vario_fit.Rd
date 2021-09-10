@@ -9,6 +9,7 @@ pkern_vario_fit(
   xpars = "exp",
   ypars = xpars,
   v = NA,
+  nug = NA,
   nmin = 2,
   ninitial = 1
 )
@@ -21,6 +22,8 @@ pkern_vario_fit(
 \item{ypars}{character or list, recognizable (as \code{pars}) by \code{pkern_corr}}
 
 \item{v}{length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for variance}
+
+\item{nug}{length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for nugget}
 
 \item{nmin}{positive integer, the minimum number of samples to include a lag}
 

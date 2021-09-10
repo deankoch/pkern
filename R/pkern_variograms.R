@@ -12,13 +12,15 @@
 #'
 #' Kernel parameters `pars` are passed to the correlation function (`pkern_corr`)
 #' to get correlation values at distances `d`. The result is converted to semivariance
-#' assuming pointwise variance `v` and returned as a vector the same length as `d`.
+#' (assuming common variance `v` with nugget effect `nug`) and returned as a vector
+#' the same length as `d`.
 #'
 #' When `d` is NULL, the function instead returns the semivariance function as an
 #' anonymous function of distance.
 #'
 #' @param pars list of kernel parameters, in form recognized by `pkern_corr`
-#' @param v numeric, the pointwise variance
+#' @param v positive numeric, the common variance
+#' @param nug positive numeric, the size of the nugget effect
 #' @param d vector of nonegative numeric spatial lags to evaluate
 #'
 #' @return either a vector the same length as `d`, or an anonymous function of distance
@@ -26,12 +28,12 @@
 #'
 #' @examples
 #' pars.mat = pkern_corr('mat')
-#' pkern_tvario(pars.mat, v=1, 1:10)
-#' sv = pkern_tvario(pars.mat, v=1)
+#' pkern_tvario(pars.mat, v=1, nug=0.5, 1:10)
+#' sv = pkern_tvario(pars.mat, nug=0.5, v=1)
 #' sv(1:10)
-pkern_tvario = function(pars, v, d=NULL)
+pkern_tvario = function(pars, v, nug=0, d=NULL)
 {
-  fn = function(d) { unname(v) * ( 1 - pkern_corr(pars, d) ) }
+  fn = function(d) { unname(v) * ( 1 + nug - pkern_corr(pars, d) ) }
   if( is.null(d) ) return(fn)
   return(fn(d))
 }
@@ -196,8 +198,12 @@ pkern_vario = function(dims, vec, sep=NA, simple=TRUE, method='median', diagonal
 
 #' Plot 1-dimensional empirical semivariograms for a separable model
 #'
+#' `pars` should be a list containing named elements: "x" and "y", lists of x and y kernel
+#' parameters in form recognized by `pkern_corr`; "v", the numeric variance; and, optionally,
+#' "nug", a numeric providing the size of the nugget effect.
+#'
 #' @param vario list of semivariance data, the return value of `pkern_vario` or `pkern_xvario`
-#' @param pars list of kernel parameters including variance in named element "v"
+#' @param pars list of kernel parameters "x" and/or "y", variance "v", and optionally nugget "nug"
 #' @param nmin positive integer, the minimum number of point pairs needed to include in plot
 #' @param ptitle character or vector of two, title(s) for the plot(s)
 #' @param shade logical, indicating to shade points according to the number of samples
@@ -208,46 +214,48 @@ pkern_vario = function(dims, vec, sep=NA, simple=TRUE, method='median', diagonal
 #' @examples
 pkern_vario_plot = function(vario, pars=NULL, nmin=1, ptitle=NULL, shade=TRUE)
 {
-
-  # handle 2-dimensional case with diagonals
-  if( all( c('x', 'y', 'd1', 'd2') %in% names(vario) ) )
-  {
-    # assign default plot titles as needed
-    if( length(ptitle) != 2 ) ptitle = c(x='x', y='y', d1='x (45 degrees)', d2='y (45 degrees)')
-
-    # assign names to pars if they are missing
-    nm.pars = c('x', 'y', 'v')
-    if( !is.null(pars) & !all( nm.pars %in% names(pars) ) ) names(pars) = nm.pars
-
-    # make the plots
-    par(mfrow=c(2,2))
-    pkern_vario_plot(vario[['x']], list(x=pars[['x']], v=pars[['v']]), nmin, ptitle['x'], shade)
-    pkern_vario_plot(vario[['y']], list(x=pars[['y']], v=pars[['v']]), nmin, ptitle['y'], shade)
-    pkern_vario_plot(vario[['d1']], pars, nmin, ptitle['d1'], shade)
-    pkern_vario_plot(vario[['d2']], pars, nmin, ptitle['d2'], shade)
-    par(mfrow=c(1,1))
-    return(invisible())
-  }
-
-  # handle 2-dimensional case without diagonals
+  # handle 2-dimensional case
   if( all( c('x', 'y') %in% names(vario) ) )
   {
-    # assign default plot titles as needed
-    if( length(ptitle) != 2 ) ptitle = c(x='x', y='y')
-
     # assign names to pars if they are missing
     nm.pars = c('x', 'y', 'v')
     if( !is.null(pars) & !all( nm.pars %in% names(pars) ) ) names(pars) = nm.pars
 
-    # make the plots
-    par(mfrow=c(1,2))
-    pkern_vario_plot(vario[['x']], list(x=pars[['x']], v=pars[['v']]), nmin, ptitle['x'], shade)
-    pkern_vario_plot(vario[['y']], list(x=pars[['y']], v=pars[['v']]), nmin, ptitle['y'], shade)
+    # extract componentwise parameters
+    xpars = c( pars[['x']], list( v=pars[['v']], nug=pars[['nug']] ) )
+    ypars = c( pars[['y']], list( v=pars[['v']], nug=pars[['nug']] ) )
+
+    # handle diagonals
+    if( all( c('x', 'y', 'd1', 'd2') %in% names(vario) ) )
+    {
+      # assign default plot titles as needed
+      if( length(ptitle) != 2 ) ptitle = c(x='x', y='y', d1='x (45 degrees)', d2='y (45 degrees)')
+
+      # make the plots in four recursive calls
+      par(mfrow=c(2,2))
+      pkern_vario_plot(vario[['x']], pars=xpars, nmin=nmin, ptitle=ptitle['x'], shade=shade)
+      pkern_vario_plot(vario[['y']], pars=ypars, nmin=nmin, ptitle=ptitle['y'], shade=shade)
+      pkern_vario_plot(vario[['d1']], pars=pars, nmin=nmin, ptitle=ptitle['d1'], shade=shade)
+      pkern_vario_plot(vario[['d2']], pars=pars, nmin=nmin, ptitle=ptitle['d2'], shade=shade)
+
+    } else {
+
+      # assign default plot titles as needed
+      if( length(ptitle) != 2 ) ptitle = c(x='x', y='y')
+
+      # make the plots
+      par(mfrow=c(1,2))
+      pkern_vario_plot(vario[['x']], pars=xpars, nmin=nmin, ptitle=ptitle['x'], shade=shade)
+      pkern_vario_plot(vario[['y']], pars=ypars, nmin=nmin, ptitle=ptitle['y'], shade=shade)
+
+    }
+
+    # reset plot panel layout and finish, returning nothing
     par(mfrow=c(1,1))
     return(invisible())
   }
 
-  # handle 1-dimension case
+  # 1-dimension case:
 
   # unpack arguments
   idx = vario[['n']] > nmin - 1
@@ -265,24 +273,31 @@ pkern_vario_plot = function(vario, pars=NULL, nmin=1, ptitle=NULL, shade=TRUE)
   # if kernel parameters are supplied, plot the theoretical values
   if( !is.null(unlist(pars)) )
   {
-    # check for variance in parameters list
-    idxv = names(pars) == 'v'
-    if( !any(idxv) ) stop('variance v not found in pars')
+    # # check for variance components in parameters list
+    # idxv = names(pars) == 'v'
+    # if( !any(idxv) ) stop('variance v not found in pars')
+    # if( is.null(pars[['nug']]) )
+    #
+    # # extract kernel parameters and variance
+    # nm.pars = names(pars)
+    # v = pars[[ which(nm.pars %in% 'v')[1] ]]
+    # pars = pars[[ which(nm.pars != 'v')[1] ]]
 
-    # extract kernel parameters and variance
-    nm.pars = names(pars)
-    v = pars[[ which(nm.pars %in% 'v')[1] ]]
-    pars = pars[[ which(nm.pars != 'v')[1] ]]
+    # check for variance components in parameters list and set default nugget (0)
+    nug = pars[['nug']]
+    v = pars[['v']]
+    if( is.null(v) ) stop('variance v not found in pars')
+    if( is.null(nug) ) nug = 0
 
     #  handle x or y kernel component requests
-    if( all( c('k', 'kp') %in% names(pars) ) ) fit = pkern_tvario(pars, v, d=sep)
+    if( all( c('k', 'kp') %in% names(pars) ) ) fit = pkern_tvario(pars, v=v, nug=nug, d=sep)
 
     # handle requests along a diagonal (both x and y components included in pars)
     if( all( c('x', 'y') %in% names(pars) ) )
     {
       # compute appropriately scaled kernel values
-      fitx = pkern_tvario(pars[['x']], sqrt(v), d=sep/sqrt(2))
-      fity = pkern_tvario(pars[['y']], sqrt(v), d=sep/sqrt(2))
+      fitx = pkern_tvario(pars[['x']], v=sqrt(v), nug=nug, d=sep/sqrt(2))
+      fity = pkern_tvario(pars[['y']], v=sqrt(v), nug=nug, d=sep/sqrt(2))
       fit = fitx * fity
     }
 
@@ -316,6 +331,7 @@ pkern_vario_plot = function(vario, pars=NULL, nmin=1, ptitle=NULL, shade=TRUE)
 #' @param xpars character or list, recognizable (as `pars`) by `pkern_corr`
 #' @param ypars character or list, recognizable (as `pars`) by `pkern_corr`
 #' @param v length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for variance
+#' @param nug length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for nugget
 #' @param nmin positive integer, the minimum number of samples to include a lag
 #' @param ninitial positive integer, the number of initial value sets to test (see details)
 #'
@@ -323,14 +339,15 @@ pkern_vario_plot = function(vario, pars=NULL, nmin=1, ptitle=NULL, shade=TRUE)
 #' @export
 #'
 #' @examples
-pkern_vario_fit = function(vario, xpars='exp', ypars=xpars, v=NA, nmin=2, ninitial=1)
+pkern_vario_fit = function(vario, xpars='exp', ypars=xpars, v=NA, nug=NA, nmin=2, ninitial=1)
 {
   # handle kernel specification as string, convert to list
   if( is.character(xpars) ) xpars = pkern_corr(xpars)
   if( is.character(ypars) ) ypars = pkern_corr(ypars)
 
-  # set defaults for sigma
-  if( anyNA(v) ) v = c(min=0, ini=1, max=vario$v)
+  # set defaults for variance and nugget
+  if( anyNA(v) ) v = c(min=0, ini=vario$v/2, max=vario$v)
+  if( anyNA(nug) ) nug = c(min=0, ini=v[2]/2, max=v[3]/2)
 
   # set default lower and upper bounds for kernel parameters as needed
   if( is.null(xpars$lower) ) xpars$lower = pkern_corr(xpars)[,'min']
@@ -339,9 +356,9 @@ pkern_vario_fit = function(vario, xpars='exp', ypars=xpars, v=NA, nmin=2, niniti
   if( is.null(ypars$upper) ) ypars$upper = pkern_corr(ypars)[,'max']
 
   # vectorized bounds for all covariance parameters
-  plower = c(v[1], xpars$lower, ypars$lower)
-  pinitial = c( v[2], pkern_unpack(xpars, ypars) )
-  pupper = c(v[3], xpars$upper, ypars$upper)
+  plower = c(v[1], nug[1], xpars$lower, ypars$lower)
+  pinitial = c( v[2], nug[2], pkern_unpack(xpars, ypars) )
+  pupper = c(v[3], nug[3], xpars$upper, ypars$upper)
 
   # check that we have enough data in the empirical variograms
   idx.notv = names(vario) != 'v'
@@ -361,11 +378,11 @@ pkern_vario_fit = function(vario, xpars='exp', ypars=xpars, v=NA, nmin=2, niniti
     # mv, list of matrices ("x", "y" and optionally "d1", "d2") with columns "n", "sep", "sv"
 
     # extract kernel parameters as lists (omit first element, the variance)
-    pars = pkern_unpack(xp, yp, pvec[-1])
+    pars = pkern_unpack(xp, yp, pvec[-(1:2)])
 
     # generate theoretical semivariance values along x and y for each lag
-    xsv = pkern_tvario(pars=pars[['x']], v=pvec[1], d=mv[['x']][,'sep'])
-    ysv = pkern_tvario(pars=pars[['y']], v=pvec[1], d=mv[['y']][,'sep'])
+    xsv = pkern_tvario(pars=pars[['x']], v=pvec[1], nug=pvec[2], d=mv[['x']][,'sep'])
+    ysv = pkern_tvario(pars=pars[['y']], v=pvec[1], nug=pvec[2], d=mv[['y']][,'sep'])
 
     # compute weighted sums of squares along both dimensions and return their sum
     # wss.x = sum( ( mv[['x']][,'n'] / (xsv)^2 ) * ( ( mv[['x']][,'sv'] - xsv )^2 ) )
@@ -378,13 +395,13 @@ pkern_vario_fit = function(vario, xpars='exp', ypars=xpars, v=NA, nmin=2, niniti
     if( length(mv) == 4 )
     {
       # generate theoretical semivariance values for each lag on first diagonal
-      xsv.d1 = pkern_tvario(pars=pars[['x']], v=sqrt(pvec[1]), d=mv[['d1']][,'sep']/sqrt(2))
-      ysv.d1 = pkern_tvario(pars=pars[['y']], v=sqrt(pvec[1]), d=mv[['d1']][,'sep']/sqrt(2))
+      xsv.d1 = pkern_tvario(pars=pars[['x']], v=sqrt(pvec[1]), nug=pvec[2], d=mv[['d1']][,'sep']/sqrt(2))
+      ysv.d1 = pkern_tvario(pars=pars[['y']], v=sqrt(pvec[1]), nug=pvec[2], d=mv[['d1']][,'sep']/sqrt(2))
       d1sv = xsv.d1 * ysv.d1
 
       # generate theoretical semivariance values for each lag on second diagonal
-      xsv.d2 = pkern_tvario(pars=pars[['x']], v=sqrt(pvec[1]), d=mv[['d2']][,'sep']/sqrt(2))
-      ysv.d2 = pkern_tvario(pars=pars[['y']], v=sqrt(pvec[1]), d=mv[['d2']][,'sep']/sqrt(2))
+      xsv.d2 = pkern_tvario(pars=pars[['x']], v=sqrt(pvec[1]), nug=pvec[2], d=mv[['d2']][,'sep']/sqrt(2))
+      ysv.d2 = pkern_tvario(pars=pars[['y']], v=sqrt(pvec[1]), nug=pvec[2], d=mv[['d2']][,'sep']/sqrt(2))
       d2sv = xsv.d2 * ysv.d2
 
       # compute weighted sums of squares along both dimensions and return their sum
@@ -418,6 +435,7 @@ pkern_vario_fit = function(vario, xpars='exp', ypars=xpars, v=NA, nmin=2, niniti
 
   # unpack fitted parameters and return in a list
   vfit = setNames(result.optim$par[1], 'fitted')
-  pfit = pkern_unpack(xpars, ypars, result.optim$par[-1])
-  return( list(x=pfit[['x']], y=pfit[['y']], v=vfit) )
+  nugfit = setNames(result.optim$par[2], 'fitted')
+  pfit = pkern_unpack(xpars, ypars, result.optim$par[-(1:2)])
+  return( list(x=pfit[['x']], y=pfit[['y']], v=vfit, nug=nugfit) )
 }

@@ -4,12 +4,14 @@
 \alias{pkern_tvario}
 \title{Theoretical semivariances along x or y direction}
 \usage{
-pkern_tvario(pars, v, d = NULL)
+pkern_tvario(pars, v, nug = 0, d = NULL)
 }
 \arguments{
 \item{pars}{list of kernel parameters, in form recognized by \code{pkern_corr}}
 
-\item{v}{numeric, the pointwise variance}
+\item{v}{positive numeric, the common variance}
+
+\item{nug}{positive numeric, the size of the nugget effect}
 
 \item{d}{vector of nonegative numeric spatial lags to evaluate}
 }
@@ -23,14 +25,15 @@ spatial lags, assuming (intrinsic) stationarity.
 \details{
 Kernel parameters \code{pars} are passed to the correlation function (\code{pkern_corr})
 to get correlation values at distances \code{d}. The result is converted to semivariance
-assuming pointwise variance \code{v} and returned as a vector the same length as \code{d}.
+(assuming common variance \code{v} with nugget effect \code{nug}) and returned as a vector
+the same length as \code{d}.
 
 When \code{d} is NULL, the function instead returns the semivariance function as an
 anonymous function of distance.
 }
 \examples{
 pars.mat = pkern_corr('mat')
-pkern_tvario(pars.mat, v=1, 1:10)
-sv = pkern_tvario(pars.mat, v=1)
+pkern_tvario(pars.mat, v=1, nug=0.5, 1:10)
+sv = pkern_tvario(pars.mat, nug=0.5, v=1)
 sv(1:10)
 }
