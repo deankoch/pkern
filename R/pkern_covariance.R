@@ -40,9 +40,9 @@ pkern_corr = function(pars, d=NA)
 {
   # if `d` is (or contains) NA, return suggested bounds for supplied pars
   makebounds = anyNA(d)
-  bds.rho = c(min=0, ini=1, max=1e5)
-  bds.p = c(min=0.01, ini=1.99, max=2)
-  bds.kap = c(min=1, ini=5, max=50)
+  bds.rho = c(min=1e-2, ini=1, max=1e2)
+  bds.p = c(min=1e-2, ini=1.99, max=2)
+  bds.kap = c(min=1e-2, ini=1, max=50)
 
   # handle character input to pars
   if( is.character(pars) )
@@ -56,7 +56,7 @@ pkern_corr = function(pars, d=NA)
   if( !all( c('k', 'kp') %in% names(pars) ) ) stop('pars must be list with elements "k" and "kp"')
 
   # exponential
-  if(pars$k == 'exp')
+  if(pars[['k']] == 'exp')
   {
     # return suggested bounds and initial value if requested
     if(makebounds) return(rbind(rho=bds.rho))
@@ -67,12 +67,12 @@ pkern_corr = function(pars, d=NA)
     rho = pars$kp[kp.idx]
 
     # new parameter list for recursive call
-    pars = list(k='gxp', kp=c(rho=rho, p=1))
+    pars = list(k='gxp', kp=c(rho=rho, p=1L))
     return( pkern_corr(pars, abs(d)) )
   }
 
   # gaussian/stable
-  if(pars$k == 'gau')
+  if(pars[['k']] == 'gau')
   {
     # return suggested bounds and initial value if requested
     if(makebounds) return(rbind(rho=bds.rho))
@@ -83,12 +83,12 @@ pkern_corr = function(pars, d=NA)
     rho = pars$kp[kp.idx]
 
     # new parameter list for recursive call
-    pars = list(k='gxp', kp=c(rho=rho, p=2))
+    pars = list(k='gxp', kp=c(rho=rho, p=2L))
     return( pkern_corr(pars, d) )
   }
 
   # spherical
-  if(pars$k == 'sph')
+  if(pars[['k']] == 'sph')
   {
     # return suggested bounds and initial value if requested
     if(makebounds) return(rbind(rho=bds.rho))
@@ -109,7 +109,7 @@ pkern_corr = function(pars, d=NA)
   }
 
   # gamma-exponential
-  if(pars$k == 'gxp')
+  if(pars[['k']] == 'gxp')
   {
     # return suggested bounds and initial value if requested
     if(makebounds) return(rbind(rho=bds.rho, p=bds.p))
@@ -126,7 +126,7 @@ pkern_corr = function(pars, d=NA)
   }
 
   # Matern
-  if(pars$k == 'mat')
+  if(pars[['k']] == 'mat')
   {
     # return suggested bounds and initial value if requested
     if(makebounds) return(rbind(rho=bds.rho, kap=bds.kap))
@@ -211,7 +211,7 @@ pkern_unpack = function(xpars, ypars, p=NULL)
   # generate x and y kernel parameter lists
   xpars = modifyList(xpars, list(kp=kpx))
   ypars = modifyList(ypars, list(kp=kpy))
-  return( list(xpars=xpars, ypars=ypars) )
+  return( list(x=xpars, y=ypars) )
 }
 
 
@@ -256,7 +256,7 @@ pkern_corrmat = function(pars, n, ds=1, i=seq(n), j=seq(n))
 #' cell.
 #'
 #' if either entry of `dims` is an even number, it incremented by 1 in order to
-#' make the definition of "central" unambigious. If `v` is not supplied, it is set to
+#' make the notion of "central" unambiguous. If `v` is not supplied, it is set to
 #' the default 1, and the legend label is changed to "correlation". For convenience, `v`
 #' can be supplied as a third element in `pars`; However, arguments to `v` take precedence,
 #' so when both are supplied, `pars$v` is ignored with a warning.
