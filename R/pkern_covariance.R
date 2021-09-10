@@ -255,13 +255,18 @@ pkern_corrmat = function(pars, n, ds=1, i=seq(n), j=seq(n))
 #' and coloring cells according to their covariance (or correlation) with the central
 #' cell.
 #'
+#' `pars` should be a list containing elements "x" and "y", which are lists of parameters
+#' for the x and y component kernels (recognized by `pkern_corr`). Optionally, `pars` can
+#' also include a (positive numeric) variance term in "v" and a (nonegative numeric)
+#' nugget effect in "nug".
+#'
 #' if either entry of `dims` is an even number, it incremented by 1 in order to
 #' make the notion of "central" unambiguous. If `v` is not supplied, it is set to
-#' the default 1, and the legend label is changed to "correlation". For convenience, `v`
-#' can be supplied as a third element in `pars`; However, arguments to `v` take precedence,
-#' so when both are supplied, `pars$v` is ignored with a warning.
+#' the default 1, and the legend label is changed to "correlation". If `nug` is
+#' supplied, the central point has this value added to it. If it is not supplied,
+#' `nug` is assumed to be zero.
 #'
-#' @param pars list of two parameter lists "x" and "y", each recognized by `pkern_corr`
+#' @param pars list of two parameter lists "x" and "y", and (optionally) "v", "nug"
 #' @param dims c(nx, ny), the number of x and y lags to include
 #' @param v numeric, the pointwise variance
 #'
@@ -271,38 +276,28 @@ pkern_corrmat = function(pars, n, ds=1, i=seq(n), j=seq(n))
 #' @examples
 #' pars = list(x=pkern_corr('mat'), y=pkern_corr('sph'))
 #' pkern_kplot(pars)
-#' pkern_kplot(pars, v=1)
 #' pkern_kplot(pars, dims=c(10,5))
-#' pkern_kplot = function(pars, dims=c(11, 11), v=NA)
-#' pars$v = 2
-#' pkern_kplot(pars, v=3)
-pkern_kplot = function(pars, dims=c(11,11), v=NA)
+#' pkern_kplot(pars, v=c(pars, list(v=2)))
+#' pkern_kplot(pars, v=c(pars, list(v=2, nug=1)))
+pkern_kplot = function(pars, dims=c(25, 25))
 {
-  # copy v from pars list if available
-  if( !is.null(pars[['v']]) )
-  {
-    if( !is.na(v) )
-    {
-      pars[['v']] = v
-      warning('ignoring element v in pars')
-    }
 
-    v = pars[['v']]
-  }
-
-  # set default v = 1 as needed (interpret as correlation plot)
-  ktype = 'covariance'
-  if( is.na(v) )
-  {
-    v = 1
-    ktype = 'correlation'
-  }
+  # unpack v and nug, setting defaults as needed and determining plot title
+  ktype = ifelse( is.null(pars[['v']]), 'correlation', 'covariance')
+  v = ifelse( is.null(pars[['v']]), 1, pars[['v']])
+  nug = ifelse( is.null(pars[['nug']]), 1, pars[['nug']])
 
   # generate the kernel name string
   kname = sapply(pars[c('x', 'y')], \(x) x$k ) |> paste(collapse=' x ')
 
   # set the plot title
   ptitle = paste0(ktype, ' about central grid point (', kname, ')')
+
+  # generate a subtitle
+  stitle = 'this is a placeholder subtitle balh blah blah'
+  kpx.nm = names( pkern_corr(pars[['x']][['k']])[['kp']] )
+  kpy.nm = names( pkern_corr(pars[['y']][['k']])[['kp']] )
+  # TODO: finish this
 
   # increment dims as needed and find the row, column of central cell
   dims = dims + 1 - (dims %% 2)
@@ -313,13 +308,19 @@ pkern_kplot = function(pars, dims=c(11,11), v=NA)
   ky = pkern_corrmat(pars[['y']], dims[2], i=ij.central['i'])
   z = v * as.vector( kronecker(kx, ky) )
 
+  idx.central = pkern_mat2vec(ij.central, dims[2])
+  z[idx.central] = z[idx.central] + nug
+
   # compute coordinates and reshape z into a matrix oriented for `graphics::image` and friends
   x = seq(dims[1]) - ij.central['j']
   y = seq(dims[2]) - ij.central['i']
   z.mat = matrix(z[pkern_r2c(dims, in.byrow=FALSE, out.byrow=TRUE)], dims[1])
 
-  # make the plot and finish
-  graphics::filled.contour(x, y, z.mat, xlab='dx', ylab='dy', frame.plot=T, asp=1, main=ptitle)
+  # make the plot, add subtitle, and finish
+  graphics::filled.contour(x, y, z.mat, xlab='dx', ylab='dy', asp=1)
+  mtext(side=3, line=par('mgp')[1]-1, adj=1, ptitle)
+  mtext(side=3, line=par('mgp')[1]-2, adj=1, cex=0.8, stitle)
+
   return(invisible())
 }
 
