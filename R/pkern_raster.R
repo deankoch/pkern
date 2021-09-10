@@ -79,6 +79,8 @@ pkern_fromraster = function(r, what='all')
 #' with some error checking and the ability to pass both the data vector and its
 #' dimensions together as a list (in "rvec").
 #'
+#' If `rvec` is a matrix, `dims` can be omitted
+#'
 #' @return a RasterLayer containing the data from "rvec"
 #' @export
 #'
@@ -93,6 +95,8 @@ pkern_toraster = function(rvec=NA, dims=NULL, template=NULL)
 
   # stop with an error message if raster package is unavailable
   pkern_checkRaster()
+
+  if(is.null(dims) & is.matrix(rvec)) dims = rev(dim(rvec))
 
   # handle list input
   if( is.list(rvec) )
