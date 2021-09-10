@@ -121,61 +121,85 @@ pkern_unwhich = function(idx, n, asinteger=FALSE)
 #'
 #' A grid with nx columns and ny rows has grid lines and i=1:ny, j=1:nx.
 #' A subgrid includes only a subset of these grid lines. This function
-#' uses the grid line numbers to identify points on the subgrid, returning
-#' their column-vectorized index with respect to the full grid. This is often
+#' returns the column-vectorized index of a subgrid with respect to the
+#' full grid, based on the supplied grid line numbers. This is often
 #' helpful when extracting a subset of a dataframe or sub-matrix of a
 #' covariance matrix for gridded data.
 #'
-#' The function returns indices in column-vectorized order, relative to the order of the
-#' elements in its arguments `j` and `i`. This means that if `j = c(j1, j2, ..., in)`
-#' and `i = c(i1, i2, ...im)` then the output may has the order
+#' NA `i` or `j` indicates to use all grid lines. For convenience, `i` and `j`
+#' can passed in a list to argument `i`, in which case argument `j` is ignored
+#' (a warning is issued if `j` is non-NULL in this case).
 #'
-#' (j1, i1), (j1, i2), ... (j1, im), (j2, i1), ... (jm, in).
+#' With `type="index"`, the function returns a subset of `seq(prod(dims))` indexing
+#' the grid points whose i,j indices appear in both `i` and `j`; With `type="logical"`,
+#' the function returns the corresponding logical vector of length `prod(dims)`; and
+#' with `type="01"` the 0, 1 representation of the logical vector.
 #'
-#' However the function does not order `i` or `j` prior to this mapping, so different
-#' output orderings can be induced by changing the ordering of the `i` and `j`. For
-#' example providing `i` in descending order results in a vertically flipped grid.
+#' In default `type="index"` mode, the function returns indices in column-vectorized
+#' order, assuming its arguments `i` and `j` are themselves ordered. This means that
+#' if `j = c(j1, j2, ..., in)` and `i = c(i1, i2, ...im)` then the output has the order
 #'
-#' NA `i` or `j` indicates to use all grid lines. For convenience, list(i,j)
-#' can supplied in argument i. If
+#' (j1, i1), (j1, i2), ... (j1, im), (j2, i1), (j2, i2), ..., (j3, i1), ... (jm, in).
+#'
+#' However the function does not check the internal order of `i` or `j` prior to this
+#' mapping, so different output orderings can be induced by reordering `i` and/or `j`.
+#' For example providing `i` in descending order results in a vertically flipped grid.
+#' Note that in "01" and "logical" modes the order has no effect on the output.
 #'
 #' @param dims c(nx, ny), the number of x and y grid lines in the full grid
-#' @param j vector of positive integers no greater than nx, the x grid lines of the subgrid
 #' @param i vector of positive integers no greater than ny, the y grid lines of the subgrid
+#' @param j vector of positive integers no greater than nx, the x grid lines of the subgrid
+#' @param type character specifying the type of output, either "index", "logical", or "01"
 #'
-#' @return An integer vector indexing the subgrid points with respect to the full grid
+#' @return A logical or integer vector, with length and type depending on `type` (see details)
 #' @export
 #'
 #' @examples
 #' dims = c(5,6)
-#' pkern_idx_sg(dims, c(1,3,5), c(2, 4))
-pkern_idx_sg = function(dims, i=NULL, j=NULL)
+#' pkern_idx_sg(dims)
+#' i = c(2,4)
+#' j = c(1,3,5)
+#' idx = pkern_idx_sg(dims, i, j)
+#' idx
+#' pkern_idx_sg(dims, i, j, type='01')
+#' logic = pkern_idx_sg(dims, i, j, type='logical')
+#' logic
+#' identical(logic, pkern_idx_sg(dims, rev(i), j, type='logical'))
+#' identical(idx, pkern_idx_sg(dims, rev(i), j))
+pkern_idx_sg = function(dims, i=NULL, j=NULL, type="index")
 {
   # handle input as list
-  if( length(i) == 2 )
+  if( is.list(i) & ( length(i) == 2 ) )
   {
-    if( !is.null(j)  ) warning('argument i ignored since j had length 2')
+    if( !is.null(j)  ) warning('argument j ignored since i had length 2')
     j = i[[2]]
     i = i[[1]]
   }
 
-  # handle default j, i (select all grid lines on a dimension)
-  if( is.null(i) ) i = 1:dims[2]
-  if( is.null(j) ) j = 1:dims[1]
+  # handle default i and j (select all grid lines along each dimension)
+  if( is.null(i) ) i = seq( dims[2] )
+  if( is.null(j) ) j = seq( dims[1] )
 
-
-  # count desired subgrid dimensions and compute result
+  # count desired subgrid dimensions
   ni = length(i)
   nj = length(j)
 
-  # y coords cycle from highest to lowest in blocks, x coords increase blockwise
+  # integer and logical modes have a direct kronecker product representation
+  if( type %in% c('logical', '01') )
+  {
+    # kronecker product becomes outer product in 1D
+    logic = outer(seq( dims[1] ) %in% j, seq( dims[2] ) %in% i)
+    if( type == '01' ) return( Rfast::as_integer(logic, result.sort=FALSE) )
+  }
+
+  # index mode
   return( rep(i, nj) + rep(dims[2] * ( j - 1 ), each=ni) )
 }
 
 
 #' Swap grid indices from row-vectorized to column-vectorized order
 #'
-#' "pkern" uses column-vectorization with y decreasing, to mirror standard mathematical
+#' `pkern` uses column-vectorization with y decreasing, to mirror standard mathematical
 #' notation for matrices. This utility function is for converting to and from this ordering.
 #'
 #' dims can be a length-2 vector (as described below) or a RasterLayer object, from which
@@ -410,4 +434,103 @@ pkern_regular = function(gid, ng=max(gid), sep=NA)
   return( g.test[[idx.best]][ map.test[[idx.test]] ] )
 }
 
+
+
+#' Rotate a rectangular array by 45 degrees clockwise
+#'
+#' performs the rotation f(x,y) = (x + y, -x + y) about the center of a rectangular
+#' array (45 degrees counterclockwise), with distances scaled by sqrt(2)/2 to snap
+#' grid cells to those of a larger array.
+#'
+#' When `z` is a matrix, `dims` is ignored (with a warning) and can be omitted, and
+#' the function returns the new rotated array . When `z` is a vector, it should be
+#' in column-vectorized order, and the function returns a list containing the dimensions
+#' of the larger array (nx, ny), and the column-vectorized data.
+#'
+#' NAs for all output grid points not mapped to `z`
+#'
+#' @param z either a numeric matrix or its length-`prod(dims)` column-vectorized version
+#' @param dims c(nx, ny) the number of x and y grid lines
+#'
+#' @return either a list ("z", "dims") or matrix
+#' @export
+#'
+#' @examples
+pkern_r45 = function(z, dims=NULL)
+{
+  # handle matrix mode, extracting grid dimensions (nx, ny) as needed
+  matmode = FALSE
+  if( is.null(dims) )
+  {
+    matmode = TRUE
+    if( !is.matrix(z) ) stop('If dims is not supplied, z must be a matrix')
+    if( !is.null(dims) ) warning('A matrix was supplied so dims is ignored')
+    dims = rev( dim(z) )
+    z = as.vector(z)
+  }
+
+  # rotate long arrays so we only have to deal with the tall array problem
+  tmode = FALSE
+  if( diff(dims) < 0 )
+  {
+    tmode = TRUE
+    z = z[pkern_r2c(rev(dims))]
+    dims = rev(dims)
+  }
+
+  # increment dimensions as need to get odd nx and ny
+  dims.pad = dims + 1 - (dims %% 2)
+
+  # copy the data to this odd-dimensional array
+  zpad = rep(NA, prod(dims.pad))
+  zpad[ pkern_idx_sg(dims.pad, i=seq(dims[2]), j=seq(dims[1])) ] = z
+
+  # sanity check:
+  # matrix(zpad, dims.pad[2]) |> pkern_toraster() |> plot(col=rainbow(100))
+
+  # find the central point in padded array, about which we rotate
+  ij.central = setNames(rev( 1 + ( (dims.pad - 1) / 2 ) ), c('i', 'j'))
+
+  # map from original (padded) i, j to rotated coordinates in larger array...
+  ij = pkern_vec2mat(seq(prod(dims.pad)), dims.pad[2])
+  irot = ij[,'j'] + ij[,'i'] + diff(ij.central)
+  jrot = ij[,'j'] - ij[,'i'] + sum(ij.central)
+
+  # ...and find their vectorized index (with respect to larger array)
+  dims.rot = rep(sum(dims.pad)-1, 2)
+  idx.rot = pkern_mat2vec(cbind(i=irot,j=jrot), dims.rot[2])
+
+  # copy data to larger array
+  zrot = rep(NA, prod(dims.rot))
+  zrot[idx.rot] = zpad
+
+  # sanity check:
+  # matrix(zpad, dims.pad[2]) |> pkern_toraster() |> plot(col=rainbow(100))
+
+  # identify the minimal subset of rows containing all non-NA data
+  ikeep = apply(matrix(zrot, dims.rot[2]), 1, \(x) !all(is.na(x))) |> which()
+  iseq = min(ikeep):max(ikeep)
+
+  # identify the minimal subset of columns containing all non-NA data
+  jkeep = apply(matrix(zrot, dims.rot[2]), 2, \(x) !all(is.na(x))) |> which()
+  jseq = min(ikeep):max(ikeep)
+
+  # output dimensions after cropping
+  dims.out = c( length(jseq), length(iseq) )
+
+  # copy data to cropped output array
+  zout = zrot[ pkern_idx_sg(dims.rot, i=iseq, j=jseq) ]
+
+  # rotate output back to long form as needed
+  if( tmode )
+  {
+    zout = zout[pkern_r2c(rev(dims.out), flipx=TRUE)]
+    dims.out = rev(dims.out)
+  }
+
+  # return the matrix if requested
+  if( matmode ) return( matrix(zout, dims.out[2]) )
+  return( list(z=zout, dims=dims.out) )
+
+}
 
