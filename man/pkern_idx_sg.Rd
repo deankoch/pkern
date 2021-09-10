@@ -34,8 +34,7 @@ can passed in a list to argument \code{i}, in which case argument \code{j} is ig
 With \code{type="index"}, the function returns a subset of \code{seq(prod(dims))} indexing
 the grid points whose i,j indices appear in both \code{i} and \code{j}; With \code{type="logical"},
 the function returns the corresponding logical vector of length \code{prod(dims)}; and
-with \code{type="01"} the 0, 1 representation of the logical vector. These
-alternative modes can help with code optimization when the output is large.
+with \code{type="01"} the 0, 1 representation of the logical vector.
 
 In default \code{type="index"} mode, the function returns indices in column-vectorized
 order, assuming its arguments \code{i} and \code{j} are themselves ordered. This means that

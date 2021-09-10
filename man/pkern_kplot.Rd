@@ -23,7 +23,7 @@ cell.
 }
 \details{
 if either entry of \code{dims} is an even number, it incremented by 1 in order to
-make the definition of "central" unambigious. If \code{v} is not supplied, it is set to
+make the notion of "central" unambiguous. If \code{v} is not supplied, it is set to
 the default 1, and the legend label is changed to "correlation". For convenience, \code{v}
 can be supplied as a third element in \code{pars}; However, arguments to \code{v} take precedence,
 so when both are supplied, \code{pars$v} is ignored with a warning.

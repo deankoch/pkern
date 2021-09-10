@@ -16,7 +16,9 @@ pkern_toraster(rvec = NA, dims = NULL, template = NULL)
 Produces a RasterLayer from a column-vectorized dataset. This is simply a
 wrapper for the call \code{raster(matrix(rvec, ncol=dims[1]), template=template)}
 with some error checking and the ability to pass both the data vector and its
-dimensions together as a list (in "rvec").}
+dimensions together as a list (in "rvec").
+
+If \code{rvec} is a matrix, \code{dims} can be omitted}
 }
 \value{
 a RasterLayer containing the data from "rvec"

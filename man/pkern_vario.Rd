@@ -4,7 +4,15 @@
 \alias{pkern_vario}
 \title{Directional sample semivariograms for regular 2D gridded data}
 \usage{
-pkern_vario(dims, vec, sep = NA, nmin = 2, simple = TRUE, method = "median")
+pkern_vario(
+  dims,
+  vec,
+  sep = NA,
+  simple = TRUE,
+  method = "median",
+  diagonal = TRUE,
+  dmax = NA
+)
 }
 \arguments{
 \item{dims}{vector c(nx, ny) of positive integers, the number of grid lines}
@@ -13,21 +21,26 @@ pkern_vario(dims, vec, sep = NA, nmin = 2, simple = TRUE, method = "median")
 
 \item{sep}{list c(dx, dy) of positive integer vectors, grid line lags to sample}
 
-\item{nmin}{positive integer, the minimum number of point pairs needed to include an estimate}
-
 \item{simple}{logical, if FALSE the function includes point pair indices in return list}
 
 \item{method}{character, one of "mean", "median", "ch", passed to \code{pkern_xvario}}
+
+\item{diagonal}{logical, if TRUE, variogram results are returned also for diagonals}
 }
 \value{
-list with elements "x" and "y" (returned from \code{pkern_xvario}) and "sig"
+list of \code{pkern_xvario} output "x", "y" (and possibly "d1", "d2") and sample variance "v"
 }
 \description{
-A wrapper for two calls to \code{pkern_xvario} to get the directional sample semivariograms
-along the x and y dimensions, on regular lattice data. Note that \code{sep} is given in terms
-of grid line indices (integers), not distances (their product with the x or y resolution)
+A wrapper for calls to \code{pkern_xvario} to get the directional sample semivariograms
+from regular lattice data along the x and y dimensions, and optionally along the
+diagonals (x and y axes after a 45 degree rotation).
 }
 \details{
-The function returns its two (x and y component) results in a list along with
-"v" the estimated (univariate) variance of \code{vec}
+Note that \code{sep} is given in terms of grid line indices (integers), not distances
+(their product with the x or y resolution). For the diagonals, the grid line separations
+are scaled so that \code{sep} is \code{sqrt(2)} for diagonally adjacent grid points.
+
+The function makes the appropriate calls to \code{pkern_xvario} and returns the results
+in list elements "x", "y" (and if \code{diagonal=TRUE}, "d1", "d2" the x and y axes after
+rotation), along with "v", the estimated (univariate) variance of \code{vec}
 }

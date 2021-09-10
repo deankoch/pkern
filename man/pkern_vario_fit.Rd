@@ -4,7 +4,14 @@
 \alias{pkern_vario_fit}
 \title{Fit a theoretical separable covariance model to a separated empirical semivariogram}
 \usage{
-pkern_vario_fit(vario, xpars = "exp", ypars = xpars, v = NA, nmin = 2)
+pkern_vario_fit(
+  vario,
+  xpars = "exp",
+  ypars = xpars,
+  v = NA,
+  nmin = 2,
+  ninitial = 1
+)
 }
 \arguments{
 \item{vario}{list, the return value from a call to \code{pkern_vario}}
@@ -16,6 +23,8 @@ pkern_vario_fit(vario, xpars = "exp", ypars = xpars, v = NA, nmin = 2)
 \item{v}{length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for variance}
 
 \item{nmin}{positive integer, the minimum number of samples to include a lag}
+
+\item{ninitial}{positive integer, the number of initial value sets to test (see details)}
 }
 \value{
 

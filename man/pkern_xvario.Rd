@@ -18,7 +18,7 @@ pkern_xvario(dims, vec, sep = NA, simple = TRUE, method = "median")
 \item{method}{character, one of "mean", "median", "ch"}
 }
 \value{
-a list with named elements "sep", "vario", and "pairs"
+a list with named elements "sep", "n", and "sv"
 }
 \description{
 The function identifies and computes the semivariance (in \code{vec}) of point pairs on a
