@@ -4,36 +4,41 @@
 \alias{pkern_kplot}
 \title{Make a heatmap of covariances/correlations around a grid's central point}
 \usage{
-pkern_kplot(pars, dims = c(11, 11), v = NA)
+pkern_kplot(pars, dims = c(25, 25))
 }
 \arguments{
-\item{pars}{list of two parameter lists "x" and "y", each recognized by \code{pkern_corr}}
+\item{pars}{list of two parameter lists "x" and "y", and (optionally) "v", "nug"}
 
 \item{dims}{c(nx, ny), the number of x and y lags to include}
 
 \item{v}{numeric, the pointwise variance}
 }
 \value{
-returns nothing but prints a heatmap plot
+returns nothing but prints a contour plot of the specified kernel
 }
 \description{
-This function visualizes a separable kernel by building a grid of size \code{dims}
-and coloring cells according to their covariance (or correlation) with the central
-cell.
+This function displays a separable kernel by building a grid of size \code{dims},
+assigning to each cell the covariance (or correlation) with the central cell,
+then passing the result to a contour plotter (\code{graphics::filled.contour})
+for visualization.
 }
 \details{
+\code{pars} should be a list containing elements "x" and "y", which are lists of parameters
+for the x and y component kernels (recognized by \code{pkern_corr}). Optionally, \code{pars} can
+also include a (positive numeric) pointwise variance term in "v". Covariance parameters
+from both kernels are printed as a subtitle, with values rounded to 3 decimal places.
+
 if either entry of \code{dims} is an even number, it incremented by 1 in order to
 make the notion of "central" unambiguous. If \code{v} is not supplied, it is set to
-the default 1, and the legend label is changed to "correlation". For convenience, \code{v}
-can be supplied as a third element in \code{pars}; However, arguments to \code{v} take precedence,
-so when both are supplied, \code{pars$v} is ignored with a warning.
+the default 1, and the legend label is changed to "correlation".
+
+Note that contour plots (which smooth their data) are not an appropriate tool for
+visualizing the nugget effect (a discontinuity), so \code{pars$nug} is ignored by this
+function.
 }
 \examples{
-pars = list(x=pkern_corr('mat'), y=pkern_corr('sph'))
+pars = list(x=pkern_corr('mat'), y=pkern_corr('exp'))
 pkern_kplot(pars)
-pkern_kplot(pars, v=1)
 pkern_kplot(pars, dims=c(10,5))
-pkern_kplot = function(pars, dims=c(11, 11), v=NA)
-pars$v = 2
-pkern_kplot(pars, v=3)
+pkern_kplot(c(pars, list(v=2)), dims=c(10,5))
 }

@@ -43,8 +43,10 @@ pkern_corr = function(pars, d=NA)
   bds.rho = c(min=1e-2, ini=1, max=1e2)
   bds.p = c(min=1e-2, ini=1.99, max=2)
   bds.kap = c(min=1e-2, ini=1, max=50)
+  bds.sph.rho = c(min=1e-2, ini=5, max=1e2)
+  bds.exp.rho = c(min=1e-2, ini=2, max=1e2)
 
-  # handle character input to pars
+  # handle character input to pars as request for initial values
   if( is.character(pars) )
   {
     pars = list(k=pars, kp=NULL)
@@ -59,7 +61,7 @@ pkern_corr = function(pars, d=NA)
   if(pars[['k']] == 'exp')
   {
     # return suggested bounds and initial value if requested
-    if(makebounds) return(rbind(rho=bds.rho))
+    if(makebounds) return(rbind(rho=bds.exp.rho))
 
     # unpack names (or assume rho is first element of pars$kp)
     kp.idx = match('rho', names(pars$kp))
@@ -91,7 +93,7 @@ pkern_corr = function(pars, d=NA)
   if(pars[['k']] == 'sph')
   {
     # return suggested bounds and initial value if requested
-    if(makebounds) return(rbind(rho=bds.rho))
+    if(makebounds) return(rbind(rho=bds.sph.rho))
 
     # unpack names (or assume rho is first element of pars$kp)
     kp.idx = match('rho', names(pars$kp))
@@ -251,65 +253,70 @@ pkern_corrmat = function(pars, n, ds=1, i=seq(n), j=seq(n))
 
 #' Make a heatmap of covariances/correlations around a grid's central point
 #'
-#' This function visualizes a separable kernel by building a grid of size `dims`
-#' and coloring cells according to their covariance (or correlation) with the central
-#' cell.
+#' This function displays a separable kernel by building a grid of size `dims`,
+#' assigning to each cell the covariance (or correlation) with the central cell,
+#' then passing the result to a contour plotter (`graphics::filled.contour`)
+#' for visualization.
 #'
 #' `pars` should be a list containing elements "x" and "y", which are lists of parameters
 #' for the x and y component kernels (recognized by `pkern_corr`). Optionally, `pars` can
-#' also include a (positive numeric) variance term in "v" and a (nonegative numeric)
-#' nugget effect in "nug".
+#' also include a (positive numeric) pointwise variance term in "v". Covariance parameters
+#' from both kernels are printed as a subtitle, with values rounded to 3 decimal places.
 #'
 #' if either entry of `dims` is an even number, it incremented by 1 in order to
 #' make the notion of "central" unambiguous. If `v` is not supplied, it is set to
-#' the default 1, and the legend label is changed to "correlation". If `nug` is
-#' supplied, the central point has this value added to it. If it is not supplied,
-#' `nug` is assumed to be zero.
+#' the default 1, and the legend label is changed to "correlation".
+#'
+#' Note that contour plots (which smooth their data) are not an appropriate tool for
+#' visualizing the nugget effect (a discontinuity), so `pars$nug` is ignored by this
+#' function.
 #'
 #' @param pars list of two parameter lists "x" and "y", and (optionally) "v", "nug"
 #' @param dims c(nx, ny), the number of x and y lags to include
 #' @param v numeric, the pointwise variance
 #'
-#' @return returns nothing but prints a heatmap plot
+#' @return returns nothing but prints a contour plot of the specified kernel
 #' @export
 #'
 #' @examples
-#' pars = list(x=pkern_corr('mat'), y=pkern_corr('sph'))
+#' pars = list(x=pkern_corr('mat'), y=pkern_corr('exp'))
 #' pkern_kplot(pars)
 #' pkern_kplot(pars, dims=c(10,5))
-#' pkern_kplot(pars, v=c(pars, list(v=2)))
-#' pkern_kplot(pars, v=c(pars, list(v=2, nug=1)))
+#' pkern_kplot(c(pars, list(v=2)), dims=c(10,5))
 pkern_kplot = function(pars, dims=c(25, 25))
 {
-
-  # unpack v and nug, setting defaults as needed and determining plot title
+  # unpack v, setting defaults as needed, determine plot title
   ktype = ifelse( is.null(pars[['v']]), 'correlation', 'covariance')
   v = ifelse( is.null(pars[['v']]), 1, pars[['v']])
-  nug = ifelse( is.null(pars[['nug']]), 1, pars[['nug']])
 
   # generate the kernel name string
-  kname = sapply(pars[c('x', 'y')], \(x) x$k ) |> paste(collapse=' x ')
+  kname = sapply(pars[c('x', 'y')], \(x) paste0('[', x$k, ']') ) |> paste(collapse=' x ')
 
   # set the plot title
-  ptitle = paste0(ktype, ' about central grid point (', kname, ')')
+  ptitle = paste(ktype, 'about central grid point with kernel:', kname)
 
-  # generate a subtitle
-  stitle = 'this is a placeholder subtitle balh blah blah'
+  # extract parameter names
   kpx.nm = names( pkern_corr(pars[['x']][['k']])[['kp']] )
   kpy.nm = names( pkern_corr(pars[['y']][['k']])[['kp']] )
-  # TODO: finish this
+  if( is.null(kpx.nm) ) kpx.nm = 'rho'
+  if( is.null(kpy.nm) ) kpy.nm = 'rho'
 
-  # increment dims as needed and find the row, column of central cell
+  # create a subtitle
+  kpx = mapply(\(nm, p) paste(nm, '=', round(p, 3)), nm=kpx.nm, p=pars[['x']][['kp']])
+  kpy = mapply(\(nm, p) paste(nm, '=', round(p, 3)), nm=kpy.nm, p=pars[['y']][['kp']])
+  xstr = paste0('[', paste(kpx, collapse=', '), ']')
+  ystr = paste0('[', paste(kpy, collapse=', '), ']')
+  stitle = paste('parameters', xstr, ' x ', ystr)
+
+  # increment dims as needed and find the row, column, and index of central cell
   dims = dims + 1 - (dims %% 2)
   ij.central = setNames(rev( 1 + ( (dims - 1) / 2 ) ), c('i', 'j'))
+  idx.central = pkern_mat2vec(ij.central, dims[2])
 
   # compute the required component kernel values and their kronecker product
   kx = pkern_corrmat(pars[['x']], dims[1], j=ij.central['j'])
   ky = pkern_corrmat(pars[['y']], dims[2], i=ij.central['i'])
   z = v * as.vector( kronecker(kx, ky) )
-
-  idx.central = pkern_mat2vec(ij.central, dims[2])
-  z[idx.central] = z[idx.central] + nug
 
   # compute coordinates and reshape z into a matrix oriented for `graphics::image` and friends
   x = seq(dims[1]) - ij.central['j']
@@ -317,7 +324,7 @@ pkern_kplot = function(pars, dims=c(25, 25))
   z.mat = matrix(z[pkern_r2c(dims, in.byrow=FALSE, out.byrow=TRUE)], dims[1])
 
   # make the plot, add subtitle, and finish
-  graphics::filled.contour(x, y, z.mat, xlab='dx', ylab='dy', asp=1)
+  graphics::filled.contour(x, y, z.mat, xlab='dx', ylab='dy', asp=1, nlevels=50)
   mtext(side=3, line=par('mgp')[1]-1, adj=1, ptitle)
   mtext(side=3, line=par('mgp')[1]-2, adj=1, cex=0.8, stitle)
 

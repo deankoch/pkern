@@ -25,9 +25,9 @@ pkern_vario_fit(
 
 \item{nug}{length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for nugget}
 
-\item{nmin}{positive integer, the minimum number of samples to include a lag}
+\item{nmin}{positive integer, lags with fewer than \code{nmin} samples are omitted in estimation}
 
-\item{ninitial}{positive integer, the number of initial value sets to test (see details)}
+\item{ninitial}{positive integer, the number of initial parameter sets tested (see details)}
 }
 \value{
 
@@ -35,7 +35,7 @@ pkern_vario_fit(
 \description{
 Pipe the results of a \code{pkern_vario} call to this function to estimate model
 parameters for \code{xpars} and \code{ypars}, the x and y component kernels, by weighted
-least squares (Cressie, 2015), where \code{stats::optim} ("L-BFGS-B" method with default
+least squares (Cressie, 2015), where \code{stats::optim} ("L-BFGS-B") with default
 settings is used to solve the minimization problem.
 }
 \details{
@@ -45,7 +45,17 @@ and bounds. If parameter lists (recognized by \code{pkern_corr}), are supplied, 
 function uses its "kp" entry for initial values, and if the list contains entries
 "lower" and/or "upper", they are used as bounds.
 
-The variance is estimated simultaneously with the correlation kernel parameters
-using bounds and initial value in \code{v}. If these are not supplied, the function
-sets reasonable defaults.
+The pointwise variance is estimated simultaneously with the correlation kernel
+parameters using the bounds and initial values in \code{v} and \code{nug}. If these are not
+supplied, the function sets (for both) default default bounds of 0 to 4 times the
+sample variance.
+
+The nugget effect can be disabled by setting its maximum to 0. Note that for
+certain sampling configurations and kernels (particularly the Gaussian), this will
+produce ill-conditioned covariance matrices, leading to inaccuracies or errors
+in prediction functions like \code{pkern_cmean}.
+
+When \code{ninitial > 1}, the least squares optimization call is repeated for additional
+sets of initial values, chosen uniformly at random within their upper and lower
+bounds. Try increasing this to resolve issues of convergence to incorrect local optima.
 }

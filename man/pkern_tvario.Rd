@@ -9,9 +9,9 @@ pkern_tvario(pars, v, nug = 0, d = NULL)
 \arguments{
 \item{pars}{list of kernel parameters, in form recognized by \code{pkern_corr}}
 
-\item{v}{positive numeric, the common variance}
+\item{v}{positive numeric, the pointwise variance absent a nugget effect}
 
-\item{nug}{positive numeric, the size of the nugget effect}
+\item{nug}{positive numeric, (optional) the variance of the nugget effect}
 
 \item{d}{vector of nonegative numeric spatial lags to evaluate}
 }
@@ -25,8 +25,8 @@ spatial lags, assuming (intrinsic) stationarity.
 \details{
 Kernel parameters \code{pars} are passed to the correlation function (\code{pkern_corr})
 to get correlation values at distances \code{d}. The result is converted to semivariance
-(assuming common variance \code{v} with nugget effect \code{nug}) and returned as a vector
-the same length as \code{d}.
+assuming a pointwise variance of \code{v + nug} (an optional nugget effect) and returned
+as a vector the same length as \code{d}.
 
 When \code{d} is NULL, the function instead returns the semivariance function as an
 anonymous function of distance.

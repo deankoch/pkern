@@ -46,11 +46,11 @@ gxy.snap = pkern_snap(pts=tmin, g=dem, regular=TRUE, makeplot=FALSE)
 nm.data = 'tmin'
 
 # plot the larger example with snapped grid lines
-# plot(dem)
-# plot(tmin, add=T, pch=16)
-# abline(v=gxy.snap$x$gval)
-# abline(h=gxy.snap$y$gval)
-# par(old.par)
+plot(dem)
+plot(tmin, add=T, pch=16, pal=\(n) rainbow(n, rev=TRUE))
+abline(v=gxy.snap$x$gval)
+abline(h=gxy.snap$y$gval)
+par(old.par)
 
 
 # development of new raster function
@@ -85,7 +85,7 @@ plot(r.src, col=rainbow(100))
 #
 
 # development of sample variograms
-vario = pkern_vario(dims.bbox, vec.src, dmax=17)
+vario = pkern_vario(dims.bbox, vec.src, dmax=15)
 pkern_vario_plot(vario)
 
 # fit a model
@@ -102,12 +102,14 @@ pars = pkern_vario_fit(vario, 'mat')
 pkern_vario_plot(vario, pars)
 pars
 
+
+
 # persian rug art (example from filled.contour docs)
 # x <- y <- seq(-4*pi, 4*pi, length.out = 27)
 # r <- sqrt(outer(x^2, y^2, "+"))
 # filled.contour(cos(r^2)*exp(-r/(2*pi)), axes = FALSE)
-
 pkern_kplot(pars, dims.bbox)
+
 
 
 # compute conditional mean

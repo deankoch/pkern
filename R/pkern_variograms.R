@@ -12,15 +12,15 @@
 #'
 #' Kernel parameters `pars` are passed to the correlation function (`pkern_corr`)
 #' to get correlation values at distances `d`. The result is converted to semivariance
-#' (assuming common variance `v` with nugget effect `nug`) and returned as a vector
-#' the same length as `d`.
+#' assuming a pointwise variance of `v + nug` (an optional nugget effect) and returned
+#' as a vector the same length as `d`.
 #'
 #' When `d` is NULL, the function instead returns the semivariance function as an
 #' anonymous function of distance.
 #'
 #' @param pars list of kernel parameters, in form recognized by `pkern_corr`
-#' @param v positive numeric, the common variance
-#' @param nug positive numeric, the size of the nugget effect
+#' @param v positive numeric, the pointwise variance absent a nugget effect
+#' @param nug positive numeric, (optional) the variance of the nugget effect
 #' @param d vector of nonegative numeric spatial lags to evaluate
 #'
 #' @return either a vector the same length as `d`, or an anonymous function of distance
@@ -165,7 +165,7 @@ pkern_vario = function(dims, vec, sep=NA, simple=TRUE, method='median', diagonal
   # bundle into output list
   list.out = list(x=xout, y=yout)
 
-  # repeat after rotation, if requested
+  # repeat with 45 degree rotated coordinates, if requested
   if( diagonal )
   {
     # rotate the data by 45 degrees clockwise
@@ -188,7 +188,7 @@ pkern_vario = function(dims, vec, sep=NA, simple=TRUE, method='median', diagonal
   list.out = lapply(list.out, \(d) lapply(d, \(z) z[ !is.na(d[['sv']]) ] ) )
 
   # truncate to requested distance maximum
-  if( is.numeric(dmax) ) list.out = lapply(list.out, \(d) lapply(d, \(z) z[ !( d[['sep']]>dmax ) ] ))
+  if( is.numeric(dmax) ) list.out = lapply(list.out, \(d) lapply(d, \(z) z[ !(d[['sep']] > dmax) ] ))
 
   # return results along with estimated variance
   return(c(list.out, list(v=v)))
@@ -199,8 +199,8 @@ pkern_vario = function(dims, vec, sep=NA, simple=TRUE, method='median', diagonal
 #' Plot 1-dimensional empirical semivariograms for a separable model
 #'
 #' `pars` should be a list containing named elements: "x" and "y", lists of x and y kernel
-#' parameters in form recognized by `pkern_corr`; "v", the numeric variance; and, optionally,
-#' "nug", a numeric providing the size of the nugget effect.
+#' parameters in form recognized by `pkern_corr`; "v", the pointwise variance in the absence
+#' of a nugget effect; and, optionally, "nug", the variance of the nugget effect.
 #'
 #' @param vario list of semivariance data, the return value of `pkern_vario` or `pkern_xvario`
 #' @param pars list of kernel parameters "x" and/or "y", variance "v", and optionally nugget "nug"
@@ -314,7 +314,7 @@ pkern_vario_plot = function(vario, pars=NULL, nmin=1, ptitle=NULL, shade=TRUE)
 #'
 #' Pipe the results of a `pkern_vario` call to this function to estimate model
 #' parameters for `xpars` and `ypars`, the x and y component kernels, by weighted
-#' least squares (Cressie, 2015), where `stats::optim` ("L-BFGS-B" method with default
+#' least squares (Cressie, 2015), where `stats::optim` ("L-BFGS-B") with default
 #' settings is used to solve the minimization problem.
 #'
 #' `xpars` and `ypars` may be specified as character strings (the exponential
@@ -323,17 +323,27 @@ pkern_vario_plot = function(vario, pars=NULL, nmin=1, ptitle=NULL, shade=TRUE)
 #' function uses its "kp" entry for initial values, and if the list contains entries
 #' "lower" and/or "upper", they are used as bounds.
 #'
-#' The variance is estimated simultaneously with the correlation kernel parameters
-#' using bounds and initial value in `v`. If these are not supplied, the function
-#' sets reasonable defaults.
+#' The pointwise variance is estimated simultaneously with the correlation kernel
+#' parameters using the bounds and initial values in `v` and `nug`. If these are not
+#' supplied, the function sets (for both) default default bounds of 0 to 4 times the
+#' sample variance.
+#'
+#' The nugget effect can be disabled by setting its maximum to 0. Note that for
+#' certain sampling configurations and kernels (particularly the Gaussian), this will
+#' produce ill-conditioned covariance matrices, leading to inaccuracies or errors
+#' in prediction functions like `pkern_cmean`.
+#'
+#' When `ninitial > 1`, the least squares optimization call is repeated for additional
+#' sets of initial values, chosen uniformly at random within their upper and lower
+#' bounds. Try increasing this to resolve issues of convergence to incorrect local optima.
 #'
 #' @param vario list, the return value from a call to `pkern_vario`
 #' @param xpars character or list, recognizable (as `pars`) by `pkern_corr`
 #' @param ypars character or list, recognizable (as `pars`) by `pkern_corr`
 #' @param v length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for variance
 #' @param nug length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for nugget
-#' @param nmin positive integer, the minimum number of samples to include a lag
-#' @param ninitial positive integer, the number of initial value sets to test (see details)
+#' @param nmin positive integer, lags with fewer than `nmin` samples are omitted in estimation
+#' @param ninitial positive integer, the number of initial parameter sets tested (see details)
 #'
 #' @return
 #' @export
@@ -346,8 +356,8 @@ pkern_vario_fit = function(vario, xpars='exp', ypars=xpars, v=NA, nug=NA, nmin=2
   if( is.character(ypars) ) ypars = pkern_corr(ypars)
 
   # set defaults for variance and nugget
-  if( anyNA(v) ) v = c(min=0, ini=vario$v/2, max=vario$v)
-  if( anyNA(nug) ) nug = c(min=0, ini=v[2]/2, max=v[3]/2)
+  if( anyNA(v) ) v = c(min=0, ini=vario$v, max=4*vario$v)
+  if( anyNA(nug) ) nug = c(min=0, ini=v[2]/2, max=4*vario$v)
 
   # set default lower and upper bounds for kernel parameters as needed
   if( is.null(xpars$lower) ) xpars$lower = pkern_corr(xpars)[,'min']

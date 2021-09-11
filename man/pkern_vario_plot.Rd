@@ -22,6 +22,6 @@ prints a plot and returns nothing
 }
 \description{
 \code{pars} should be a list containing named elements: "x" and "y", lists of x and y kernel
-parameters in form recognized by \code{pkern_corr}; "v", the numeric variance; and, optionally,
-"nug", a numeric providing the size of the nugget effect.
+parameters in form recognized by \code{pkern_corr}; "v", the pointwise variance in the absence
+of a nugget effect; and, optionally, "nug", the variance of the nugget effect.
 }
