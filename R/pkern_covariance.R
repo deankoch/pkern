@@ -40,11 +40,11 @@ pkern_corr = function(pars, d=NA)
 {
   # if `d` is (or contains) NA, return suggested bounds for supplied pars
   makebounds = anyNA(d)
-  bds.rho = c(min=1e-2, ini=1, max=1e2)
+  bds.rho = c(min=1e-2, ini=1, max=65180.2)
   bds.p = c(min=1e-2, ini=1.99, max=2)
   bds.kap = c(min=1e-2, ini=1, max=50)
-  bds.sph.rho = c(min=1e-2, ini=5, max=1e2)
-  bds.exp.rho = c(min=1e-2, ini=2, max=1e2)
+  bds.sph.rho = c(min=1e-2, ini=5, max=1e6)
+  bds.exp.rho = c(min=1e-2, ini=2, max=1e6)
 
   # handle character input to pars as request for initial values
   if( is.character(pars) )
