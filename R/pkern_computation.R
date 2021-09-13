@@ -43,7 +43,7 @@ pkern_kprod = function(X, Y, z, trans=FALSE)
 # uses Rccp libraries in Rfast package and ...
 
 # conditional mean of points on a grid given zobs, a sample taken over a subgrid
-pkern_cmean = function(dims, xpars, ypars, zobs, gxy, pre=NULL, nug=1e-9)
+pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
 {
   # Fast conditional mean computer for problems where sampled locations form a subgrid
   #
@@ -53,10 +53,10 @@ pkern_cmean = function(dims, xpars, ypars, zobs, gxy, pre=NULL, nug=1e-9)
   # ARGUMENTS:
   #
   # dims: vector of two integers (nx, ny), the dimensions of the full grid
-  # xpars: list of kernel parameters for the x-dimension component
-  # ypars: list of kernel parameters for the y-dimension component
-  # zobs: numeric vector of observed data
+  # pars: list containing kernel parameters "x" and "y", nugget size "nug", and resolution "ds"
+  # zobs: numeric vector of observed data, possibly with NAs
   # gxy: list of two integer vectors, the x and y grid lines of the subgrid
+  # precompute: either logical (default FALSE), or a list of precomputed objects (see details)
   #
   # DETAILS:
   #
@@ -66,128 +66,166 @@ pkern_cmean = function(dims, xpars, ypars, zobs, gxy, pre=NULL, nug=1e-9)
   # (ie the number of grid line intersections), and the grid line numbers in gxy
   # should be ordered subsets of the sequences seq(dims[1]) and seq(dims[2])
   #
-  # see sk_kern for details on xpars, ypars
-  #
-  # RETURN:
-  #
   # the function returns a numeric vector of length prod(dims), containing the
   # observed data from zobs and the mean values at all other grid points, conditional
   # on zobs (in column-vectorized order).
   #
 
-  #### unpack input
+  nsg = length(zobs)
 
-  # unpack grid dimensions and create vectors indexing all its grid lines
-  nx = dims[1]
-  ny = dims[2]
-  ngx = length(gxy[[1]])
-  ngy = length(gxy[[2]])
 
-  # unpack and sort x and y grid line indices for observed data and find their complements
-  gx = sort(gxy[[1]])
-  gy = sort(gxy[[2]])
-  gxc = seq(nx)[-gx]
-  gyc = seq(ny)[-gy]
-
-  # compute resolution increase factors
-  dsx = diff(gx[1:2])
-  dsy = diff(gy[1:2])
-
-  if( is.null(pre) )
+  # check if precomputed matrices and indices were supplied
+  if( !is.logical(precompute) )
   {
+    # check for invalid input
+    if( !is.list(precompute) ) stop('"precompute" must be a list')
 
-    #### compute subset indices
+    # unpack correlation matrices and eigendecomposition of marginal variance
+    vx = precompute[['vx']]
+    vy = precompute[['vy']]
+    vx.cross = precompute[['vx.cross']]
+    vy.cross = precompute[['vy.cross']]
+    ed = precompute[['ed']]
 
-    # index of observed grid points in full grid
-    idx.obs = pkern_idx_sg(dims, i=gy, j=gx)
+    # unpack indexing vectors
+    idx.on = precompute[['idx.on']]
+    idx.off = precompute[['idx.off']]
+    idx.xoff = precompute[['idx.xoff']]
+    idx.yoff = precompute[['idx.yoff']]
+    idx.sg.obs = precompute[['idx.sg.obs']]
 
-    # initialize predictions vector and add the observed points
-    zout = rep(as.numeric(NA), prod(dims))
-    zout[idx.obs] = zobs
+    # don't return the precomputed data in this case
+    precompute = FALSE
 
-    # indexing on full grid of *all* points lying on grid lines of the subgrid
-    idx.x = pkern_idx_sg(dims, i=NULL, j=gx)
-    idx.y = pkern_idx_sg(dims, i=gy, j=NULL)
-
-    # index of unobserved points sharing an x grid line with an observed one
-    idx.unobs.x = idx.x[!(idx.x %in% idx.obs)]
-
-    # index of unobserved points sharing a y grid line with an observed one
-    idx.unobs.y = idx.y[!(idx.y %in% idx.obs)]
-
-    # index of unobserved points sharing no grid lines with observations
-    idx.unobs.no = seq(nx*ny)[-c(idx.obs, idx.x, idx.y)]
-
-
-    #### matrix computations
-
-    # build component marginal covariance matrices for observations
-    vx = pkern_corrmat(xpars, ngx)
-    vy = pkern_corrmat(ypars, ngy)
-
-    # build components of cross covariance matrices between observations and the first two subsets
-    vx.cross = pkern_corrmat(xpars, dims[1], ds=1/dsx, j=gxc, i=gx)
-    vy.cross = pkern_corrmat(ypars, dims[2], ds=1/dsy, j=gyc, i=gy)
-
-    # TODO: replace explicit inverse with faster methods
-    vx.inv = chol2inv( Rfast::cholesky(vx) )
-    vy.inv = chol2inv( Rfast::cholesky(vy) )
-
+    # TODO: verify that zobs agrees with the (possibly precomputed) index of NAs
 
   } else {
 
-    # unpack precomputed objects
-    if( is.list(pre) )
+    # computationally expensive steps which are independent of `zobs`:
+
+    ## compute important indices in vectorized output grid
+
+    # sort x and y grid line indices for observed data and find their complements
+    gx = sort( gxy[[1]] )
+    gy = sort( gxy[[2]] )
+    gxc = seq( dims[1] )[-gx]
+    gyc = seq( dims[2] )[-gy]
+
+    # index of subgrid points in full grid, and all points on one of its grid lines
+    idx.on = pkern_idx_sg(dims, i=gy, j=gx)
+    idx.on.x = pkern_idx_sg(dims, i=NULL, j=gx)
+    idx.on.y = pkern_idx_sg(dims, i=gy, j=NULL)
+
+    # partition non-subgrid points into three sets depending on overlap with grid lines
+    idx.off = seq( prod(dims) )[ -c(idx.on, idx.on.x, idx.on.y) ]
+    idx.xoff = idx.on.x[ !( idx.on.x %in% idx.on ) ]
+    idx.yoff = idx.on.y[ !( idx.on.y %in% idx.on ) ]
+
+    ## compute correlation matrices
+
+    # find relative increase in resolution going from subgrid to full grid
+    dsx = diff( gx[1:2] )
+    dsy = diff( gy[1:2] )
+
+    # regularize range parameters for computations over integer lattice
+    pars[['x']][['kp']][1] = pars[['x']][['kp']][1] / pars[['ds']][1]
+    pars[['y']][['kp']][1] = pars[['y']][['kp']][1] / pars[['ds']][2]
+
+    # build component marginal correlation matrices for the subgrid
+    vx = pkern_corrmat(pars[['x']], length( gxy[[1]] ) )
+    vy = pkern_corrmat(pars[['y']], length( gxy[[2]] ) )
+
+    # build component cross-correlation matrices for points on vs off subgrid lines
+    vx.cross = pkern_corrmat(pars[['x']], dims[1], ds=1/dsx, j=gxc, i=gx)
+    vy.cross = pkern_corrmat(pars[['y']], dims[2], ds=1/dsy, j=gyc, i=gy)
+
+    ## compute eigendecomposition(s)
+
+    # slower method when there is missing data
+    if( anyNA(zobs) )
     {
-      vx = pre[[1]]
-      vy = pre[[2]]
-      vx.cross = pre[[3]]
-      vy.cross = pre[[4]]
-      vx.inv = pre[[5]]
-      vy.inv = pre[[6]]
-      idx.unobs.x = pre[[7]]
-      idx.unobs.y = pre[[8]]
-      idx.unobs.no = pre[[9]]
+      # missing data case requires first evaluating the variance kronecker product
+      idx.sg.obs = which( !is.na(zobs) )
+      ed = eigen(kronecker(vx, vy)[idx.sg.obs, idx.sg.obs], symmetric=TRUE)
 
     } else {
 
-      # any non-list input to `pre` interpreted as prompt to precompute expensive stuff
-      pre = list(vx, vy, vx.cross, vy.cross, vx.inv, vy.inv, idx.unobs.x, idx.unobs.y, idx.unobs.no)
-      return(pre)
+      # with no missing data we can do eigendecompositions on component matrices
+      idx.sg.obs = seq(nsg)
+      ed = list(x=eigen(vx, symmetric=TRUE), y=eigen(vy, symmetric=TRUE))
     }
   }
 
-  # left-multiply inverse marginal covariance to get transformed observations
-  ztrans = pkern_kprod(vx.inv, vy.inv, zobs, trans=TRUE)
+  # return the list of precomputed objects if requested
+  if( precompute ) return(list(vx=vx,
+                               vy=vy,
+                               ed=ed,
+                               vx.cross=vx.cross,
+                               vy.cross=vy.cross,
+                               idx.on=idx.on,
+                               idx.off=idx.off,
+                               idx.xoff=idx.xoff,
+                               idx.yoff=idx.yoff,
+                               idx.sg.obs=idx.sg.obs))
 
-  ## TESTING QR BASED METHOD ***********************************************
+  # missing data case
+  if( length(idx.sg.obs) < nsg )
+  {
+    # omit the NA values from zobs
+    zobs.crop = zobs[idx.sg.obs]
 
-  # ztrans.t = c( qr.solve(qr(vx), Rfast::transpose( qr.solve(qr(vy), matrix(zobs, ngy)) ) ) )
-  # ztrans = ztrans.t[ pkern_r2c(rev(c(ngx, ngy)), FALSE, TRUE) ]
+    # pointwise variances are equal to the eigenvalues plus the nugget variance
+    pwv = pars[['nug']] + ed[['values']]
 
-  # works okay!
+    # pad output vector with zeros (equivalent to subsetting cross-correlation matrices below)
+    zobs.indep = rep(0, nsg)
 
-  ## ***********************************************
+    # transform `zobs` by product with inverse covariance to get mutual independence
+    zobs.indep[idx.sg.obs] = ed[['vectors']] %*% ( ( t(ed[['vectors']]) %*% zobs.crop ) / pwv )
 
+  } else {
+
+    # kronecker product trick to get pointwise variances
+    pwv = pars[['nug']] + kronecker(ed[['x']][['values']], ed[['y']][['values']])
+
+    # kronecker product trick to get product with covariance inverse
+    zobs.ortho = pkern_kprod(ed[['x']][['vectors']], ed[['y']][['vectors']], zobs, trans=TRUE) / pwv
+    zobs.indep = pkern_kprod(ed[['x']][['vectors']], ed[['y']][['vectors']], zobs.ortho, trans=FALSE)
+  }
 
   ## TESTING EIGENVALUE-BASED METHOD ***********************************************
 
-  evx = eigen(vx, symmetric=TRUE)
-  evy = eigen(vy, symmetric=TRUE)
-  z1 = pkern_kprod(evx[['vectors']], evy[['vectors']], zobs, trans=TRUE)
-  z2 = z1 / ( nug + kronecker(evx[['values']], evy[['values']]) )
-  ztrans = pkern_kprod(evx[['vectors']], evy[['vectors']], z2, trans=FALSE)
+  # evx = eigen(vx, symmetric=TRUE)
+  # evy = eigen(vy, symmetric=TRUE)
+  # z1 = pkern_kprod(evx[['vectors']], evy[['vectors']], zobs, trans=TRUE)
+  # z2 = z1 / ( nug + kronecker(evx[['values']], evy[['values']]) )
+  # ztrans = pkern_kprod(evx[['vectors']], evy[['vectors']], z2, trans=FALSE)
+
+  ## ***********************************************
+
+
+  ## NON-KRONECKER VERSION FOR MISSING DATA ****************************************
+
+  # idx.miss = is.na(zobs)
+  # zcomplete = zobs[-which(idx.miss)]
+  # evxy = eigen(kronecker(vx, vy)[!idx.miss, !idx.miss], symmetric=TRUE)
+  #
+  # xx = evxy[['vectors']] %*% ( ( t(evxy[['vectors']]) %*% zcomplete ) / ( nug + evxy[['values']] ) )
+  # ztrans = rep(0, length(zobs))
+  # ztrans[!idx.miss] = xx
 
   # works okay!
 
   ## ***********************************************
 
-
+  # initialize predictions vector and add the observed points
+  zout = rep(as.numeric(NA), prod(dims))
+  zout[idx.on] = zobs
 
   # compute predictions separately on the three subsets
-  zout[idx.unobs.x] = pkern_kprod(vx, vy.cross, ztrans, trans=TRUE)
-  zout[idx.unobs.y] = pkern_kprod(vx.cross, vy, ztrans, trans=TRUE)
-  zout[idx.unobs.no] = pkern_kprod(vx.cross, vy.cross, ztrans, trans=TRUE)
+  zout[idx.xoff] = pkern_kprod(vx, vy.cross, zobs.indep, trans=TRUE)
+  zout[idx.yoff] = pkern_kprod(vx.cross, vy, zobs.indep, trans=TRUE)
+  zout[idx.off] = pkern_kprod(vx.cross, vy.cross, zobs.indep, trans=TRUE)
 
   # finish
   return(zout)
