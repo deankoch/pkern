@@ -11,7 +11,8 @@ pkern_vario(
   simple = TRUE,
   method = "median",
   diagonal = TRUE,
-  dmax = NA
+  dmax = NA,
+  ds = NA
 )
 }
 \arguments{
@@ -25,22 +26,34 @@ pkern_vario(
 
 \item{method}{character, one of "mean", "median", "ch", passed to \code{pkern_xvario}}
 
-\item{diagonal}{logical, if TRUE, variogram results are returned also for diagonals}
+\item{diagonal}{logical, if TRUE, semivariogram results are returned also for diagonals}
+
+\item{dmax}{numeric, maximum grid line separation distance (used to filter results)}
+
+\item{ds}{length-2 vector of positive numeric, the spacing distance of x and y grid lines}
 }
 \value{
-list of \code{pkern_xvario} output "x", "y" (and possibly "d1", "d2") and sample variance "v"
+list of \code{pkern_xvario} output "x", "y" (and "d1", "d2"); sample variance "v"; and "ds"
 }
 \description{
 A wrapper for calls to \code{pkern_xvario} to get the directional sample semivariograms
 from regular lattice data along the x and y dimensions, and optionally along the
-diagonals (x and y axes after a 45 degree rotation).
+diagonals.
 }
 \details{
-Note that \code{sep} is given in terms of grid line indices (integers), not distances
-(their product with the x or y resolution). For the diagonals, the grid line separations
-are scaled so that \code{sep} is \code{sqrt(2)} for diagonally adjacent grid points.
-
 The function makes the appropriate calls to \code{pkern_xvario} and returns the results
-in list elements "x", "y" (and if \code{diagonal=TRUE}, "d1", "d2" the x and y axes after
-rotation), along with "v", the estimated (univariate) variance of \code{vec}
+in list elements "x", "y". If \code{diagonal=TRUE}, the function also returns "d1" and
+"d2", the x and y semivariograms after a 45 degree counterclockwise rotation of the
+input grid (see \code{pkern_r45}), assuming equal x and y grid line spacings. For unequal
+grid line spacings, the true rotation angle is \code{atan(ds[2]/ds[1])}
+
+Note that input \code{sep} is specified in terms of grid line indices (integers), not
+distances (their product with the x or y resolution). However, non-integer separation
+distances can be specified by setting the resolution of the input grid (dx, dy) in
+argument \code{ds}. When \code{ds} is supplied, the output "sep" values are scaled accordingly
+and \code{dmax} is interpreted as a distance, rather than a number of grid lines.
+
+When \code{ds} is not supplied, the function assumes that the x grid lines have the same
+spacing distance (1) as the y grid lines. In this case, diagonally adjacent
+grid points have separation distance \code{sqrt(2)}.
 }

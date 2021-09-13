@@ -6,12 +6,11 @@
 \usage{
 pkern_vario_fit(
   vario,
-  xpars = "exp",
+  xpars = "mat",
   ypars = xpars,
-  v = NA,
-  nug = NA,
-  nmin = 2,
-  ninitial = 1
+  v = NULL,
+  nug = NULL,
+  ninitial = 5
 )
 }
 \arguments{
@@ -24,8 +23,6 @@ pkern_vario_fit(
 \item{v}{length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for variance}
 
 \item{nug}{length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for nugget}
-
-\item{nmin}{positive integer, lags with fewer than \code{nmin} samples are omitted in estimation}
 
 \item{ninitial}{positive integer, the number of initial parameter sets tested (see details)}
 }

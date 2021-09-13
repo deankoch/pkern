@@ -25,5 +25,5 @@ the function returns the new rotated array . When \code{z} is a vector, it shoul
 in column-vectorized order, and the function returns a list containing the dimensions
 of the larger array (nx, ny), and the column-vectorized data.
 
-NAs for all output grid points not mapped to \code{z}
+The fucntion sets NAs for all output grid points not mapped to \code{z}
 }

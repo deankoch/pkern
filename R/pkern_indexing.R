@@ -447,7 +447,7 @@ pkern_regular = function(gid, ng=max(gid), sep=NA)
 #' in column-vectorized order, and the function returns a list containing the dimensions
 #' of the larger array (nx, ny), and the column-vectorized data.
 #'
-#' NAs for all output grid points not mapped to `z`
+#' The fucntion sets NAs for all output grid points not mapped to `z`
 #'
 #' @param z either a numeric matrix or its length-`prod(dims)` column-vectorized version
 #' @param dims c(nx, ny) the number of x and y grid lines

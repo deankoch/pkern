@@ -4,24 +4,31 @@
 \alias{pkern_vario_plot}
 \title{Plot 1-dimensional empirical semivariograms for a separable model}
 \usage{
-pkern_vario_plot(vario, pars = NULL, nmin = 1, ptitle = NULL, shade = TRUE)
+pkern_vario_plot(vario, pars = NULL, plotpars = NULL)
 }
 \arguments{
 \item{vario}{list of semivariance data, the return value of \code{pkern_vario} or \code{pkern_xvario}}
 
 \item{pars}{list of kernel parameters "x" and/or "y", variance "v", and optionally nugget "nug"}
 
-\item{nmin}{positive integer, the minimum number of point pairs needed to include in plot}
-
-\item{ptitle}{character or vector of two, title(s) for the plot(s)}
-
-\item{shade}{logical, indicating to shade points according to the number of samples}
+\item{plotpars}{list, plotting options (see details)}
 }
 \value{
 prints a plot and returns nothing
 }
 \description{
+Plots the output of \code{pkern_vario} or \code{pkern_xvario}, optionally includind the theoretical
+semivariogram values for a model specified in \code{pars} (eg the return value of \code{pkern_vario_fit}).
+}
+\details{
 \code{pars} should be a list containing named elements: "x" and "y", lists of x and y kernel
 parameters in form recognized by \code{pkern_corr}; "v", the pointwise variance in the absence
-of a nugget effect; and, optionally, "nug", the variance of the nugget effect.
+of a nugget effect and, optionally, "nug", the variance of the nugget effect.
+
+\code{plotpars} applies to all plots. It should be a list containing any of the following elements:
+
+"title" character or vector of two, title(s) for the plot(s)
+"shade" logical, indicating to shade points according to the number of samples
+"seplim" length-2 numeric vector, the x limits for the scatterplot
+"svlim" length-2 numeric vector, the y limits for the scatterplot
 }
