@@ -23,7 +23,7 @@ a list with named elements "sep", "n", and "sv"
 \description{
 The function identifies and computes the semivariance (in \code{vec}) of point pairs on a
 regular grid of dimensions \code{dims} at the supplied x grid line lags, \code{sep}. Elements of
-\code{set} must be a subset of \code{1:(dims[1]-1)} (the default setting).
+\code{sep} must be a subset of \code{1:(dims[1]-1)} (the default).
 }
 \details{
 Results are returned in a named list containing the lags ("sep"), the number of point
