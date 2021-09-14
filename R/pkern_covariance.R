@@ -40,9 +40,9 @@ pkern_corr = function(pars, d=NA)
 {
   # if `d` is (or contains) NA, return suggested bounds for supplied pars
   makebounds = anyNA(d)
-  bds.rho = c(min=1e-2, ini=1, max=65180.2)
-  bds.p = c(min=1e-2, ini=1.99, max=2)
-  bds.kap = c(min=1e-2, ini=1, max=50)
+  bds.rho = c(min=1e-2, ini=1, max=1e6)
+  bds.p = c(min=1e-2, ini=1, max=2)
+  bds.kap = c(min=1e-2, ini=1, max=40)
   bds.sph.rho = c(min=1e-2, ini=5, max=1e6)
   bds.exp.rho = c(min=1e-2, ini=2, max=1e6)
 
@@ -160,6 +160,116 @@ pkern_corr = function(pars, d=NA)
   # if we got this far, input `pars$k` didn't match anything
   stop(paste('kernel name', pars$k, 'not recognized'))
 }
+
+
+
+#' Solve for range parameter given a correlation value
+#'
+#' @param cval numeric between 0 and 1, the correlation
+#' @param pars a kernel parameter list recognized by `pkern_corr`
+#' @param d positive numeric, the distance at which to evaluate the kernel
+#' @param upper positive numeric, an upper limit for the search
+#'
+#' @return
+#' @export
+#'
+#' @examples
+pkern_rho = function(cval, pars, d, upper=1e3*d)
+{
+  # anonymous function for inverting kernel with respect to range parameter
+  fn = function(rho) abs( pkern_corr(modifyList( pars, list(kp=c(rho, pars[['kp']][-1]))), d) - cval)
+  return(optimize(fn, lower=0, upper=upper)$minimum)
+}
+
+
+#' Suggest bounds for parameters of x and y component kernels for a grid model
+#'
+#' This function takes a kernel name or parameter list (`pars`) and adds vectors "lower"
+#' and "upper", bounds for the kernel parameters, whenever they are missing. If the input
+#' has no parameter values assigned (in `pars$kp`), the function sets them to the midpoint
+#' (mean) of the respective bounds.
+#'
+#' Bounds for shape parameters are hard-coded, whereas the bounds for the range parameter
+#' are determined based on the grid resolution (`ds`, the distance between grid lines in
+#' x and y directions) and a user supplied correlation range; `cmin` is the minimum allowable
+#' correlation between adjacent grid points, and `cmax` is the maximum. By default `cmin` is
+#' set to 0.05, so that the effective range of the kernel is bounded
+#' below by the shortest interpoint distance.
+#'
+#'
+#' @param pars kernel parameter list (recognized by `pkern_corr`) or list of two of them
+#' @param ds vector c(dx, dy) or positive numeric, the resolution of the sampled grid
+#' @param cmin positive numeric, minimum allowable correlation between adjacent grid cells
+#' @param cmax positive numeric, maximum allowable correlation between adjacent grid cells
+#'
+#'
+#' @return kernel parameter list containing "kp", "lower", "upper", or list of two such lists
+#' @export
+#'
+#' @examples
+pkern_bds = function(pars, ds=NA, cmin=0.05, cmax=1-cmin)
+{
+  # handle character input (kernel names)
+  if( is.character(pars) ) pars = list(k=pars, kp=NULL)
+
+  # single dimension case
+  if( all( c('k', 'kp') %in% names(pars) ) )
+  {
+    # do nothing and return if upper and lower are already assigned
+    if( all( c('kp', 'lower', 'upper') %in% names(pars) ) ) return(pars)
+
+    # check for invalid input to ds, set default as needed
+    if( length(ds) > 1 ) stop('ds should have length 1')
+    if( is.na(ds) ) ds = 1
+
+    # handle shape parameter, if there is one
+    if( pars[['k']] %in% c('mat', 'gxp') )
+    {
+      # set for numerical stability (note "mat" becomes indistinguishable from "gau" as shp->Inf)
+      if( pars[['k']] == 'mat' ) bds.shp = c(0.5, 40)
+
+      # max of 2 to ensure positive definite covariance matrix
+      if( pars[['k']] == 'gxp' ) bds.shp = c(0.5, 2)
+
+      # set up a grid of test values and find rho for each one, then take min/max
+      shp.test = seq(bds.shp[1], bds.shp[2], length.out = 100)
+      rhomin = min( sapply(shp.test, \(p) pkern_rho(cmin, modifyList(pars, list(kp=c(NA, p))), ds)) )
+      rhomax = max( sapply(shp.test, \(p) pkern_rho(cmax, modifyList(pars, list(kp=c(NA, p))), ds)) )
+
+      # append bounds and initial values as needed
+      if( is.null( pars[['lower']] ) ) pars[['lower']] = c(rhomin, bds.shp[1])
+      if( is.null( pars[['upper']] ) ) pars[['upper']] = c(rhomax, bds.shp[2])
+      if( is.null( pars[['kp']] ) ) pars[['kp']] = ( pars[['lower']] + pars[['upper']] ) / 2
+
+    } else {
+
+      # no shape parameter case is simple 1d optimization
+      rhomin = pkern_rho(cmin, pars, ds)
+      rhomax = pkern_rho(cmax, pars, ds)
+
+      # append bounds and initial values as needed
+      if( is.null( pars[['lower']] ) ) pars[['lower']] = rhomin
+      if( is.null( pars[['upper']] ) ) pars[['upper']] = rhomax
+      if( is.null( pars[['kp']] ) ) pars[['kp']] = ( rhomin + rhomax ) / 2
+
+    }
+
+    # finished with 1D case
+    return(pars)
+  }
+
+  # else assume pars is a list containing two parameter lists "x" and "y"
+  if( !all( c('x', 'y') %in% names(pars) ) ) stop('expected parameter lists "x" and "y" in pars')
+
+  # recursive calls to build x and y component bounds
+  pars.out = modifyList(pars, list(x = pkern_bds(pars[['x']], ds[1], cmin=cmin, cmax=cmax),
+                                   y = pkern_bds(pars[['y']], ds[2], cmin=cmin, cmax=cmax)) )
+
+  # return results in list
+  return( pars.out )
+}
+
+
 
 
 #' Vectorize x and y component parameters
@@ -330,4 +440,5 @@ pkern_kplot = function(pars, dims=c(25, 25))
 
   return(invisible())
 }
+
 

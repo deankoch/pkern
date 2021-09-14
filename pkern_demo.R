@@ -109,15 +109,24 @@ rpred = pkern_toraster(zpred, template=dem)
 plot(crop(rpred, r.src), col=rainbow(100))
 
 
+
 # repeat with a restriction on semivariance distance
-vario = pkern_vario(dims.bbox, vec.src, ds=ds, dmax=8e4)
-pars = pkern_vario_fit(vario, ninitial=50)
+vario = pkern_vario(dims.bbox, vec.src, ds=ds, dmax=10e4)
+pars = pkern_vario_fit(vario, 'mat', ninitial=50)
 pkern_vario_plot(vario, pars)
+pars
 
 # compute conditional mean
 zpred = pkern_cmean(vec.src, dims=dims, pars=pars, gxy=gxy)
 rpred = pkern_toraster(zpred, template=dem)
-plot(crop(rpred, r.src), col=rainbow(100))
+plot(crop(rpred, r.src), col=rainbow(1e2))
+plot(rpred, col=rainbow(1e5))
+
+#dims = dims.bbox
+
+cmin
+pars=  pars[[1]]
+ds = ds[1]
 
 
 
@@ -126,6 +135,9 @@ plot(crop(rpred, r.src), col=rainbow(100))
 # r <- sqrt(outer(x^2, y^2, "+"))
 # filled.contour(cos(r^2)*exp(-r/(2*pi)), axes = FALSE)
 #pkern_kplot(pars, dims.bbox)
+
+
+
 
 
 #############

@@ -168,6 +168,7 @@ pkern_vario = function(dims, vec, sep=NA, simple=TRUE, method='median', diagonal
 
   # set default resolution (1,1)
   if( anyNA(ds) ) ds = c(1,1)
+  if( length(ds) == 1 ) stop('ds must have length 2')
 
   # compute x semivariances, then repeat in row-vectorized order to get y semivariances
   xout = pkern_xvario(dims, vec, simple=simple, method=method)
@@ -442,28 +443,24 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
 #' @examples
 pkern_vario_fit = function(vario, xpars='mat', ypars=xpars, v=NULL, nug=NULL, ninitial=5)
 {
-  # handle kernel specification as string, convert to list
-  if( is.character(xpars) ) xpars = pkern_corr(xpars)
-  if( is.character(ypars) ) ypars = pkern_corr(ypars)
-
   # set defaults for variance and nugget
-  if( is.null(v) ) v = c(min=0, ini=vario$v, max=4*vario$v)
-  if( is.null(nug) ) nug = c(min=0, ini=v[2]/2, max=4*vario$v)
+  if( is.null(v) ) v = c(min=0, ini=vario$v, max=4*vario[['v']])
+  if( is.null(nug) ) nug = c(min=1e-3, ini=v[2]/2, max=4*vario[['v']])
 
-  # set default lower and upper bounds for kernel parameters as needed
-  if( is.null(xpars$lower) ) xpars$lower = pkern_corr(xpars)[,'min']
-  if( is.null(xpars$upper) ) xpars$upper = pkern_corr(xpars)[,'max']
-  if( is.null(ypars$lower) ) ypars$lower = pkern_corr(ypars)[,'min']
-  if( is.null(ypars$upper) ) ypars$upper = pkern_corr(ypars)[,'max']
+  # set up defaults and bounds for kernel parameters as needed
+  xpars = pkern_bds(xpars, vario[['ds']][1])
+  ypars = pkern_bds(ypars, vario[['ds']][2])
 
   # vectorized bounds for all covariance parameters
-  plower = c(v[1], nug[1], xpars$lower, ypars$lower)
+  plower = c(v[1], nug[1], xpars[['lower']], ypars[['lower']])
   pinitial = c( v[2], nug[2], pkern_unpack(xpars, ypars) )
-  pupper = c(v[3], nug[3], xpars$upper, ypars$upper)
+  pupper = c(v[3], nug[3], xpars[['upper']], ypars[['upper']])
 
   # build matrices to hold pertinent info from `vario` (omit zero point in first index)
   idx.vario = names(vario) %in% c('x', 'y', 'd1', 'd2')
-  mvario = lapply(vario[idx.vario], \(vg) cbind(n=vg$n[-1], sep=vg$sep[-1], sv=vg$sv[-1]))
+  mvario = lapply(vario[idx.vario], \(vg) cbind(n=vg[['n']][-1],
+                                                sep=vg[['sep']][-1],
+                                                sv=vg[['sv']][-1]))
 
   # define anonymous objective function for optimizer
   fn = function(pvec, xp, yp, mv, ds)
@@ -482,10 +479,10 @@ pkern_vario_fit = function(vario, xpars='mat', ypars=xpars, v=NULL, nug=NULL, ni
     ysv = pkern_tvario(pars=pars[['y']], v=pvec[1], nug=pvec[2], d=mv[['y']][,'sep'])
 
     # compute weighted sums of squares along both dimensions and return their sum
-    #wss.x = sum( ( mv[['x']][,'n'] / (xsv)^2 ) * ( ( mv[['x']][,'sv'] - xsv )^2 ) )
-    #wss.y = sum( ( mv[['y']][,'n'] / (ysv)^2 ) * ( ( mv[['y']][,'sv'] - ysv )^2 ) )
-    wss.x = sum( ( mv[['x']][,'n'] ) * ( ( mv[['x']][,'sv'] - xsv )^2 ) )
-    wss.y = sum( ( mv[['y']][,'n'] ) * ( ( mv[['y']][,'sv'] - ysv )^2 ) )
+    wss.x = sum( ( mv[['x']][,'n'] / (xsv)^2 ) * ( ( mv[['x']][,'sv'] - xsv )^2 ) )
+    wss.y = sum( ( mv[['y']][,'n'] / (ysv)^2 ) * ( ( mv[['y']][,'sv'] - ysv )^2 ) )
+    # wss.x = sum( ( mv[['x']][,'n'] ) * ( ( mv[['x']][,'sv'] - xsv )^2 ) )
+    # wss.y = sum( ( mv[['y']][,'n'] ) * ( ( mv[['y']][,'sv'] - ysv )^2 ) )
 
     # do the same for the 45 degree rotated version if it is supplied
     wss.d1 = wss.d2 = 0
@@ -509,10 +506,10 @@ pkern_vario_fit = function(vario, xpars='mat', ypars=xpars, v=NULL, nug=NULL, ni
       d2sv = xsv.d2 * ysv.d2
 
       # compute weighted sums of squares along both dimensions and return their sum
-      wss.d1 = sum( ( mv[['d1']][,'n'] ) * ( ( mv[['d1']][,'sv'] - d1sv )^2 ) )
-      wss.d2 = sum( ( mv[['d2']][,'n'] ) * ( ( mv[['d2']][,'sv'] - d2sv )^2 ) )
-      #wss.d1 = sum( ( mv[['d1']][,'n'] / (d1sv)^2 ) * ( ( mv[['d1']][,'sv'] - d1sv )^2 ) )
-      #wss.d2 = sum( ( mv[['d2']][,'n'] / (d2sv)^2 ) * ( ( mv[['d2']][,'sv'] - d2sv )^2 ) )
+      # wss.d1 = sum( ( mv[['d1']][,'n'] ) * ( ( mv[['d1']][,'sv'] - d1sv )^2 ) )
+      # wss.d2 = sum( ( mv[['d2']][,'n'] ) * ( ( mv[['d2']][,'sv'] - d2sv )^2 ) )
+      wss.d1 = sum( ( mv[['d1']][,'n'] / (d1sv)^2 ) * ( ( mv[['d1']][,'sv'] - d1sv )^2 ) )
+      wss.d2 = sum( ( mv[['d2']][,'n'] / (d2sv)^2 ) * ( ( mv[['d2']][,'sv'] - d2sv )^2 ) )
     }
 
     # compute total of weighted sums of squares
