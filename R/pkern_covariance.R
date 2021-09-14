@@ -300,18 +300,18 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cmax=1-cmin)
 #' pkern_unpack(pars)
 #' pkern_unpack(pars, 1:3)
 #' pkern_unpack = function(pars, p=NULL)
-pkern_unpack = function(pars, kp)
+pkern_unpack = function(pars, kp=NULL)
 {
   # vectorization in order x, y
-  if( is.null(p) ) return( c(pars[['x']][['kp']], pars[['y']][['kp']]) )
+  if( is.null(kp) ) return( c(pars[['x']][['kp']], pars[['y']][['kp']]) )
 
   # determine number of parameters from each kernel
   npx = length(pars[['x']][['kp']])
   npy = length(pars[['y']][['kp']])
 
-  # unpack values from numeric vector p
-  kpx = p[ seq(npx) ]
-  kpy = p[ npx + seq(npy) ]
+  # unpack values from numeric vector kp
+  kpx = kp[ seq(npx) ]
+  kpy = kp[ npx + seq(npy) ]
 
   # overwrite x and y kernel parameter lists
   pars[['x']] = modifyList(pars[['x']], list(kp=kpx))
@@ -353,87 +353,6 @@ pkern_corrmat = function(pars, n, ds=1, i=seq(n), j=seq(n))
 
   # build and return the matrix
   return(sapply(j, function(x) bigvec[ (n-x) + i ]))
-}
-
-
-#' Make a heatmap of covariances/correlations around a grid's central point
-#'
-#' This function displays a separable kernel by building a grid of size `dims`,
-#' assigning to each cell the covariance (or correlation) with the central cell,
-#' then passing the result to a contour plotter (`graphics::filled.contour`)
-#' for visualization.
-#'
-#' `pars` should be a list containing elements "x" and "y", which are lists of parameters
-#' for the x and y component kernels (recognized by `pkern_corr`). Optionally, `pars` can
-#' also include a (positive numeric) pointwise variance term in "v". Covariance parameters
-#' from both kernels are printed as a subtitle, with values rounded to 3 decimal places.
-#'
-#' if either entry of `dims` is an even number, it incremented by 1 in order to
-#' make the notion of "central" unambiguous. If `v` is not supplied, it is set to
-#' the default 1, and the legend label is changed to "correlation".
-#'
-#' Note that contour plots (which smooth their data) are not an appropriate tool for
-#' visualizing the nugget effect (a discontinuity), so `pars$nug` is ignored by this
-#' function.
-#'
-#' @param pars list of two parameter lists "x" and "y", and (optionally) "v", "nug"
-#' @param dims c(nx, ny), the number of x and y lags to include
-#' @param v numeric, the pointwise variance
-#'
-#' @return returns nothing but prints a contour plot of the specified kernel
-#' @export
-#'
-#' @examples
-#' pars = pkern_bds(c('exp', 'mat'))
-#' pkern_kplot(pars)
-#' pkern_kplot(pars, dims=c(10,5))
-#' pkern_kplot(c(pars, list(v=2)), dims=c(10,5))
-pkern_kplot = function(pars, dims=c(25, 25))
-{
-  # unpack v, setting defaults as needed, determine plot title
-  ktype = ifelse( is.null(pars[['v']]), 'correlation', 'covariance')
-  v = ifelse( is.null(pars[['v']]), 1, pars[['v']])
-
-  # generate the kernel name string
-  kname = sapply(pars[c('x', 'y')], \(x) paste0('[', x$k, ']') ) |> paste(collapse=' x ')
-
-  # set the plot title
-  ptitle = paste(ktype, 'about central grid point with kernel:', kname)
-
-  # extract parameter names
-  kpx.nm = names( pkern_corr(pars[['x']][['k']])[['kp']] )
-  kpy.nm = names( pkern_corr(pars[['y']][['k']])[['kp']] )
-  if( is.null(kpx.nm) ) kpx.nm = 'rho'
-  if( is.null(kpy.nm) ) kpy.nm = 'rho'
-
-  # create a subtitle
-  kpx = mapply(\(nm, p) paste(nm, '=', round(p, 3)), nm=kpx.nm, p=pars[['x']][['kp']])
-  kpy = mapply(\(nm, p) paste(nm, '=', round(p, 3)), nm=kpy.nm, p=pars[['y']][['kp']])
-  xstr = paste0('[', paste(kpx, collapse=', '), ']')
-  ystr = paste0('[', paste(kpy, collapse=', '), ']')
-  stitle = paste('parameters', xstr, ' x ', ystr)
-
-  # increment dims as needed and find the row, column, and index of central cell
-  dims = dims + 1 - (dims %% 2)
-  ij.central = setNames(rev( 1 + ( (dims - 1) / 2 ) ), c('i', 'j'))
-  idx.central = pkern_mat2vec(ij.central, dims[2])
-
-  # compute the required component kernel values and their kronecker product
-  kx = pkern_corrmat(pars[['x']], dims[1], j=ij.central['j'])
-  ky = pkern_corrmat(pars[['y']], dims[2], i=ij.central['i'])
-  z = v * as.vector( kronecker(kx, ky) )
-
-  # compute coordinates and reshape z into a matrix oriented for `graphics::image` and friends
-  x = seq(dims[1]) - ij.central['j']
-  y = seq(dims[2]) - ij.central['i']
-  z.mat = matrix(z[pkern_r2c(dims, in.byrow=FALSE, out.byrow=TRUE)], dims[1])
-
-  # make the plot, add subtitle, and finish
-  graphics::filled.contour(x, y, z.mat, xlab='dx', ylab='dy', asp=1, nlevels=50)
-  mtext(side=3, line=par('mgp')[1]-1, adj=1, ptitle)
-  mtext(side=3, line=par('mgp')[1]-2, adj=1, cex=0.8, stitle)
-
-  return(invisible())
 }
 
 

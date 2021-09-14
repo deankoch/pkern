@@ -20,7 +20,7 @@
 #'
 #' @param pars list of kernel parameters, in form recognized by `pkern_corr`
 #' @param v positive numeric, the pointwise variance absent a nugget effect
-#' @param nug positive numeric, (optional) the variance of the nugget effect
+#' @param nug nonegative numeric, the variance of the nugget effect
 #' @param d vector of nonegative numeric spatial lags to evaluate
 #'
 #' @return either a vector the same length as `d`, or an anonymous function of distance
@@ -28,7 +28,8 @@
 #'
 #' @examples
 #' pars.mat = pkern_corr('mat')
-#' pkern_tvario(pars.mat, v=1, nug=0.5, 1:10)
+#' pkern_tvario(pars.mat, v=1, d=1:10)
+#' pkern_tvario(pars.mat, v=2, nug=0.5, d=1:10)
 #' sv = pkern_tvario(pars.mat, nug=0.5, v=1)
 #' sv(1:10)
 pkern_tvario = function(pars, v, nug=0, d=NULL)
@@ -147,8 +148,8 @@ pkern_xvario = function(dims, vec, sep=NA, simple=TRUE, method='median')
 #' spacing distance (1) as the y grid lines. In this case, diagonally adjacent
 #' grid points have separation distance `sqrt(2)`.
 #'
-#' @param vec numeric vector of data, in column vectorized order (length `prod(dims)`)
 #' @param dims vector c(nx, ny) of positive integers, the number of grid lines
+#' @param vec numeric vector of data, in column vectorized order (length `prod(dims)`)
 #' @param sep list c(dx, dy) of positive integer vectors, grid line lags to sample
 #' @param simple logical, if FALSE the function includes point pair indices in return list
 #' @param method character, one of "mean", "median", "ch", passed to `pkern_xvario`
@@ -212,197 +213,6 @@ pkern_vario = function(dims, vec, sep=NA, simple=TRUE, method='median', diagonal
 
 
 
-#' Plot 1-dimensional empirical semivariograms for a separable model
-#'
-#' Plots the output of `pkern_vario` or `pkern_xvario`, optionally includind the theoretical
-#' semivariogram values for a model specified in `pars` (eg the return value of `pkern_vario_fit`).
-#'
-#' `pars` should be a list containing named elements: "x" and "y", lists of x and y kernel
-#' parameters in form recognized by `pkern_corr`; "v", the pointwise variance in the absence
-#' of a nugget effect and, optionally, "nug", the variance of the nugget effect.
-#'
-#' `plotpars` applies to all plots. It should be a list containing any of the following elements:
-#'
-#'    "title" character or vector of two, title(s) for the plot(s)
-#'    "shade" logical, indicating to shade points according to the number of samples
-#'    "seplim" length-2 numeric vector, the x limits for the scatterplot
-#'    "svlim" length-2 numeric vector, the y limits for the scatterplot
-#'
-#' @param vario list of semivariance data, the return value of `pkern_vario` or `pkern_xvario`
-#' @param pars list of kernel parameters "x" and/or "y", variance "v", and optionally nugget "nug"
-#' @param plotpars list, plotting options (see details)
-#'
-#' @return prints a plot and returns nothing
-#' @export
-#'
-#' @examples
-pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
-{
-  # intialize empty list `plotpars` as needed and set some defaults
-  if( is.null(plotpars) ) plotpars = list()
-  if( is.null(plotpars[['shade']]) ) plotpars[['shade']] = TRUE
-
-  # identify the semivariance directions provided in vario
-  nm.vario = c('x', 'y', 'd1', 'd2')
-  is.vario = setNames(nm.vario %in% names(vario), nm.vario)
-
-  # handle 2-dimensional case
-  if( all( is.vario[c('x', 'y')] ) )
-  {
-    # assign names to pars if they are missing
-    nm.pars = c('x', 'y', 'v')
-    if( !is.null(pars) & !all( nm.pars %in% names(pars) ) ) names(pars) = nm.pars
-
-    # extract componentwise parameters
-    xpars = c( pars[['x']], list( v=pars[['v']], nug=pars[['nug']] ) )
-    ypars = c( pars[['y']], list( v=pars[['v']], nug=pars[['nug']] ) )
-
-    # set default plot titles
-    title.def = FALSE
-    if( is.null(plotpars[['title']]) )
-    {
-      title.def = TRUE
-      plotpars[['title']] = c(x='x', y='y')
-    }
-
-    # set default (common) x-axis limits for the scatterplots
-    seplim.def = FALSE
-    if( is.null(plotpars[['seplim']]) )
-    {
-      seplim.def = TRUE
-      sepmax = sapply( vario[c("x", "y")], \(xy) max( xy[['sep']] ) )
-      plotpars[['seplim']] = c(0, max(sepmax))
-    }
-
-    # same for y-axis
-    svlim.def = FALSE
-    if( is.null(plotpars[['svlim']]) )
-    {
-      svlim.def = TRUE
-      svmax = sapply( vario[c("x", "y")], \(xy) max( xy[['sv']] ) )
-      plotpars[['svlim']] = c(0, max(svmax))
-    }
-
-    # update default plot settings for diagonals
-    if( all( is.vario ) )
-    {
-      # update x-axis limits as needed
-      if( svlim.def )
-      {
-        sepmax = sapply( vario[c("d1", "d2")], \(xy) max( xy[['sep']] ) )
-        plotpars[['seplim']][2] = max(plotpars[['seplim']][2], sepmax)
-      }
-
-      # update y-axis limits as needed
-      if( svlim.def )
-      {
-        svmax = sapply( vario[c("d1", "d2")], \(xy) max( xy[['sv']] ) )
-        plotpars[['svlim']][2] = max(plotpars[['svlim']][2], svmax)
-      }
-
-      # assign plot titles as needed
-      if( title.def )
-      {
-        dstr = paste0('(', round( atan( vario[['ds']][2] / vario[['ds']][1] )*180/pi, 1), ' degrees)')
-        plotpars[['title']] = c(plotpars[['title']], d1=paste('x', dstr), d2=paste('y', dstr))
-      }
-    }
-
-    # split `plotpars` into its components
-    nm.toplot = setNames(nm=names(is.vario)[is.vario])
-    plotpars.list = lapply(nm.toplot, \(pp) {
-      modifyList(plotpars, list(title=plotpars[['title']][pp]))
-      })
-
-    # initialize either a 2 or 4 pane layout
-    par( mfrow = c(sum(is.vario)/2, 2) )
-
-    # recursive calls to add "x" and "y" plots
-    pkern_vario_plot(vario[['x']], pars=xpars, plotpars=plotpars.list[['x']])
-    pkern_vario_plot(vario[['y']], pars=ypars, plotpars=plotpars.list[['y']])
-
-    # recursive calls to add diagonal plots
-    if( all( is.vario ) )
-    {
-      ds = vario[['ds']]
-      pkern_vario_plot(c(vario[['d1']], list(ds=ds)), pars=pars, plotpars=plotpars.list[['d1']])
-      pkern_vario_plot(c(vario[['d2']], list(ds=ds)), pars=pars, plotpars=plotpars.list[['d2']])
-    }
-
-    # reset plot panel layout before finishing, returning nothing
-    par(mfrow=c(1,1))
-    return(invisible())
-  }
-
-  # 1-dimension case:
-
-  # unpack plotting limits
-  xlim = plotpars[['seplim']]
-  ylim = plotpars[['svlim']]
-  main = plotpars[['title']]
-
-  # catch empty variogram
-  if( length(vario[['n']]) == 1 )
-  {
-    # initialize an empty plot
-    plot(xlim, ylim, pch=NA, xlab='lag', ylab='semivariance', main=main)
-
-  } else {
-
-    # unpack arguments (exclude the zero point)
-    n = vario[['n']][-1]
-    sep = vario[['sep']][-1]
-    sv = vario[['sv']][-1]
-
-    # map point shading to the number of point pairs sampled if requested
-    colmap = 'black'
-    if( plotpars[['shade']] ) colmap = rev( gray.colors( max(n) ) )[n]
-
-    # make the scatterplot of sampled semivariances
-    plot(sep, sv, xlab='lag', ylab='semivariance',
-         xlim=xlim, ylim=ylim, main=main, pch=16, col=colmap)
-
-  }
-
-  # if kernel parameters are supplied, plot the theoretical values
-  if( !is.null(unlist(pars)) )
-  {
-    # check for variance components in parameters list and set default nugget (0)
-    nug = pars[['nug']]
-    v = pars[['v']]
-    if( is.null(v) ) stop('variance v not found in pars')
-    if( is.null(nug) ) nug = 0
-
-    #  handle x or y kernel component requests
-    sep = seq(xlim[1], xlim[2], length.out=1e2)
-    if( all( c('k', 'kp') %in% names(pars) ) ) fit = pkern_tvario(pars, v=v, nug=nug, d=sep)
-
-    # handle requests along a diagonal (both x and y components included in pars)
-    if( all( c('x', 'y') %in% names(pars) ) )
-    {
-      # find unit distance along diagonals
-      ds = vario[['ds']]
-      udist = sqrt(sum(ds^2))
-
-      # find the equivalent displacement along x and y directions
-      sepx = ds[1] * sep / udist
-      sepy = ds[2] * sep / udist
-
-      # compute appropriately scaled kernel values
-      fitx = pkern_tvario(pars[['x']], v=sqrt(v), nug=nug, d=sepx)
-      fity = pkern_tvario(pars[['y']], v=sqrt(v), nug=nug, d=sepy)
-      fit = fitx * fity
-    }
-
-    # add line plot showing semivariance at requested lags
-    lines(sep, fit)
-  }
-
-  return(invisible())
-}
-
-
-
 #' Fit a theoretical separable covariance model to a separated empirical semivariogram
 #'
 #' Pipe the results of a `pkern_vario` call to this function to estimate model
@@ -457,10 +267,8 @@ pkern_vario_fit = function(vario, xpars='mat', ypars=xpars, v=NULL, nug=NULL, ni
   pupper = c(v[3], nug[3], xpars[['upper']], ypars[['upper']])
 
   # build matrices to hold pertinent info from `vario` (omit zero point in first index)
-  idx.vario = names(vario) %in% c('x', 'y', 'd1', 'd2')
-  mvario = lapply(vario[idx.vario], \(vg) cbind(n=vg[['n']][-1],
-                                                sep=vg[['sep']][-1],
-                                                sv=vg[['sv']][-1]))
+  midx = names(vario) %in% c('x', 'y', 'd1', 'd2')
+  mvario = lapply(vario[midx], \(vg) cbind(n=vg[['n']][-1], sep=vg[['sep']][-1], sv=vg[['sv']][-1]))
 
   # define anonymous objective function for optimizer
   fn = function(pvec, xp, yp, mv, ds)
