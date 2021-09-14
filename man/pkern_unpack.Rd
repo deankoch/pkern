@@ -4,34 +4,25 @@
 \alias{pkern_unpack}
 \title{Vectorize x and y component parameters}
 \usage{
-pkern_unpack(xpars, ypars, p = NULL)
+pkern_unpack(pars, kp)
 }
 \arguments{
-\item{xpars}{list of x component covariance paramaters (in the form accepted by \code{pkern_corr})}
+\item{pars}{list of "x" and "y" kernel parameter lists (each containing vector "kp")}
 
-\item{ypars}{list of y component covariance paramaters (in the form accepted by \code{pkern_corr})}
-
-\item{p}{(optional) vector of combined kernel parameters, or one of "min", "ini", "max"}
+\item{kp}{vector of combined kernel parameters (or NA)}
 }
 \value{
-numeric vector of parameters, or \code{list(xpars, ypars)} modified appropriately
+numeric vector of parameters, or \code{pars} modified appropriately
 }
 \description{
-when \code{p} is NULL, the function concatenates the two (x and y) component kernel parameter
-sets into a single vector. When this vector is passed back as \code{p}, the function does the
-inverse, copying parameter values from a vector to the corresponding list entry in \code{xpars}
-or \code{ypars}, and returning them in a list
-}
-\details{
-If \code{p} is set to "min", "ini", or "max", the function returns a vector of suggested
-minima, inital values, or maxima for the parameters.
+when \code{kp} is NULL, the function concatenates the two (x and y) component kernel parameter
+sets into a single vector. When this vector is passed back as \code{kp}, the function does the
+inverse, copying parameter values from a vector to the corresponding list entry in \code{pars}
+and returning them in a list
 }
 \examples{
-pars.mat = pkern_corr('mat')
-pars.exp = pkern_corr('exp')
-p = pkern_unpack(pars.exp, pars.mat)
-p
-p[2:3] = 1
-pkern_unpack(pars.exp, pars.mat, p)
-pkern_unpack(pars.exp, pars.mat, 'min')
+pars = pkern_corr(c('mat', 'exp'))
+pkern_unpack(pars)
+pkern_unpack(pars, 1:3)
+pkern_unpack = function(pars, p=NULL)
 }

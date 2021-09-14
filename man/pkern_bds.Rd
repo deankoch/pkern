@@ -19,16 +19,34 @@ pkern_bds(pars, ds = NA, cmin = 0.05, cmax = 1 - cmin)
 kernel parameter list containing "kp", "lower", "upper", or list of two such lists
 }
 \description{
-This function takes a kernel name or parameter list (\code{pars}) and adds vectors "lower"
-and "upper", bounds for the kernel parameters, whenever they are missing. If the input
-has no parameter values assigned (in \code{pars$kp}), the function sets them to the midpoint
-(mean) of the respective bounds.
+This function takes a kernel parameter list (\code{pars}) and adds vectors "kp"
+(initial values), "lower" and "upper" (bounds). Initial values are set to the
+midpoint (mean) of the respective bounds. \code{pars} can also be a character string
+(or vector of two), naming the desired kernel(s) (see \code{pkern_corr}).
 }
 \details{
 Bounds for shape parameters are hard-coded, whereas the bounds for the range parameter
 are determined based on the grid resolution (\code{ds}, the distance between grid lines in
 x and y directions) and a user supplied correlation range; \code{cmin} is the minimum allowable
-correlation between adjacent grid points, and \code{cmax} is the maximum. By default \code{cmin} is
-set to 0.05, so that the effective range of the kernel is bounded
+correlation between adjacent grid points, and \code{cmax} is the maximum. The corresponding
+"rho" values are then estimated using \code{base::optimize} (see \code{pkern_rho})
+
+By default \code{cmin} is set to 0.05, so that the effective range of the kernel is bounded
 below by the shortest interpoint distance.
+}
+\examples{
+
+# suggested bounds depend on grid resolution
+pars = 'mat'
+pkern_bds(pars)
+pkern_bds(pars, ds=100)
+
+# specify separable 2D kernels with a vector of two names
+pars = c('exp', 'mat')
+pkern_bds(pars)
+
+# initial values are set based on lower and upper
+pars = list(k='mat', upper=c(10,10))
+pkern_bds(pars)
+
 }

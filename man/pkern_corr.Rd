@@ -7,36 +7,49 @@
 pkern_corr(pars, d = NA)
 }
 \arguments{
-\item{pars}{list with elements "k", the kernel name, and "p" the parameter vector}
+\item{pars}{list with elements "k", the kernel name, and "kp" the parameter vector}
 
 \item{d}{numeric vector of length n, the distances to evaluate}
 }
 \value{
-length-n vector, or a matrix of parameter bounds, or a parameter list (see details)
+length-n vector or a list of parameters and bounds (see details)
 }
 \description{
-Computes stationary correlation function values for (nonegative) 1-dimensional
-distances \code{d}. Parameter list entry \code{pars$kp} supplies the kernel parameter(s),
-where \code{pars$k} is one of the following kernel names
+Computes stationary correlation function values for the n (nonegative) 1-dimensional
+distances in \code{d}. Parameter list entry \code{pars$kp} supplies the kernel parameter(s).
 }
 \details{
-"exp": exponential (special case of "gex" with p=1 and \code{d<-abs(d)}). \code{kp = rho}
-"gau": gaussian/stable (special case of "gex" with p=2). \code{kp = rho}
-"sph": spherical (AKA stable/Gaussian for p=2). \code{kp = rho}
-"gex": gamma-exponential. \code{kp = c(rho, p)}
-"mat": Whittle-Matern ((Handcock and Wallis parameterization). \code{kp = c(rho, kap)}
+\code{pars$k} must be one of the following kernel names:
 
-If any element of \code{d} is NA, the function ignores \code{d} and instead returns a list
-containing the parameter names, along with suggested initial values and bounds to
-use in optimization.
+(1 parameter)
 
-If instead of a list, \code{pars} is one of the kernel name strings, the function returns
-an example of the parameter list format for the kernel, with suggested initial values
-(and \code{d} is ignored)
+"exp": exponential (special case of "gex" with "p"=1 and \code{d<-abs(d)})
+"gau": gaussian/stable (special case of "gex" with "p"=2)
+"sph": spherical (AKA stable/Gaussian for p=2)
+
+(2 parameters)
+
+"gex": gamma-exponential (with shape "p")
+"mat": Whittle-Matern (Handcock and Wallis parameterization, with shape "kap")
+
+For the 1-parameter kernels, \code{pars$kp} is the range parameter value ("rho" ); For the
+2-parameter kernels, \code{pars$kp} is a vector whose first element is "rho", and second
+element is the shape parameter ("p" or "kap"). Note that names in \code{pars$kp} are ignored
+and only the order matters - the range parameter must come first.
+
+When \code{d} is NA (or contains at least one NA value), or if instead of a list \code{pars} is
+a kernel name string (or a vector of two of them), then \code{d} is ignored and the function
+passes \code{pars} to \code{pkern_bds} and returns the result. This sets suggested parameter values
+and bounds wherever they are missing from \code{pars}.
 }
 \examples{
-pars.mat = pkern_corr('mat')
-pars.mat
-pkern_corr(pars.mat)
-pkern_corr(pars.mat, d=1:10)
+
+# define a 1D kernel and grab values
+pars = list(k='mat', kp=c(10, 2))
+pkern_corr(pars, d=1:10)
+
+# get suggested bounds
+pkern_corr(pars)
+pkern_corr('mat')
+
 }

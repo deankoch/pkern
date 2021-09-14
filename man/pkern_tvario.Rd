@@ -11,7 +11,7 @@ pkern_tvario(pars, v, nug = 0, d = NULL)
 
 \item{v}{positive numeric, the pointwise variance absent a nugget effect}
 
-\item{nug}{positive numeric, (optional) the variance of the nugget effect}
+\item{nug}{nonegative numeric, the variance of the nugget effect}
 
 \item{d}{vector of nonegative numeric spatial lags to evaluate}
 }
@@ -33,7 +33,8 @@ anonymous function of distance.
 }
 \examples{
 pars.mat = pkern_corr('mat')
-pkern_tvario(pars.mat, v=1, nug=0.5, 1:10)
+pkern_tvario(pars.mat, v=1, d=1:10)
+pkern_tvario(pars.mat, v=2, nug=0.5, d=1:10)
 sv = pkern_tvario(pars.mat, nug=0.5, v=1)
 sv(1:10)
 }

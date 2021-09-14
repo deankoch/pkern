@@ -26,6 +26,8 @@ from assumption of stationarity.
 }
 \examples{
 pars = pkern_corr('exp')
-pkern_corrmat(10, pars)
-pkern_corrmat(10, pars, c(1,2), c(3:4))
+pkern_corrmat(pars, n=10)
+pkern_corrmat(pars, n=10, i=2:4, j=2:4)
+pkern_corrmat(pars, n=3)
+pkern_corrmat(pars, n=3, ds=2)
 }

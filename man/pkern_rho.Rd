@@ -4,7 +4,7 @@
 \alias{pkern_rho}
 \title{Solve for range parameter given a correlation value}
 \usage{
-pkern_rho(cval, pars, d, upper = 1000 * d)
+pkern_rho(cval, pars, d = 1, upper = 1000 * d)
 }
 \arguments{
 \item{cval}{numeric between 0 and 1, the correlation}
@@ -16,8 +16,16 @@ pkern_rho(cval, pars, d, upper = 1000 * d)
 \item{upper}{positive numeric, an upper limit for the search}
 }
 \value{
-
+the estimated "rho" value producing semivariance \code{cval} at distance \code{d}
 }
 \description{
 Solve for range parameter given a correlation value
+}
+\examples{
+pars = pkern_corr('exp')
+cval = 0.5
+pkern_rho(cval, pars, d=1)
+pkern_rho(cval, pars, d=10)
+pkern_corr(modifyList(pars, list(kp=pkern_rho(0.5, pars, d=10))), d=10)
+
 }

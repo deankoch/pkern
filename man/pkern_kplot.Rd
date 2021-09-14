@@ -37,7 +37,7 @@ visualizing the nugget effect (a discontinuity), so \code{pars$nug} is ignored b
 function.
 }
 \examples{
-pars = list(x=pkern_corr('mat'), y=pkern_corr('exp'))
+pars = pkern_bds(c('exp', 'mat'))
 pkern_kplot(pars)
 pkern_kplot(pars, dims=c(10,5))
 pkern_kplot(c(pars, list(v=2)), dims=c(10,5))
