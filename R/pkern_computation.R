@@ -230,3 +230,45 @@ pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
   # finish
   return(zout)
 }
+
+
+# simulate grid point values of a random field with separable kernel `pars`
+pkern_sim = function(pars, dims=c(25,25), precompute=FALSE)
+{
+  # set nugget effect to zero if it isn't supplied
+  if( is.null( pars[['nug']] ) ) pars[['nug']] = 0
+
+  # check if precomputed matrices and indices were supplied
+  if( !is.logical(precompute) )
+  {
+    # check for invalid input
+    if( !is.list(precompute) ) stop('"precompute" must be a list')
+
+    # unpack x and y component correlation matrices and their eigendecompositions
+    v = precompute[['v']]
+    ed = precompute[['ed']]
+    precompute = FALSE
+
+  } else {
+
+    # build x and y component correlation matrices, compute their eigendecompositions
+    v = mapply(\(p, d) pkern_corrmat(p,d), p=pars[c('x', 'y')], d=dims, SIMPLIFY=FALSE)
+    ed = lapply(v, \(vmat) eigen(vmat, symmetric=TRUE))
+  }
+
+  # return the list of precomputed objects if requested
+  if( precompute ) return( list(v=v, ed=ed) )
+
+  # kronecker product trick to get pointwise variances
+  pwv = pars[['nug']] + kronecker(ed[['x']][['values']], ed[['y']][['values']])
+
+  # generate independent standard normal data
+  z = rnorm( prod(dims) )
+
+  # equivalent to multiplying by full covariance matrix square root
+  z.ortho = sqrt(pwv) * pkern_kprod(ed[['x']][['vectors']], ed[['y']][['vectors']], z, trans=TRUE)
+  z.corr = pkern_kprod(ed[['x']][['vectors']], ed[['y']][['vectors']], z.ortho, trans=FALSE)
+
+  # reshape as matrix and finish
+  return(matrix(z.corr, dims[2]))
+}
