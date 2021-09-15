@@ -235,6 +235,9 @@ pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
 # simulate grid point values of a random field with separable kernel `pars`
 pkern_sim = function(pars, dims=c(25,25), precompute=FALSE)
 {
+  # if only one component kernel is supplied, use it for both x and y
+  if( all( c('k', 'kp') %in% names(pars) ) ) pars = list(x=pars, y=pars)
+
   # set nugget effect to zero if it isn't supplied
   if( is.null( pars[['nug']] ) ) pars[['nug']] = 0
 
@@ -261,6 +264,14 @@ pkern_sim = function(pars, dims=c(25,25), precompute=FALSE)
 
   # kronecker product trick to get pointwise variances
   pwv = pars[['nug']] + kronecker(ed[['x']][['values']], ed[['y']][['values']])
+
+  # increase nugget to offset negative eigenvalues (numerical instability)
+  if( any(pwv < 0) )
+  {
+    add.nug = -min(pwv)
+    warning( paste('V is numerically singular. Nugget effect increased by', signif(add.nug, 3)) )
+    pwv = pwv + add.nug
+  }
 
   # generate independent standard normal data
   z = rnorm( prod(dims) )

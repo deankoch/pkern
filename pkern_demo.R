@@ -13,9 +13,23 @@
 library(devtools)
 load_all()
 document()
-
 old.par = par(no.readonly=TRUE)
 
+
+# generate a matrix of data
+z = pkern_sim(pkern_corr('mat'), dims=c(30, 40))
+#plot(pkern_toraster(z), col=hcl.colors(100,"YlOrRd", rev = TRUE))
+#pkern_plot(z)
+pkern_plot(z, smoothed=F)
+
+lvls = pretty(z, 10)
+cols = hcl.colors(length(lvls)-1, "YlOrRd", rev = TRUE)
+.filled.contour(x=x, y=y, zmat, lvls, cols)
+
+graphics::image(x=x, y=y, zmat, axes=FALSE, ann=FALSE, asp=1)
+
+methods(image)
+getAnywhere(image.default)
 
 library(here)
 library(raster)
@@ -98,8 +112,11 @@ gxy = lapply(gxy.snap, \(d) d$gid)
 
 
 
-# fit a model to the sample variograms
+# sample variogram
 vario = pkern_vario(dims.bbox, vec.src, ds=ds)
+pkern_vario_plot(vario)
+
+# fit a model to the sample variograms
 pars = pkern_vario_fit(vario)
 pkern_vario_plot(vario, pars)
 
@@ -124,9 +141,7 @@ plot(rpred, col=rainbow(1e5))
 
 #dims = dims.bbox
 
-cmin
-pars=  pars[[1]]
-ds = ds[1]
+
 
 
 
