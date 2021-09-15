@@ -27,14 +27,16 @@
 #' @export
 #'
 #' @examples
-#' pars.mat = pkern_corr('mat')
-#' pkern_tvario(pars.mat, v=1, d=1:10)
-#' pkern_tvario(pars.mat, v=2, nug=0.5, d=1:10)
-#' sv = pkern_tvario(pars.mat, nug=0.5, v=1)
-#' sv(1:10)
+#' d = 1:10
+#' pars = pkern_corr('mat')
+#' pkern_tvario(pars, v=1, d=d)
+#' pkern_tvario(pars, v=2, nug=0.5, d=d)
+#'
+#' sv = pkern_tvario(pars, v=2, nug=0.5)
+#' plot(d, sv(d))
 pkern_tvario = function(pars, v, nug=0, d=NULL)
 {
-  fn = function(d) { unname(v) * ( 1 + nug - pkern_corr(pars, d) ) }
+  fn = function(d) { nug + ( unname(v) * ( 1 - pkern_corr(pars, d) ) ) }
   if( is.null(d) ) return(fn)
   return(fn(d))
 }
@@ -263,7 +265,7 @@ pkern_vario_fit = function(vario, xpars='mat', ypars=xpars, v=NULL, nug=NULL, ni
 
   # vectorized bounds for all covariance parameters
   plower = c(v[1], nug[1], xpars[['lower']], ypars[['lower']])
-  pinitial = c( v[2], nug[2], pkern_unpack(xpars, ypars) )
+  pinitial = c( v[2], nug[2], xpars[['kp']], ypars[['kp']] )
   pupper = c(v[3], nug[3], xpars[['upper']], ypars[['upper']])
 
   # build matrices to hold pertinent info from `vario` (omit zero point in first index)
@@ -271,20 +273,19 @@ pkern_vario_fit = function(vario, xpars='mat', ypars=xpars, v=NULL, nug=NULL, ni
   mvario = lapply(vario[midx], \(vg) cbind(n=vg[['n']][-1], sep=vg[['sep']][-1], sv=vg[['sv']][-1]))
 
   # define anonymous objective function for optimizer
-  fn = function(pvec, xp, yp, mv, ds)
+  fn = function(pvec, p, mv, ds)
   {
     # pvec, numeric vector of parameters
-    # xp, x kernel parameter list (must element named "k")
-    # yp, y kernel parameter list (must element named "k")
+    # p, list of "x", "y" kernel parameter lists associated with pvec
     # mv, list of matrices ("x", "y" and optionally "d1", "d2") with columns "n", "sep", "sv"
     # ds, numeric vector of grid line spacings in x and y directions
 
     # extract kernel parameters as lists (omit first element, the variance)
-    pars = pkern_unpack(xp, yp, pvec[-(1:2)])
+    p = pkern_unpack(p, pvec[-(1:2)])
 
     # generate theoretical semivariance values along x and y for each lag
-    xsv = pkern_tvario(pars=pars[['x']], v=pvec[1], nug=pvec[2], d=mv[['x']][,'sep'])
-    ysv = pkern_tvario(pars=pars[['y']], v=pvec[1], nug=pvec[2], d=mv[['y']][,'sep'])
+    xsv = pkern_tvario(pars=p[['x']], v=pvec[1], nug=pvec[2], d=mv[['x']][,'sep'])
+    ysv = pkern_tvario(pars=p[['y']], v=pvec[1], nug=pvec[2], d=mv[['y']][,'sep'])
 
     # compute weighted sums of squares along both dimensions and return their sum
     wss.x = sum( ( mv[['x']][,'n'] / (xsv)^2 ) * ( ( mv[['x']][,'sv'] - xsv )^2 ) )
@@ -302,16 +303,18 @@ pkern_vario_fit = function(vario, xpars='mat', ypars=xpars, v=NULL, nug=NULL, ni
       # generate theoretical semivariance values for each lag on first diagonal
       d1.xsep = ds[1] * mv[['d1']][,'sep'] / udist
       d1.ysep = ds[2] * mv[['d1']][,'sep'] / udist
-      xsv.d1 = pkern_tvario(pars=pars[['x']], v=sqrt(pvec[1]), nug=pvec[2], d=d1.xsep)
-      ysv.d1 = pkern_tvario(pars=pars[['y']], v=sqrt(pvec[1]), nug=pvec[2], d=d1.ysep)
-      d1sv = xsv.d1 * ysv.d1
+      xsv.d1 = pkern_tvario(pars=p[['x']], v=sqrt(pvec[1]), d=d1.xsep)
+      ysv.d1 = pkern_tvario(pars=p[['y']], v=sqrt(pvec[1]), d=d1.ysep)
 
-      # generate theoretical semivariance values for each lag on second diagonal
+      # nugget gets added after the product
+      d1sv = pvec[2] + ( xsv.d1 * ysv.d1 )
+
+      # repeat for the other diagonal
       d2.xsep = ds[1] * mv[['d2']][,'sep'] / udist
       d2.ysep = ds[2] * mv[['d2']][,'sep'] / udist
-      xsv.d2 = pkern_tvario(pars=pars[['x']], v=sqrt(pvec[1]), nug=pvec[2], d=d2.xsep)
-      ysv.d2 = pkern_tvario(pars=pars[['y']], v=sqrt(pvec[1]), nug=pvec[2], d=d2.ysep)
-      d2sv = xsv.d2 * ysv.d2
+      xsv.d2 = pkern_tvario(pars=p[['x']], v=sqrt(pvec[1]), d=d2.xsep)
+      ysv.d2 = pkern_tvario(pars=p[['y']], v=sqrt(pvec[1]), d=d2.ysep)
+      d2sv = pvec[2] + ( xsv.d2 * ysv.d2 )
 
       # compute weighted sums of squares along both dimensions and return their sum
       # wss.d1 = sum( ( mv[['d1']][,'n'] ) * ( ( mv[['d1']][,'sv'] - d1sv )^2 ) )
@@ -336,8 +339,7 @@ pkern_vario_fit = function(vario, xpars='mat', ypars=xpars, v=NULL, nug=NULL, ni
                                                         method='L-BFGS-B',
                                                         lower=plower,
                                                         upper=pupper,
-                                                        xp=xpars,
-                                                        yp=ypars,
+                                                        p=list(x=xpars, y=ypars),
                                                         mv=mvario,
                                                         ds=vario[['ds']]))
 
@@ -348,6 +350,6 @@ pkern_vario_fit = function(vario, xpars='mat', ypars=xpars, v=NULL, nug=NULL, ni
   # unpack fitted parameters and return in a list
   vfit = setNames(result.optim$par[1], 'fitted')
   nugfit = setNames(result.optim$par[2], 'fitted')
-  pfit = pkern_unpack(xpars, ypars, result.optim$par[-(1:2)])
+  pfit = pkern_unpack(list(x=xpars, y=ypars), result.optim$par[-(1:2)])
   return( list(x=pfit[['x']], y=pfit[['y']], v=vfit, nug=nugfit, ds=vario[['ds']]) )
 }
