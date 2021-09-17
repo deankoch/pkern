@@ -9,6 +9,9 @@
 # compute coordinates and reshape z into a matrix oriented for `graphics::image` and friends
 pkern_plot = function(z, dims=NULL, xy=NULL, ds=1, smoothed=FALSE, maxx=300, ppars=list())
 {
+  # duplicate distance scaling factors as needed
+  if( length(ds) == 1 ) ds = rep(ds, 2)
+
   # extract grid size from matrix/raster input
   if( any( c('matrix', 'RasterLayer') %in% class(z) ) )
   {
@@ -31,12 +34,23 @@ pkern_plot = function(z, dims=NULL, xy=NULL, ds=1, smoothed=FALSE, maxx=300, ppa
   if( is.null(names(xy)) ) xy = setNames(xy, xynm)
   if( is.null(dims) ) dims = sapply(xy, length)
 
+  # unpack plotting parameters and/or set defaults
+  asp = ifelse( is.null(ppars[['asp']]), 1, ppars[['asp']])
+  leg = ifelse( is.null(ppars[['leg']]), 'z', ppars[['leg']])
+  xlab = ifelse( is.null(ppars[['xlab']]), 'x', ppars[['xlab']])
+  ylab = ifelse( is.null(ppars[['ylab']]), 'y', ppars[['ylab']])
+  glcol = ifelse( is.null(ppars[['glcol']]), NA, ppars[['glcol']])
+  pal = ifelse( is.null(ppars[['pal']]), 'Spectral', ppars[['pal']])
+  bcol = ifelse( is.null(ppars[['bcol']]), 'black', ppars[['bcol']])
+  fcol = ifelse( is.null(ppars[['fcol']]), 'black', ppars[['fcol']])
+  discrete = ifelse( is.null(ppars[['discrete']]), FALSE, ppars[['discrete']])
+
   # determine aggregation factors along x and y directions
   afact = ceiling( dims/maxx )
   if( any( afact > 1 ) )
   {
     # aggregate the data as needed
-    z.agg = pkern_agg(z, dims, afact, tol=0.99)
+    z.agg = pkern_agg(z, dims, afact, tol=0.99, discrete=discrete)
     z = z.agg[['z']]
     ij = z.agg[['ij']]
     dims.sg = unname(rev(sapply(ij, length)))
@@ -49,29 +63,40 @@ pkern_plot = function(z, dims=NULL, xy=NULL, ds=1, smoothed=FALSE, maxx=300, ppa
   # convert data to row-vectorized order for compatibility with `graphics::image` and friends
   zmat = matrix(z[pkern_r2c(dims, in.byrow=FALSE, out.byrow=TRUE, flipx=TRUE)], dims[1])
 
+  # adjust xy for supplied distance scaling
+  xy = setNames(mapply(\(d, g) g*d, g=xy, d=ds, SIMPLIFY=FALSE), xynm)
+
   # find grid line spacing halves on plot and positions of grid lines
   xysp = sapply(xy, \(g) diff(g[1:2]) / 2 )
   xygl = lapply(xynm, \(d) c(xy[[d]][1] - xysp[[d]], xy[[d]] + xysp[[d]]) )
   xylim = lapply(xygl, range)
 
-  # unpack plotting parameters and/or set defaults
-  asp = ifelse( is.null(ppars[['asp']]), 1, ppars[['asp']])
-  leg = ifelse( is.null(ppars[['leg']]), 'z', ppars[['leg']])
-  xlab = ifelse( is.null(ppars[['xlab']]), 'x', ppars[['xlab']])
-  ylab = ifelse( is.null(ppars[['ylab']]), 'y', ppars[['ylab']])
-  glcol = ifelse( is.null(ppars[['glcol']]), NA, ppars[['glcol']])
-  pal = ifelse( is.null(ppars[['pal']]), 'Spectral', ppars[['pal']])
-  bcol = ifelse( is.null(ppars[['bcol']]), 'black', ppars[['bcol']])
-  fcol = ifelse( is.null(ppars[['fcol']]), 'black', ppars[['fcol']])
-
-  # set up color palette
+  # set up a default continuous color palette
   zr = range(z, na.rm=TRUE, finite=TRUE)
   lvls = pretty(z, 1e2)
-  cols = hcl.colors(length(lvls)-1, pal, rev = TRUE)
 
-  # set up plot window ratios
-  rd = sapply(xy, \(g) diff(range(g))) * rr
-  rdd = diff(rd)
+  # set up breakpoints in colorbar for discrete case
+  if( discrete )
+  {
+    # TODO: replace this slow operation
+    dlvls = sort(unique(z))
+
+    # make a new z range with padding so that colorbar ticks don't wind up on the edge
+    dpad = min(diff(dlvls))/2
+    zr = zr + ( dpad * c(-1, 1) )
+
+    # new levels are at midpoints between discrete values
+    lvls = c(dlvls[1] - dpad, dlvls + c(diff(dlvls)/2, dpad))
+
+  } else {
+
+    # in continuous case we just pick a large number of breaks covering the range
+    zr = range(z, na.rm=TRUE, finite=TRUE)
+    lvls = pretty(z, 5e2)
+  }
+
+  # set up a color palette
+  cols = hcl.colors(length(lvls)-1, pal, rev=TRUE)
 
   # backing up current settings before we change anything
   old.par = par(no.readonly=TRUE)
@@ -271,10 +296,9 @@ pkern_toString = function(pars, nsig=3)
 #' pkern_kplot(c(pars, list(v=2, nug=0.5)), dims=c(50,30), smoothed=TRUE)
 pkern_kplot = function(pars, dims=NULL, ds=1, smoothed=FALSE, maxx=200, ppars=list())
 {
-
+  # duplicate distance scaling factors as needed
   if( 'ds' %in% names(pars) ) ds = pars[['ds']]
   if( length(ds) == 1 ) ds = rep(ds, 2)
-
 
   # determine if this is a correlation or covariance plot
   is.nug = !is.null(pars[['nug']])

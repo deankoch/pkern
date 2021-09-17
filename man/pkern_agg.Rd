@@ -4,7 +4,7 @@
 \alias{pkern_agg}
 \title{Reduce the resolution of a regular grid by separable convolution}
 \usage{
-pkern_agg(z, dims = NULL, afact = 2, pars = NULL, tol = 0.05)
+pkern_agg(z, dims = NULL, afact = 2, pars = NULL, tol = 0.05, discrete = FALSE)
 }
 \arguments{
 \item{z}{either a numeric matrix with dimensions \code{dims}, or its column-vectorization}
@@ -16,6 +16,8 @@ pkern_agg(z, dims = NULL, afact = 2, pars = NULL, tol = 0.05)
 \item{pars}{(optional) list of "x" and "y" kernel parameters}
 
 \item{tol}{numeric between 0 and 1, tolerance for NAs}
+
+\item{discrete}{logical, indicating to round output to nearest integer}
 }
 \value{
 numeric matrix of dimensions \code{floor(dims/afact)}, the aggregated grid

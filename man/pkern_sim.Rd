@@ -4,24 +4,18 @@
 \alias{pkern_sim}
 \title{Simulate grid point values of a random field with separable covariance kernel}
 \usage{
-pkern_sim(
-  pars,
-  dims = c(25, 25),
-  precompute = FALSE,
-  makeplot = TRUE,
-  maxx = maxx
-)
+pkern_sim(pars, dims = c(25, 25), ds = 1, precompute = FALSE, makeplot = TRUE)
 }
 \arguments{
 \item{pars}{a kernel parameters list ("k", "kp"), or list of two of them ("x", "y")}
 
 \item{dims}{integer vector c(nx, ny), the grid size}
 
+\item{ds}{positive numeric or vector of two, the distance scaling factor(s)}
+
 \item{precompute}{logical or list, for caching computationally expensive operations}
 
 \item{makeplot}{logical, whether to plot the results}
-
-\item{maxx, }{plotting resolution, passed to \code{pkern_plot} (when \code{makeplot==TRUE})}
 }
 \value{
 a numeric matrix with dimensions \code{rev(dims)} or a list of precomputed objects

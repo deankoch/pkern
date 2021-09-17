@@ -4,7 +4,14 @@
 \alias{pkern_kplot}
 \title{Make a heatmap of covariances/correlations around a grid's central point}
 \usage{
-pkern_kplot(pars, dims = NULL, smoothed = FALSE, maxx = 200, ppars = list())
+pkern_kplot(
+  pars,
+  dims = NULL,
+  ds = 1,
+  smoothed = FALSE,
+  maxx = 200,
+  ppars = list()
+)
 }
 \arguments{
 \item{pars}{list of two parameter lists "x" and "y", and (optionally) "v", "nug"}

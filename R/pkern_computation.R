@@ -42,7 +42,7 @@ pkern_kprod = function(X, Y, z, trans=FALSE)
 
 # uses Rccp libraries in Rfast package and ...
 
-# conditional mean of points on a grid given zobs, a sample taken over a subgrid
+# conditional mean of points on a grid given a sample taken over a subgrid
 pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
 {
   # Fast conditional mean computer for problems where sampled locations form a subgrid
@@ -71,8 +71,8 @@ pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
   # on zobs (in column-vectorized order).
   #
 
+  # the number of points in the sampled subgrid
   nsg = length(zobs)
-
 
   # check if precomputed matrices and indices were supplied
   if( !is.logical(precompute) )
@@ -80,11 +80,14 @@ pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
     # check for invalid input
     if( !is.list(precompute) ) stop('"precompute" must be a list')
 
-    # unpack correlation matrices and eigendecomposition of marginal variance
+    # unpack correlation matrices
     vx = precompute[['vx']]
     vy = precompute[['vy']]
     vx.cross = precompute[['vx.cross']]
     vy.cross = precompute[['vy.cross']]
+    vs.cross = precompute[['vs.cross']]
+
+    # eigendecomposition(s)
     ed = precompute[['ed']]
 
     # unpack indexing vectors
@@ -110,6 +113,8 @@ pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
     gy = sort( gxy[[2]] )
     gxc = seq( dims[1] )[-gx]
     gyc = seq( dims[2] )[-gy]
+    nx = length(gx)
+    ny = length(gy)
 
     # index of subgrid points in full grid, and all points on one of its grid lines
     idx.on = pkern_idx_sg(dims, i=gy, j=gx)
@@ -132,8 +137,8 @@ pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
     pars[['y']][['kp']][1] = pars[['y']][['kp']][1] / pars[['ds']][2]
 
     # build component marginal correlation matrices for the subgrid
-    vx = pkern_corrmat(pars[['x']], length( gxy[[1]] ) )
-    vy = pkern_corrmat(pars[['y']], length( gxy[[2]] ) )
+    vx = pkern_corrmat(pars[['x']], nx)
+    vy = pkern_corrmat(pars[['y']], ny)
 
     # build component cross-correlation matrices for points on vs off subgrid lines
     vx.cross = pkern_corrmat(pars[['x']], dims[1], ds=1/dsx, j=gxc, i=gx)
@@ -141,18 +146,26 @@ pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
 
     ## compute eigendecomposition(s)
 
-    # slower method when there is missing data
+    # slower method when not all of the subgrid is sampled
     if( anyNA(zobs) )
     {
-      # missing data case requires first evaluating the variance kronecker product
+      # indices of sampled and unsampled within the subgrid
       idx.sg.obs = which( !is.na(zobs) )
-      ed = eigen(kronecker(vx, vy)[idx.sg.obs, idx.sg.obs], symmetric=TRUE)
+      idx.sg.unobs = seq(nsg)[-idx.sg.obs]
+
+      # missing data case requires first evaluating the variance kronecker product
+      v = kronecker(vx, vy)
+      ed = eigen(v[idx.sg.obs, idx.sg.obs], symmetric=TRUE)
+
+      # we also need the (within subgrid) cross-covariance between sampled and unsampled points
+      vs.cross = v[idx.sg.unobs, idx.sg.obs]
 
     } else {
 
       # with no missing data we can do eigendecompositions on component matrices
       idx.sg.obs = seq(nsg)
       ed = list(x=eigen(vx, symmetric=TRUE), y=eigen(vy, symmetric=TRUE))
+      vs.cross = NULL
     }
   }
 
@@ -162,6 +175,7 @@ pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
                                ed=ed,
                                vx.cross=vx.cross,
                                vy.cross=vy.cross,
+                               vs.cross=vs.cross,
                                idx.on=idx.on,
                                idx.off=idx.off,
                                idx.xoff=idx.xoff,
@@ -175,7 +189,7 @@ pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
   # missing data case
   if( length(idx.sg.obs) < nsg )
   {
-    # omit the NA values from zobs
+    # omit the NA points from zobs
     zobs.crop = zobs[idx.sg.obs]
 
     # pointwise variances are equal to the eigenvalues plus the nugget variance
@@ -186,6 +200,9 @@ pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
 
     # transform `zobs` by product with inverse covariance to get mutual independence
     zobs.indep[idx.sg.obs] = ed[['vectors']] %*% ( ( t(ed[['vectors']]) %*% zobs.crop ) / pwv )
+
+    # compute and assign conditional mean of unsampled subgrid points
+    zout[ idx.on[-idx.sg.obs] ] = vs.cross %*% zobs.indep[idx.sg.obs]
 
   } else {
 
@@ -348,12 +365,13 @@ pkern_sim = function(pars, dims=c(25,25), ds=1, precompute=FALSE, makeplot=TRUE)
 #' @param afact integer or vector of two integers, the aggregation factors
 #' @param pars (optional) list of "x" and "y" kernel parameters
 #' @param tol numeric between 0 and 1, tolerance for NAs
+#' @param discrete logical, indicating to round output to nearest integer
 #'
 #' @return numeric matrix of dimensions `floor(dims/afact)`, the aggregated grid
 #' @export
 #'
 #' @examples
-pkern_agg = function(z, dims=NULL, afact=2, pars=NULL, tol=0.05)
+pkern_agg = function(z, dims=NULL, afact=2, pars=NULL, tol=0.05, discrete=FALSE)
 {
   # duplicate aggregation factor and set grid size as needed
   if( length(afact) == 1 ) afact = rep(afact, 2)
@@ -395,6 +413,9 @@ pkern_agg = function(z, dims=NULL, afact=2, pars=NULL, tol=0.05)
 
   # convolve with data
   zout = as.vector( Y %*% matrix(z, dims[2]) %*% X )
+
+  # for discrete (integer-valued) data we want integer output
+  if(discrete) zout = round(zout)
 
   # assign NA to any point where over 5% of its weight comes from NA source points
   #zout[Matrix::which(missout > tol)] = NA
