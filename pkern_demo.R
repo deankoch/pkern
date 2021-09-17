@@ -16,21 +16,6 @@ document()
 old.par = par(no.readonly=TRUE)
 
 
-# generate a matrix of data
-z = pkern_sim(pkern_corr('mat'), dims=c(30, 40))
-#plot(pkern_toraster(z), col=hcl.colors(100,"YlOrRd", rev = TRUE))
-#pkern_plot(z)
-pkern_plot(z, smoothed=F)
-
-lvls = pretty(z, 10)
-cols = hcl.colors(length(lvls)-1, "YlOrRd", rev = TRUE)
-.filled.contour(x=x, y=y, zmat, lvls, cols)
-
-graphics::image(x=x, y=y, zmat, axes=FALSE, ann=FALSE, asp=1)
-
-methods(image)
-getAnywhere(image.default)
-
 library(here)
 library(raster)
 library(sf)
@@ -53,7 +38,7 @@ tmin = st_read(file.path(path.testdata, 'tmin_full.geojson'))
 # par(old.par)
 
 # extract grid size
-dims = pkern_fromraster(dem, 'dim')
+dims.outer = pkern_fromraster(dem, 'dim')
 
 # snap weather point to a grid
 gxy.snap = pkern_snap(pts=tmin, g=dem, regular=TRUE, makeplot=FALSE)
@@ -72,17 +57,27 @@ nm.data = 'tmin'
 
 
 
-
-
 # extract grid line mapping within the bounding box for the snapped points
 xy = cbind(sapply(gxy.snap, \(d) d$id), id=seq(nrow(tmin)))
-dims.bbox = Rfast::colMaxs(xy[,c('x', 'y')], value=TRUE)
-res.inc = sapply(gxy.snap, \(xy) unique(diff(xy$gid)))
+dims = Rfast::colMaxs(xy[,c('x', 'y')], value=TRUE)
 
 # plot a rasterized version of the tmin values after centering
 tmin.mean = mean(tmin[[nm.data]])
-vec.src = rep(NA, prod(dims.bbox))
-vec.src[ pkern_mat2vec(xy, dims.bbox[2]) ] = tmin[[nm.data]] - tmin.mean
+vec.src = rep(NA, prod(dims))
+vec.src[ pkern_mat2vec(xy, dims[2]) ] = tmin[[nm.data]] - tmin.mean
+
+##
+pkern_plot(vec.src, dims.bbox, asp=1)
+
+
+
+
+
+
+
+
+pkern_plot(vec.src, dims.bbox, smoothed=T)
+
 src = pkern_toraster(vec.src, dims.bbox)
 plot(src, col=rainbow(100))
 
@@ -141,6 +136,17 @@ plot(rpred, col=rainbow(1e5))
 
 #dims = dims.bbox
 
+
+
+
+
+
+# generate a matrix of data
+z = pkern_sim(pkern_corr('mat'), dims=c(30, 40))
+#plot(pkern_toraster(z), col=hcl.colors(100,"YlOrRd", rev = TRUE))
+#pkern_plot(z)
+dev.new(width=dims[1], height=dims[2])
+pkern_plot(z, smoothed=F)
 
 
 
