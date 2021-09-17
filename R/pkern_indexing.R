@@ -92,31 +92,6 @@ pkern_vec2mat = function(idx, ny)
 }
 
 
-#' Inverse for base::which
-#'
-#' base::which takes a logical vector and returns the indices of TRUE elements.
-#' This function does the opposite, creating a length-n logical vector that is
-#' TRUE at the indices in idx, and FALSE otherwise
-#
-#' @param idx vector of positive integers no greater than n
-#' @param n positive integer
-#'
-#' @return length-n vector
-#' @export
-#'
-#' @examples
-#' n = 25
-#' foo = sample(c(TRUE, FALSE), size=n, replace=TRUE)
-#' idx.foo = which(foo)
-#' pkern_unwhich(idx.foo, n)
-pkern_unwhich = function(idx, n, asinteger=FALSE)
-{
-  outvec = rep(FALSE, n)
-  outvec[idx] = TRUE
-  return(outvec)
-}
-
-
 #' Find column-vectorized index of a subgrid
 #'
 #' A grid with nx columns and ny rows has grid lines and i=1:ny, j=1:nx.
