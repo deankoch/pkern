@@ -32,9 +32,11 @@ When \code{d} is NULL, the function instead returns the semivariance function as
 anonymous function of distance.
 }
 \examples{
-pars.mat = pkern_corr('mat')
-pkern_tvario(pars.mat, v=1, d=1:10)
-pkern_tvario(pars.mat, v=2, nug=0.5, d=1:10)
-sv = pkern_tvario(pars.mat, nug=0.5, v=1)
-sv(1:10)
+d = 1:10
+pars = pkern_corr('mat')
+pkern_tvario(pars, v=1, d=d)
+pkern_tvario(pars, v=2, nug=0.5, d=d)
+
+sv = pkern_tvario(pars, v=2, nug=0.5)
+plot(d, sv(d))
 }

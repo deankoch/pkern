@@ -4,35 +4,43 @@
 \alias{pkern_bds}
 \title{Suggest bounds for parameters of x and y component kernels for a grid model}
 \usage{
-pkern_bds(pars, ds = NA, cmin = 0.05, cmax = 1 - cmin)
+pkern_bds(pars, ds = NA, cmin = 0.05, cini = 0.9, cmax = cini + (1 - cini)/2)
 }
 \arguments{
 \item{pars}{kernel parameter list (recognized by \code{pkern_corr}) or list of two of them}
 
 \item{ds}{vector c(dx, dy) or positive numeric, the resolution of the sampled grid}
 
-\item{cmin}{positive numeric, minimum allowable correlation between adjacent grid cells}
+\item{cmin}{positive numeric, minimum allowable correlation between adjacent grid points}
 
-\item{cmax}{positive numeric, maximum allowable correlation between adjacent grid cells}
+\item{cini}{positive numeric, initial correlation between adjacent grid points}
+
+\item{cmax}{positive numeric, maximum allowable correlation between adjacent grid points}
 }
 \value{
 kernel parameter list containing "kp", "lower", "upper", or list of two such lists
 }
 \description{
 This function takes a kernel parameter list (\code{pars}) and adds vectors "kp"
-(initial values), "lower" and "upper" (bounds). Initial values are set to the
-midpoint (mean) of the respective bounds. \code{pars} can also be a character string
-(or vector of two), naming the desired kernel(s) (see \code{pkern_corr}).
+(initial values), "lower" and "upper" (bounds), wherever they are missing. As
+a shortcut, \code{pars} can also be a character string (or vector of two), naming
+the desired kernel(s) (see \code{pkern_corr}).
 }
 \details{
 Bounds for shape parameters are hard-coded, whereas the bounds for the range parameter
 are determined based on the grid resolution (\code{ds}, the distance between grid lines in
 x and y directions) and a user supplied correlation range; \code{cmin} is the minimum allowable
-correlation between adjacent grid points, and \code{cmax} is the maximum. The corresponding
-"rho" values are then estimated using \code{base::optimize} (see \code{pkern_rho})
+correlation between adjacent grid points, and \code{cmax} is the maximum. The corresponding "rho"
+values are then estimated using \code{pkern_rho} (via a grid search over the permissible
+shape parameters, if there are any)
+
+Initial values for the shape parameters are set to the midpoints of their permissible
+ranges. Initial value for the range parameters are set such that adjacent cells have
+correlation \code{cini}
 
 By default \code{cmin} is set to 0.05, so that the effective range of the kernel is bounded
-below by the shortest interpoint distance.
+below by the shortest interpoint distance. The default for \code{cmax} is the midpoint between
+\code{cini} and 1. \code{cini} is by default set to
 }
 \examples{
 

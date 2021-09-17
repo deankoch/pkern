@@ -4,7 +4,7 @@
 \alias{pkern_unpack}
 \title{Vectorize x and y component parameters}
 \usage{
-pkern_unpack(pars, kp)
+pkern_unpack(pars, kp = NULL)
 }
 \arguments{
 \item{pars}{list of "x" and "y" kernel parameter lists (each containing vector "kp")}
@@ -24,5 +24,4 @@ and returning them in a list
 pars = pkern_corr(c('mat', 'exp'))
 pkern_unpack(pars)
 pkern_unpack(pars, 1:3)
-pkern_unpack = function(pars, p=NULL)
 }
