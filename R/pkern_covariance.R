@@ -152,23 +152,30 @@ pkern_rho = function(cval, pars, d=1, upper=1e3*d)
 #' Suggest bounds for parameters of x and y component kernels for a grid model
 #'
 #' This function takes a kernel parameter list (`pars`) and adds vectors "kp"
-#' (initial values), "lower" and "upper" (bounds). Initial values are set to the
-#' midpoint (mean) of the respective bounds. `pars` can also be a character string
-#' (or vector of two), naming the desired kernel(s) (see `pkern_corr`).
+#' (initial values), "lower" and "upper" (bounds), wherever they are missing. As
+#' a shortcut, `pars` can also be a character string (or vector of two), naming
+#' the desired kernel(s) (see `pkern_corr`).
 #'
 #' Bounds for shape parameters are hard-coded, whereas the bounds for the range parameter
 #' are determined based on the grid resolution (`ds`, the distance between grid lines in
 #' x and y directions) and a user supplied correlation range; `cmin` is the minimum allowable
-#' correlation between adjacent grid points, and `cmax` is the maximum. The corresponding
-#' "rho" values are then estimated using `base::optimize` (see `pkern_rho`)
+#' correlation between adjacent grid points, and `cmax` is the maximum. The corresponding "rho"
+#' values are then estimated using `pkern_rho` (via a grid search over the permissible
+#' shape parameters, if there are any)
+#'
+#' Initial values for the shape parameters are set to the midpoints of their permissible
+#' ranges. Initial value for the range parameters are set such that adjacent cells have
+#' correlation `cini`
 #'
 #' By default `cmin` is set to 0.05, so that the effective range of the kernel is bounded
-#' below by the shortest interpoint distance.
+#' below by the shortest interpoint distance. The default for `cmax` is the midpoint between
+#' `cini` and 1. `cini` is by default set to
 #'
 #' @param pars kernel parameter list (recognized by `pkern_corr`) or list of two of them
 #' @param ds vector c(dx, dy) or positive numeric, the resolution of the sampled grid
-#' @param cmin positive numeric, minimum allowable correlation between adjacent grid cells
-#' @param cmax positive numeric, maximum allowable correlation between adjacent grid cells
+#' @param cmin positive numeric, minimum allowable correlation between adjacent grid points
+#' @param cini positive numeric, initial correlation between adjacent grid points
+#' @param cmax positive numeric, maximum allowable correlation between adjacent grid points
 #'
 #'
 #' @return kernel parameter list containing "kp", "lower", "upper", or list of two such lists
@@ -189,16 +196,16 @@ pkern_rho = function(cval, pars, d=1, upper=1e3*d)
 #' pars = list(k='mat', upper=c(10,10))
 #' pkern_bds(pars)
 #'
-pkern_bds = function(pars, ds=NA, cmin=0.05, cmax=1-cmin)
+pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
 {
   # handle character input (kernel names)
   if( is.character(pars) )
   {
     # convert to expected list format for recursive call and handle unexpected input
-    if( length(pars) == 1 ) return( pkern_bds(list(k=pars), ds=ds, cmin=cmin, cmax=cmax) )
+    if( length(pars) == 1 ) return( pkern_bds(list(k=pars), ds=ds, cmin=cmin, cini=cini, cmax=cmax) )
     if( length(pars) != 2 ) stop('expected vector of two kernel names in pars')
     pars = lapply(setNames(pars, c('x', 'y')), \(p) list(k=p))
-    return( pkern_bds(pars, ds=ds, cmin=cmin, cmax=cmax) )
+    return( pkern_bds(pars, ds=ds, cmin=cmin, cini=cini, cmax=cmax) )
   }
 
   # single dimension case
@@ -235,10 +242,17 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cmax=1-cmin)
       rhomin = min( sapply(shp.test, \(p) pkern_rho(cmin, modifyList(pars, list(kp=c(NA, p))), ds)) )
       rhomax = max( sapply(shp.test, \(p) pkern_rho(cmax, modifyList(pars, list(kp=c(NA, p))), ds)) )
 
-      # append bounds and initial values as needed
+      # append bounds as needed
       if( is.null( pars[['lower']] ) ) pars[['lower']] = c(rhomin, bds.shp[1])
       if( is.null( pars[['upper']] ) ) pars[['upper']] = c(rhomax, bds.shp[2])
-      if( is.null( pars[['kp']] ) ) pars[['kp']] = ( pars[['lower']] + pars[['upper']] ) / 2
+
+      # compute and append initial values as needed
+      if( is.null( pars[['kp']] ) )
+      {
+        shp.ini = mean( c(pars[['lower']][2], pars[['upper']][2]) )
+        rho.ini = pkern_rho(cini, modifyList(pars, list(kp=c(NA, shp.ini))), ds)
+        pars[['kp']] = c(rho.ini, shp.ini)
+      }
 
     } else {
 
@@ -250,7 +264,7 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cmax=1-cmin)
       # append bounds and initial values as needed
       if( is.null( pars[['lower']] ) ) pars[['lower']] = rhomin
       if( is.null( pars[['upper']] ) ) pars[['upper']] = rhomax
-      if( is.null( pars[['kp']] ) ) pars[['kp']] = ( rhomin + rhomax ) / 2
+      if( is.null( pars[['kp']] ) ) pars[['kp']] = pkern_rho(cini, pars, ds)
 
     }
 
@@ -299,7 +313,6 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cmax=1-cmin)
 #' pars = pkern_corr(c('mat', 'exp'))
 #' pkern_unpack(pars)
 #' pkern_unpack(pars, 1:3)
-#' pkern_unpack = function(pars, p=NULL)
 pkern_unpack = function(pars, kp=NULL)
 {
   # vectorization in order x, y

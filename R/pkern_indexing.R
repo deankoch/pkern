@@ -294,7 +294,7 @@ pkern_snap = function(pts, g, regular=FALSE, nstart=25, makeplot=TRUE)
   {
     # copying crs in case makeraster=TRUE
     g.crs = crs(g)
-    g = pkern_fromraster(g, 'xy')
+    g = pkern_fromRaster(g, 'xy')
   }
 
   # handle makeplot as title string
@@ -486,7 +486,7 @@ pkern_r45 = function(z, dims=NULL)
   zpad[ pkern_idx_sg(dims.pad, i=seq(dims[2]), j=seq(dims[1])) ] = z
 
   # sanity check:
-  # matrix(zpad, dims.pad[2]) |> pkern_toraster() |> plot(col=rainbow(100))
+  # matrix(zpad, dims.pad[2]) |> pkern_toRaster() |> plot(col=rainbow(100))
 
   # find the central point in padded array, about which we rotate
   ij.central = setNames(rev( 1 + ( (dims.pad - 1) / 2 ) ), c('i', 'j'))
@@ -505,7 +505,7 @@ pkern_r45 = function(z, dims=NULL)
   zrot[idx.rot] = zpad
 
   # sanity check:
-  # matrix(zpad, dims.pad[2]) |> pkern_toraster() |> plot(col=rainbow(100))
+  # matrix(zpad, dims.pad[2]) |> pkern_toRaster() |> plot(col=rainbow(100))
 
   # identify the minimal subset of rows containing all non-NA data
   ikeep = apply(matrix(zrot, dims.rot[2]), 1, \(x) !all(is.na(x))) |> which()
