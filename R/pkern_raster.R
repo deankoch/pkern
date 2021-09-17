@@ -41,21 +41,24 @@ pkern_checkRaster = function()
 #' @examples
 #' require(raster)
 #' r.in = system.file('external/rlogo.grd', package='raster') |> raster(band=1)
-#' pkern.in = pkern_fromraster(r.in)
+#' pkern.in = pkern_fromRaster(r.in)
 #' pkern.in$data |> matrix(ncol=pkern.in$dims[1]) |> image()
-#' pkern_toraster(pkern.in, template=r.in)
-#' pkern_toraster(pkern_fromraster(r.in, what='values'), template=r.in)
-pkern_fromraster = function(r, what='all')
+#' pkern_toRaster(pkern.in, template=r.in)
+#' pkern_toRaster(pkern_fromRaster(r.in, what='values'), template=r.in)
+pkern_fromRaster = function(r, what='all')
 {
   # stop with an error message if raster package is unavailable
   pkern_checkRaster()
 
   # extract dimensions and return if requested
-  dims = dim(r)[2:1] |> stats::setNames(c('nx', 'ny'))
+  dims = dim(r)[2:1] |> stats::setNames(c('x', 'y'))
   if( what == 'dim' ) return(dims)
 
   # extract grid line positions (as needed)
-  if( what != 'values' ) gxy = list(x=xFromCol(dem, seq(dims[1])), y=yFromRow(dem, seq(dims[2])) )
+  if( what != 'values' ) gxy = list(x=raster::xFromCol(r, seq(dims[1])),
+                                    y=raster::yFromRow(r, rev(seq(dims[2]))) )
+
+  # finish grid line mode
   if( what == 'xy' ) return(gxy)
 
   # indexing vector to get column-vectorized version of values
@@ -87,10 +90,10 @@ pkern_fromraster = function(r, what='all')
 #' @examples
 #' require(raster)
 #' r.in = system.file('external/rlogo.grd', package='raster') |> raster(band=1)
-#' pkern.in = pkern_fromraster(r.in)
-#' pkern_toraster(pkern.in, template=r.in)
+#' pkern.in = pkern_fromRaster(r.in)
+#' pkern_toRaster(pkern.in, template=r.in)
 #' r.in
-pkern_toraster = function(rvec=NA, dims=NULL, template=NULL)
+pkern_toRaster = function(rvec=NA, dims=NULL, template=NULL)
 {
 
   # stop with an error message if raster package is unavailable
