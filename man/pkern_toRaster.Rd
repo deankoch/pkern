@@ -4,24 +4,27 @@
 \alias{pkern_toRaster}
 \title{Convert column-vectorized grid to RasterLayer}
 \usage{
-pkern_toRaster(rvec = NA, dims = NULL, template = NULL)
+pkern_toRaster(rvec = NULL, dims = NULL, template = NULL)
 }
 \arguments{
-\item{rvec}{either the column-vectorized data or a list with elements "data" and "dims"}
+\item{rvec}{either the column-vectorized data or a list containing it (in element "values")}
 
 \item{dims}{c(nx, ny), the number of x and y grid lines in the full grid}
 
 \item{template}{optional RasterLayer to use as template (for setting crs, resolution etc)
 
-Produces a RasterLayer from a column-vectorized dataset. This is simply a
-wrapper for the call \code{raster(matrix(rvec, ncol=dims[1]), template=template)}
-with some error checking and the ability to pass both the data vector and its
-dimensions together as a list (in "rvec").
+Produces a RasterLayer from a vector or matrix. This essentially a wrapper for various
+\code{raster::raster} calls where the input data is in column-vectorized form.
 
-If \code{rvec} is a matrix, \code{dims} can be omitted}
+\code{rvec} can either be a matrix (in which case \code{dims} can be omitted) or its vectorized
+equivalent, or a list containing elements returned by \code{pkern_fromRaster}. If the list
+as an element named "dims", it replaces any argument supplied to \code{dims}. Other elements
+of the list (eg 'crs') are passed on to the RasterLayer construction call as needed.
+
+When template is supplied, it supercedes any properties (eg 'crs') supplied in \code{rvec}.}
 }
 \value{
-a RasterLayer containing the data from "rvec"
+a RasterLayer containing the data from \code{rvec}
 }
 \description{
 Convert column-vectorized grid to RasterLayer
@@ -30,6 +33,6 @@ Convert column-vectorized grid to RasterLayer
 require(raster)
 r.in = system.file('external/rlogo.grd', package='raster') |> raster(band=1)
 pkern.in = pkern_fromRaster(r.in)
-pkern_toRaster(pkern.in, template=r.in)
+pkern_toRaster(pkern.in)
 r.in
 }
