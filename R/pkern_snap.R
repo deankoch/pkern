@@ -300,8 +300,8 @@ pkern_snap_1d = function(g, pts, sep=1, distinct=TRUE)
   }
 
   # extract the squared snapping distances for each mapping
-  dfinal = Map(\(tab, d) sapply(seq(length(tab[['map']])), \(j) d[tab[['map']][j],j]),
-                  tab=table.final, d=dmat.list)
+  map.list = lapply(table.final, \(tab) tab[['map']])
+  dfinal = Map(\(m, d) sapply(seq_along(m), \(j) d[m[j],j]), m=map.list, d=dmat.list)
 
   # compute sums of squared snap distance for each candidate
   ssfinal = sapply(dfinal, sum)
@@ -325,12 +325,11 @@ pkern_snap_1d = function(g, pts, sep=1, distinct=TRUE)
   table.best[['empty']] = g[ table.best[['empty']] ]
 
   # add squared snapping distance vector
-  table.best[['dist']] = diff(g[1:2])^2 * dfinal[[idx.best]][ idx.unorder ]
+  table.best[['dist']] = dfinal[[idx.best]][ idx.unorder ]
 
   # reorder this mapping to match input `pts` order
   return( table.best )
 }
-
 
 
 #' Snap an irregular set of 2d points to nearest regular subgrid
@@ -358,19 +357,13 @@ pkern_snap_1d = function(g, pts, sep=1, distinct=TRUE)
 #' snap = pkern_snap_2d(g, pts, distinct=FALSE)
 #' pkern_snap_plot(snap, pts)
 #'
-#' # highlight duplicates
-#' pts.dupe = Map(\(p,m,d) p[m %in% d], p=pts, m=snap$map, d=snap$dupe)
-#' points(setNames(pts.dupe, nm=c('y', 'x')), col='red')
-#'
-#'
-#'
 #' # snap to grid lines, eliminate duplicates
 #' snap.distinct = pkern_snap_2d(g, pts)
 #' pkern_snap_plot(snap.distinct, pts)
 #'
 #' # another example with a sparse set of points and more jitter
 #' pts = expand.grid(g) + rnorm(2*ng, sd=3)
-#' pts = pts[sample(ng, 10),]
+#' pts = pts[sample(ng, 50),]
 #' pkern_snap_plot(g, pts)
 #' snap = pkern_snap_2d(g, pts, sep=3, distinct=FALSE)
 #' pkern_snap_plot(snap, pts)
@@ -380,7 +373,7 @@ pkern_snap_1d = function(g, pts, sep=1, distinct=TRUE)
 #' pkern_snap_plot(snap.distinct, pts)
 #'
 #'
-pkern_snap_2d = function(g, pts, sep=1, distinct=TRUE)
+pkern_snap_2d = function(g, pts, sep=1, distinct=TRUE, quiet=FALSE)
 {
   # coerce various input types and set expected column order for 2d case
   if( length(sep) == 1 ) sep = rep(sep, 2)
@@ -401,6 +394,19 @@ pkern_snap_2d = function(g, pts, sep=1, distinct=TRUE)
   # run 1d snapper again along rows and columns with distinct==TRUE
   if( distinct )
   {
+    # count empties and duplicates to establish progress bar
+    if( !quiet )
+    {
+      map.vec = pkern_mat2vec2(snap[['map']], gdim)
+      empty.vec = which( !( seq(ng) %in% map.vec ) )
+      table.vec = Rfast::Table(map.vec, names=TRUE)
+      dupe.vec = as.integer( names(table.vec[table.vec > 1]) )
+      ndupe = length(dupe.vec)
+      nprocess = max(ndupe, ndupe - length(empty.vec))
+      cat( paste('\nprocessing', nprocess, 'duplicated snapping points\n') )
+      pb = txtProgressBar(max=nprocess, style=3)
+    }
+
     # iteratively swap mappings to move points to empty grid cells
     has.empty = has.dupe = TRUE
     while( has.empty & has.dupe )
@@ -408,17 +414,24 @@ pkern_snap_2d = function(g, pts, sep=1, distinct=TRUE)
       # identify duplicate and empty grid points from vectorized indices
       map.vec = pkern_mat2vec2(snap[['map']], gdim)
       empty.vec = which( !( seq(ng) %in% map.vec ) )
-      table.vec = table(map.vec)
+      table.vec = Rfast::Table(map.vec, names=TRUE)
       dupe.vec = as.integer( names(table.vec[table.vec > 1]) )
       has.empty = length(empty.vec) > 0
       has.dupe = length(dupe.vec) > 0
       if( !has.empty | !has.dupe ) break()
 
+      # update progress bar
+      if( !quiet )
+      {
+        idx.progress = nprocess - max(length(dupe.vec), length(dupe.vec) - length(empty.vec))
+        setTxtProgressBar(pb, idx.progress)
+      }
+
       # identify the input point having worst snapping distance to a duplicate
       idx.dupe = which( map.vec %in% dupe.vec )
       idx.worst = idx.dupe[ which.max( Reduce('+', snap[['dist']])[idx.dupe] ) ]
 
-      points(pts[[2]][idx.worst], pts[[1]][idx.worst], col='red', pch=16)
+      #points(pts[[2]][idx.worst], pts[[1]][idx.worst], col='red', pch=16)
 
       # identify all duplicates in this set
       idx.candidate = which( map.vec %in% map.vec[idx.dupe] )
@@ -432,19 +445,27 @@ pkern_snap_2d = function(g, pts, sep=1, distinct=TRUE)
       idx.mod = idx.candidate[ idx.pair[2] ]
       idx.empty = idx.pair[1]
 
-      # identify the empty grid point to shift towards and the shift direction
-      dshift = Map(\(gp, m, e) gp[m[idx.mod]] - e[idx.empty], g, snap[['map']], yx.empty) |> unlist()
-      idx.dim = which.max( abs(dshift) )
-      int.shift = ( 2 * as.integer( dshift[idx.dim] < 0 ) ) - 1
+      #points(pts[[2]][idx.mod], pts[[1]][idx.mod], col='red', pch=16)
+      #points(yx.empty[[2]][idx.empty], yx.empty[[1]][idx.empty], col='blue', pch=4)
+
+      # find the shift direction and length (with respect to current mapping)
+      dshift = Map(\(gp, m, e) e[idx.empty] - gp[m[idx.mod]], snap[['g']], snap[['map']], yx.empty)
+      idx.dim = which.max( abs(unlist(dshift)) )
+      int.shift = ( 2 * as.integer( dshift[[idx.dim]] > 0 ) ) - 1
 
       # update the mapping and the squared distance
       snap[['map']][[idx.dim]][idx.mod] = snap[['map']][[idx.dim]][idx.mod] + int.shift
-      dist.new = Map(\(p, gp, m) (p[idx.mod] - gp[m[idx.mod]])^2, p=pts, gp=g, m=snap[['map']])
+      dist.new = Map(\(p, gp, m) (p[idx.mod] - gp[m[idx.mod]])^2, pts, snap[['g']], snap[['map']])
       snap[['dist']][[idx.dim]][idx.mod] = dist.new[[idx.dim]]
     }
+
+    # print 100% progress once finished
+    if( !quiet ) setTxtProgressBar(pb, nprocess)
+
   }
   return(snap)
 }
+
 
 #' Shift operation for discrete mapping (helper for `pkern_snap_1d`)
 #'
