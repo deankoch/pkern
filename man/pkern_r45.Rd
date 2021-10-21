@@ -4,15 +4,15 @@
 \alias{pkern_r45}
 \title{Rotate a rectangular array by 45 degrees clockwise}
 \usage{
-pkern_r45(z, dims = NULL)
+pkern_r45(z, gdim = NULL)
 }
 \arguments{
-\item{z}{either a numeric matrix or its length-\code{prod(dims)} column-vectorized version}
+\item{z}{either a numeric matrix, its column-vectorization, a RasterLayer, or a list}
 
-\item{dims}{c(nx, ny) the number of x and y grid lines}
+\item{gdim}{integer vector c(ni, nj), the number of rows and columns in the grid}
 }
 \value{
-either a list ("z", "dims") or matrix
+a numeric matrix containing the rotated array
 }
 \description{
 performs the rotation f(x,y) = (x + y, -x + y) about the center of a rectangular
@@ -20,10 +20,30 @@ array (45 degrees counterclockwise), with distances scaled by sqrt(2)/2 to snap
 grid cells to those of a larger array.
 }
 \details{
-When \code{z} is a matrix, \code{dims} is ignored (with a warning) and can be omitted, and
-the function returns the new rotated array . When \code{z} is a vector, it should be
-in column-vectorized order, and the function returns a list containing the dimensions
-of the larger array (nx, ny), and the column-vectorized data.
+NAs are assigned to all output grid points not mapped to \code{z}.
 
-The fucntion sets NAs for all output grid points not mapped to \code{z}
+When \code{z} is an object containing the grid size (matrix, RasterLayer or list),
+\code{gdim} is ignored (with a warning) and can be omitted. When \code{z} is a vector, it
+should be in column-vectorized order and have length \code{prod(gdim)}.
+
+The function sets
+}
+\examples{
+
+# a wide example modified from `graphics::.filled.contour`
+gdim = c(73,50)
+y = seq(-pi, pi, length.out=gdim[1])
+x = seq(-pi, pi, length.out=gdim[2])
+d = sqrt(outer(y^2, x^2, '+'))
+z = c( sin(d^2) * exp(-d) )
+pkern_plot(z, gdim)
+pkern_plot( pkern_r45(z, gdim) )
+
+# a tall example with raster
+if( requireNamespace('raster') ) {
+r = system.file('external/rlogo.grd', package='raster') |> raster::raster(band=1)
+rg = pkern_fromRaster(r)
+pkern_plot(rg)
+pkern_plot( pkern_r45(rg) )
+}
 }

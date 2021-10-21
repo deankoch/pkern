@@ -5,22 +5,25 @@
 \title{Directional sample semivariograms for regular 2D gridded data}
 \usage{
 pkern_vario(
-  dims,
+  gdim,
   vec,
   sep = NA,
   simple = TRUE,
   method = "median",
   diagonal = TRUE,
-  dmax = NA,
-  ds = NA
+  dmax = Inf,
+  ds = NA,
+  quiet = FALSE,
+  nmax = 10000,
+  vcalc = TRUE
 )
 }
 \arguments{
-\item{dims}{vector c(nx, ny) of positive integers, the number of grid lines}
+\item{gdim}{vector c(ny, nx) of positive integers, the number of grid lines}
 
 \item{vec}{numeric vector of data, in column vectorized order (length \code{prod(dims)})}
 
-\item{sep}{list c(dx, dy) of positive integer vectors, grid line lags to sample}
+\item{sep}{list c(dy, dx) of positive integer vectors, grid line lags to sample}
 
 \item{simple}{logical, if FALSE the function includes point pair indices in return list}
 
@@ -30,30 +33,53 @@ pkern_vario(
 
 \item{dmax}{numeric, maximum grid line separation distance (used to filter results)}
 
-\item{ds}{length-2 vector of positive numeric, the spacing distance of x and y grid lines}
+\item{ds}{length-2 vector of positive numeric, the spacing distance of y and x grid lines}
+
+\item{quiet}{logical, indicating to suppress console output}
+
+\item{nmax}{positive integer, the maximum number of point pairs to process in each sample}
+
+\item{vcalc}{logical, indicates to compute the sample variance (which can be relatively slow)}
 }
 \value{
 list of \code{pkern_xvario} output "x", "y" (and "d1", "d2"); sample variance "v"; and "ds"
 }
 \description{
 A wrapper for calls to \code{pkern_xvario} to get the directional sample semivariograms
-from regular lattice data along the x and y dimensions, and optionally along the
+from regular lattice data along the y and x dimensions, and optionally along the
 diagonals.
 }
 \details{
 The function makes the appropriate calls to \code{pkern_xvario} and returns the results
-in list elements "x", "y". If \code{diagonal=TRUE}, the function also returns "d1" and
-"d2", the x and y semivariograms after a 45 degree counterclockwise rotation of the
-input grid (see \code{pkern_r45}), assuming equal x and y grid line spacings. For unequal
-grid line spacings, the true rotation angle is \code{atan(ds[2]/ds[1])}
+in list elements "y", "x". If \code{diagonal=TRUE}, the function also returns "d1" and
+"d2", the y and x semivariograms after a 45 degree counterclockwise rotation of the
+input grid (see \code{pkern_r45}) assuming equal y and x resolution. For unequal resolution
+the rotation angle is \code{atan(ds[2]/ds[1])}.
 
 Note that input \code{sep} is specified in terms of grid line indices (integers), not
 distances (their product with the x or y resolution). However, non-integer separation
-distances can be specified by setting the resolution of the input grid (dx, dy) in
+distances can be specified by setting the resolution of the input grid (dy, dx) in
 argument \code{ds}. When \code{ds} is supplied, the output "sep" values are scaled accordingly
 and \code{dmax} is interpreted as a distance, rather than a number of grid lines.
 
 When \code{ds} is not supplied, the function assumes that the x grid lines have the same
 spacing distance (1) as the y grid lines. In this case, diagonally adjacent
 grid points have separation distance \code{sqrt(2)}.
+}
+\examples{
+gdim = c(1e2, 2e2)
+pars = pkern_corr('gau') |> utils::modifyList(list(v=1))
+vec = pkern_sim(pars, gdim)
+
+# sample first 10 lags and plot
+vario = pkern_vario(gdim, vec, sep=seq(10))
+pkern_vario_plot(vario, pars)
+
+# example with unequal resolution and multiple replicates
+ds = c(2,1)
+nrep = 10
+vec = lapply(seq(nrep), \(i) pkern_sim(pars, gdim, ds=ds, makeplot=FALSE))
+vario = pkern_vario(gdim, vec, sep=seq(10), ds=ds)
+pkern_vario_plot(vario, pars)
+
 }

@@ -4,32 +4,54 @@
 \alias{pkern_xvario}
 \title{Sample semivariogram for regular 2D gridded data along x direction}
 \usage{
-pkern_xvario(dims, vec, sep = NA, simple = TRUE, method = "median")
+pkern_xvario(
+  gdim,
+  vec,
+  simple = TRUE,
+  method = "median",
+  quiet = FALSE,
+  sep = NULL,
+  nmax = 10000
+)
 }
 \arguments{
-\item{dims}{vector c(nx, ny) of positive integers, the number of grid lines in full grid}
+\item{gdim}{vector c(ny, nx) of positive integers, the number of grid lines in full grid}
 
-\item{vec}{numeric vector of data, in column vectorized order (length \code{prod(dims)})}
-
-\item{sep}{positive integer vector, the grid line lags to sample}
+\item{vec}{numeric vector of data, in column vectorized order (length \code{prod(gdim)})}
 
 \item{simple}{logical, if FALSE the function returns a list of point pair indices}
 
 \item{method}{character, one of "mean", "median", "ch"}
+
+\item{quiet}{logical, suppresses console output}
+
+\item{sep}{positive integer vector, the grid line lags to sample}
+
+\item{nmax}{positive integer, the maximum number of point pairs to sample at each lag}
 }
 \value{
-a list with named elements "sep", "n", and "sv"
+a list with named elements "sep", "n", "sv", and optionally "pairs"
 }
 \description{
-The function identifies and computes the semivariance (in \code{vec}) of point pairs on a
-regular grid of dimensions \code{dims} at the supplied x grid line lags, \code{sep}. Elements of
-\code{sep} must be a subset of \code{1:(dims[1]-1)} (the default).
+The function computes the semivariance of point pairs located on the regular grid with
+dimensions \code{gdim}, and data vector(s) \code{vec}, at the supplied x grid line lags, \code{sep}.
+Elements of \code{sep} are must be a subset of \code{seq(gdim[2]-1)}.
 }
 \details{
-Results are returned in a named list containing the lags ("sep"), the number of point
-pairs ("n") and sample semivariances ("sv") at each lag, and optionally (if \code{simple}
-is FALSE) a list of matrices containing the indices of point pairs sampled and
-their absolute difference ("pairs").
+Results are returned in a named list containing the sampled lags (\code{sep}), the number of
+point pairs sampled at each lag (\code{n}) and the sample semivariances (\code{sv}) at each lag;
+If \code{simple=FALSE}, the function also returns \code{pairs}, a list of matrices containing the
+indices of point pairs sampled and their absolute differences.
+
+\code{vec} can be a vector (in column vectorized order), or a list of such vectors for
+repeated measurements at the same spatial locations. NAs are permitted but point
+pairs containing NAs are excluded from computations.
+
+\code{nmax} specifies a maximum number of point pairs to process at each lag. When applicable,
+a random sample of (\code{nmax}) eligible point pairs are taken at each lag. When \code{vec} is
+a list of vectors, the function always samples at least one point pair from each of them.
+Note that this means \code{nmax} is not respected when \code{vec} is a list and \code{nmax < length(vec)}.
+If the function is too slow in this case, try taking a subset of \code{vec}.
 
 method "mean" is the classical method of Matheron (1962), "median" and "ch" are the
 median and robust methods described in Cressie and Hawkins (1980).
@@ -40,5 +62,16 @@ Cressie and Hawkins (1980): https://doi.org/10.1007/BF01035243
 }
 \examples{
 
+gdim = c(1e2, 2e2)
+pars = pkern_corr('gau') |> utils::modifyList(list(v=1))
+sim = pkern_sim(pars, gdim)
+
+# sample first 10 lags and plot
+vario = pkern_xvario(gdim, sim, sep=seq(10))
+pkern_vario_plot(vario)
+
+# sample all lags (the default)
+vario = pkern_xvario(gdim, sim)
+pkern_vario_plot(vario, pars)
 
 }

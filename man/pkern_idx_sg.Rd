@@ -4,59 +4,38 @@
 \alias{pkern_idx_sg}
 \title{Find column-vectorized index of a subgrid}
 \usage{
-pkern_idx_sg(dims, i = NULL, j = NULL, type = "index")
+pkern_idx_sg(gdim, ij = NULL, nosort = FALSE)
 }
 \arguments{
-\item{dims}{c(nx, ny), the number of x and y grid lines in the full grid}
+\item{gdim}{c(ni, nj), the number rows and columns in the full grid}
 
-\item{i}{vector of positive integers no greater than ny, the y grid lines of the subgrid}
+\item{ij}{list containing vectors "i" and "j", the subgrid rows and columns}
 
-\item{j}{vector of positive integers no greater than nx, the x grid lines of the subgrid}
-
-\item{type}{character specifying the type of output, either "index", "logical", or "01"}
+\item{nosort}{logical, skips sorting the input vectors in \code{ij}}
 }
 \value{
-A logical or integer vector, with length and type depending on \code{type} (see details)
+integer vector, with length equal to the product of the lengths of "i" and "j"
 }
 \description{
-A grid with nx columns and ny rows has grid lines and i=1:ny, j=1:nx.
-A subgrid includes only a subset of these grid lines. This function
-returns the column-vectorized index of a subgrid with respect to the
-full grid, based on the supplied grid line numbers. This is often
-helpful when extracting a subset of a dataframe or sub-matrix of a
-covariance matrix for gridded data.
+Returns the column-vectorized index of a subgrid with respect to the full grid
+of size \code{gdim}, based on the supplied grid line numbers \code{ij}. The returned vector
+maps to points in the full grid (in column-vectorized order) lying at the
+intersections of \code{ij} (a subset of \code{seq(n)}, where \code{n=prod(gdim)}).
 }
 \details{
-NA \code{i} or \code{j} indicates to use all grid lines. For convenience, \code{i} and \code{j}
-can passed in a list to argument \code{i}, in which case argument \code{j} is ignored
-(a warning is issued if \code{j} is non-NULL in this case).
-
-With \code{type="index"}, the function returns a subset of \code{seq(prod(dims))} indexing
-the grid points whose i,j indices appear in both \code{i} and \code{j}; With \code{type="logical"},
-the function returns the corresponding logical vector of length \code{prod(dims)}; and
-with \code{type="01"} the 0, 1 representation of the logical vector.
-
-In default \code{type="index"} mode, the function returns indices in column-vectorized
-order, assuming its arguments \code{i} and \code{j} are themselves ordered. This means that
-if \verb{j = c(j1, j2, ..., in)} and \code{i = c(i1, i2, ...im)} then the output has the order
+NA \code{ij[1]} indicates to use all rows and NA \code{ij[2]} indicates to use all columns.
+If \verb{j = c(j1, j2, ..., in)} and \code{i = c(i1, i2, ...im)} the function returns:
 
 (j1, i1), (j1, i2), ... (j1, im), (j2, i1), (j2, i2), ..., (j3, i1), ... (jm, in).
 
-However the function does not check the internal order of \code{i} or \code{j} prior to this
-mapping, so different output orderings can be induced by reordering \code{i} and/or \code{j}.
-For example providing \code{i} in descending order results in a vertically flipped grid.
-Note that in "01" and "logical" modes the order has no effect on the output.
+By default, the function sorts the grid lines in \code{ij} into ascending order, so that
+the output is in column-vectorized order. \code{nosort=TRUE} skips the sorting, allowing
+alternative output orders.
 }
 \examples{
-dims = c(5,6)
-pkern_idx_sg(dims)
-i = c(2,4)
-j = c(1,3,5)
-idx = pkern_idx_sg(dims, i, j)
-idx
-pkern_idx_sg(dims, i, j, type='01')
-logic = pkern_idx_sg(dims, i, j, type='logical')
-logic
-identical(logic, pkern_idx_sg(dims, rev(i), j, type='logical'))
-identical(idx, pkern_idx_sg(dims, rev(i), j))
+
+gdim = c(5,6)
+pkern_idx_sg(gdim)
+ij = list(i = c(2,4), j = c(1,3,5))
+pkern_idx_sg(gdim, ij)
 }

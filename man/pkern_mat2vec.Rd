@@ -4,29 +4,34 @@
 \alias{pkern_mat2vec}
 \title{Column-vectorization indices}
 \usage{
-pkern_mat2vec(ij, ny)
+pkern_mat2vec(ij, ni, simplified = TRUE)
 }
 \arguments{
-\item{ij}{n x 2 matrix of column (x) and row (y) indices}
+\item{ij}{nx2 matrix, the row (y) and column (x) indices}
 
-\item{ny}{number of rows in the matrix}
+\item{ni}{number of rows in the matrix}
+
+\item{simplified, }{if FALSE, the function returns an n x 1 matrix}
 }
 \value{
 a vector of indices in the vectorized system
 }
 \description{
-Column vectorization (as in base::as.vector) builds a length(mn) vector by stacking
-the columns of an m X n matrix. The (i,j)th element of the matrix is mapped to the
-\code{(i + m*(j-1))}th element of the vector. This function returns the index in the vector
-associated with the supplied i, j values
+Returns the index in the vector associated with the supplied i, j values
 }
 \details{
-If \code{ij} has named columns 'x' and 'y', these are interpreted as 'j' and 'i'. If column
-names 'i' and 'j' also appear, these supercede the columns 'x' and 'y'. If no column names
-are supplied, the function assumes they are in order 'j', 'i'
+Column vectorization (as in base::as.vector) builds a length(mn) vector by stacking
+the columns of an m X n matrix. The (i,j)th element of the matrix is mapped to the
+\code{(i + m*(j-1))}th element of the vector.
+
+\code{ij} can be a matrix or a list of length-n vectors "i" and "j" (in that order), or a vector
+representing a single point at the given row and column number. \code{ni} can be a vector
+c(ni, nj), in which case its first element is selected.
 }
 \examples{
-ny = 10
-g = expand.grid(i=seq(1, ny), j=seq(1:5))
-pkern_mat2vec(g, ny)
+
+# get column-vectorized ordering of points from matrix indices
+ni = 10
+g = expand.grid(i=seq(1, ni), j=seq(1:ni))
+pkern_mat2vec(g, ni)
 }

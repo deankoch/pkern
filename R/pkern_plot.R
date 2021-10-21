@@ -5,9 +5,26 @@
 #
 
 
-# wrapper for graphics::filled.contour and graphics::image (work in progress)
-# compute coordinates and reshape z into a matrix oriented for `graphics::image` and friends
-pkern_plot = function(z, dims=NULL, xy=NULL, ds=1, smoothed=FALSE, maxx=300, ppars=list())
+#' Plot gridded datasets
+#'
+#' A wrapper for graphics::filled.contour and graphics::image (work in progress). This
+#' essentially does the same thing as `raster::plot`, but specialized for the pkern package
+#'
+#' `gdim` and `yx` can be omitted when their values can be derived from `z` (eg. when `z`
+#' is a RasterLayer, but not when it is a vector).
+#'
+#' @param z numeric vector, matrix, RasterLayer, or list
+#' @param gdim c(ni, nj), the number of rows and columns in the grid
+#' @param yx list of numeric vectors, the y and x grid line coordinates
+#' @param ds positive numeric vector, distance scaling factors along y and x directions
+#' @param ppars list of optional plotting parameters (see details)
+#'
+#' @return TODO
+#' @export
+#'
+#' @examples
+#' # TODO
+pkern_plot = function(z, gdim=NULL, yx=NULL, ds=1, ppars=list())
 {
   # duplicate distance scaling factors as needed
   if( length(ds) == 1 ) ds = rep(ds, 2)
@@ -15,24 +32,37 @@ pkern_plot = function(z, dims=NULL, xy=NULL, ds=1, smoothed=FALSE, maxx=300, ppa
   # extract grid size from matrix/raster input
   if( any( c('matrix', 'RasterLayer') %in% class(z) ) )
   {
-    # we use order (nx, ny)
-    dims = rev(dim(z)[1:2])
+    # we use order (ny, nx)
+    gdim = dim(z)[1:2]
     if( 'RasterLayer' %in% class(z) )
     {
-      if( is.null(xy) ) xy = pkern_fromRaster(z, what='xy')
+      if( is.null(yx) ) yx = pkern_fromRaster(z, what='yx')
+      if( is.null(gdim) ) gdim = pkern_fromRaster(z, what='gdim')
       z = pkern_fromRaster(z, what='values')
     }
   }
 
-  # redirect list input (interpreted as kernel parameters) to pkern_kplot
-  if( is.list(z) ) return(pkern_kplot(z, dims=dims, ds=ds, smoothed=smoothed, maxx=maxx, ppars=ppars))
+  # redirect list input
+  if( is.list(z) )
+  {
+    # output from pkern_fromRaster handled by recursive call
+    if( 'values' %in% names(z) )
+    {
+      if( !is.null( z[['gdim']] ) ) gdim = z[['gdim']]
+      if( !is.null( z[['yx']] ) ) yx = z[['yx']]
+      return(pkern_plot(z[['values']], gdim, yx, ds, ppars=ppars))
+    }
+
+    # otherwise assume list is kernel parameters and pass them on to `pkern_kplot`
+    return(pkern_kplot(z, gdim=gdim, ds=ds, ppars=ppars))
+  }
 
   # set up default grid line values when they are not supplied
-  xynm = setNames(nm=c('x', 'y'))
-  if( is.null(xy) ) xy = lapply(dims, seq)
-  if( length(xy) != 2 ) stop('could not determine grid size for input z. Try setting dims')
-  if( is.null(names(xy)) ) xy = setNames(xy, xynm)
-  if( is.null(dims) ) dims = sapply(xy, length)
+  yxnm = stats::setNames(nm=c('y', 'x'))
+  if( is.null(yx) ) yx = lapply(gdim, seq)
+  if( length(yx) != 2 ) stop('could not determine grid size for input z. Try setting gdim')
+  if( is.null(names(yx)) ) yx = stats::setNames(yx, yxnm)
+  if( is.null(gdim) ) gdim = sapply(yx, length)
 
   # unpack plotting parameters and/or set defaults
   asp = ifelse( is.null(ppars[['asp']]), 1, ppars[['asp']])
@@ -44,32 +74,36 @@ pkern_plot = function(z, dims=NULL, xy=NULL, ds=1, smoothed=FALSE, maxx=300, ppa
   bcol = ifelse( is.null(ppars[['bcol']]), 'black', ppars[['bcol']])
   fcol = ifelse( is.null(ppars[['fcol']]), 'black', ppars[['fcol']])
   discrete = ifelse( is.null(ppars[['discrete']]), FALSE, ppars[['discrete']])
+  reset = ifelse( is.null(ppars[['reset']]), TRUE, ppars[['reset']])
+  aggpars = ifelse( is.null(ppars[['aggpars']]), NA, ppars[['aggpars']])
+  maxx = ifelse( is.null(ppars[['maxx']]), 100, ppars[['maxx']])
+  smoothed = ifelse( is.null(ppars[['smoothed']]), FALSE, ppars[['smoothed']])
 
   # determine aggregation factors along x and y directions
-  afact = ceiling( dims/maxx )
+  afact = ceiling( gdim/maxx )
   if( any( afact > 1 ) )
   {
     # aggregate the data as needed
-    z.agg = pkern_agg(z, dims, afact, tol=0.99, discrete=discrete)
+    z.agg = pkern_agg(z, gdim, pars=aggpars, afact=afact, discrete=discrete)
     z = z.agg[['z']]
     ij = z.agg[['ij']]
-    dims.sg = unname(rev(sapply(ij, length)))
 
     # update grid size and grid line locations
-    dims = dims.sg
-    xy = list(x=xy[['x']][ ij[['j']] ], y=xy[['y']][ ij[['i']] ])
+    gdim = sapply(ij, length)
+    yx = mapply(\(pos, idx) pos[idx], pos=yx, idx=ij, SIMPLIFY=FALSE)
   }
 
-  # convert data to row-vectorized order for compatibility with `graphics::image` and friends
-  zmat = matrix(z[pkern_r2c(dims, in.byrow=FALSE, out.byrow=TRUE, flipx=TRUE)], dims[1])
+  # convert vectorization order for compatibility with `graphics::image` and friends
+  zmat = matrix(z[pkern_r2c(gdim, in.byrow=FALSE, out.byrow=TRUE, flipx=TRUE)], rev(gdim))
 
-  # adjust xy for supplied distance scaling
-  xy = setNames(mapply(\(d, g) g*d, g=xy, d=ds, SIMPLIFY=FALSE), xynm)
+  # adjust yx for supplied distance scaling and sort into ascending order
+  yx = lapply(yx, sort)
+  yx = stats::setNames(mapply(\(d, g) g*d, g=yx, d=ds, SIMPLIFY=FALSE), yxnm)
 
   # find grid line spacing halves on plot and positions of grid lines
-  xysp = sapply(xy, \(g) diff(g[1:2]) / 2 )
-  xygl = lapply(xynm, \(d) c(xy[[d]][1] - xysp[[d]], xy[[d]] + xysp[[d]]) )
-  xylim = lapply(xygl, range)
+  yxsp = sapply(yx, \(g) diff(g[1:2]) / 2 )
+  yxgl = lapply(yxnm, \(d) c( min(yx[[d]]) - yxsp[[d]], yx[[d]] + yxsp[[d]] ) )
+  yxlim = lapply(yxgl, range)
 
   # set up a default continuous color palette
   zr = range(z, na.rm=TRUE, finite=TRUE)
@@ -79,7 +113,7 @@ pkern_plot = function(z, dims=NULL, xy=NULL, ds=1, smoothed=FALSE, maxx=300, ppa
   if( discrete )
   {
     # TODO: replace this slow operation
-    dlvls = sort(unique(z))
+    dlvls = sort(unique(z, na.rm=TRUE))
 
     # make a new z range with padding so that colorbar ticks don't wind up on the edge
     dpad = min(diff(dlvls))/2
@@ -96,80 +130,82 @@ pkern_plot = function(z, dims=NULL, xy=NULL, ds=1, smoothed=FALSE, maxx=300, ppa
   }
 
   # set up a color palette
-  cols = hcl.colors(length(lvls)-1, pal, rev=TRUE)
+  cols = grDevices::hcl.colors(length(lvls)-1, pal, rev=TRUE)
 
   # backing up current settings before we change anything
-  old.par = par(no.readonly=TRUE)
+  old.par = graphics::par(no.readonly=TRUE)
+
+  # below is based on `graphics::filled.contour`
 
   # new plot window layout will use 2 lines to the right of the plot for color bar
-  w = ( 2 + old.par[['mar']][2] ) * ( 2.54 * par('csi') )
-  layout(matrix(c(2, 1), ncol=2), widths = c(1, lcm(w)))
+  w = ( 2 + old.par[['mar']][2] ) * ( 2.54 * graphics::par('csi') )
+  graphics::layout(matrix(c(2, 1), ncol=2), widths = c(1, graphics::lcm(w)))
 
   # set margins and horizontal text for the colorbar labels
-  par(las=1, mar=c(old.par[['mar']][1], 1, old.par[['mar']][c(3,2)]))
+  graphics::par(las=1, mar=c(old.par[['mar']][1], 1, old.par[['mar']][c(3,2)]))
 
   # draw the color bar then draw a box around it and add legend title
-  plot.new()
-  plot.window(xlim=0:1, ylim=zr, xaxs='i', yaxs='i')
-  rect(0, lvls[-length(lvls)], 1, lvls[-1], col=cols, border=NA)
-  abline(v=1)
-  axis(4, lwd=0, lwd.ticks=1)
-  abline( v = 0 )
-  abline( h = zr )
-  mtext(side=2, line=0, adj=0, padj=-1, at=zr[2], leg)
+  graphics::plot.new()
+  graphics::plot.window(xlim=0:1, ylim=zr, xaxs='i', yaxs='i')
+  graphics::rect(0, lvls[-length(lvls)], 1, lvls[-1], col=cols, border=NA)
+  graphics::abline(v=1)
+  graphics::axis(4, lwd=0, lwd.ticks=1)
+  graphics::abline( v = 0 )
+  graphics::abline( h = zr )
+  graphics::mtext(side=2, line=0, adj=0, padj=-1, at=zr[2], leg)
 
   # prepare new plot window for data heatmap
-  par(las=0, mar=c(old.par[['mar']][1:3], 1))
+  graphics::par(las=0, mar=c(old.par[['mar']][1:3], 1))
 
-  # make the image plot
+  # make the non-smoothed image plot
   if( !smoothed )
   {
     # draw the image using base graphics
-    graphics::image(x=xy[['x']], y=xy[['y']], zmat, axes=FALSE, ann=FALSE, asp=asp, col=cols)
+    graphics::image(x=yx[['x']], y=yx[['y']], zmat, axes=FALSE, ann=FALSE, asp=asp, col=cols)
 
     # add grid lines
-    abline( v = xygl[['x']], col=glcol)
-    abline( h = xygl[['y']], col=glcol)
+    graphics::abline( v = yxgl[['x']], col=glcol)
+    graphics::abline( h = yxgl[['y']], col=glcol)
   }
 
   # make the smoothed (contour) plot
   if( smoothed )
   {
-   # initialize plot window for barebones version of graphics::filled.contour
-    plot.new()
-    plot.window(xylim[['x']], xylim[['y']], xaxs='i', yaxs='i', asp=asp)
+    # create plot window and coordinate system for bare bones version of graphics::filled.contour
+    graphics::plot.new()
+    graphics::plot.window(yxlim[['x']], yxlim[['y']], xaxs='i', yaxs='i', asp=asp)
 
     # call to draw contour plot
-    graphics::.filled.contour(x=xy[['x']], y=xy[['y']], zmat, lvls, cols)
+    graphics::.filled.contour(x=yx[['x']], y=yx[['y']], zmat, lvls, cols)
   }
 
   # draw x axis
   if( !is.na(xlab) )
   {
-    xaxt = axTicks(1)
-    axis(1, lwd=0, lwd.ticks=1, at=xaxt)
-    title(xlab=xlab)
+    xaxt = graphics::axTicks(1)
+    graphics::axis(1, lwd=0, lwd.ticks=1, at=xaxt)
+    graphics::title(xlab=xlab)
   }
 
   # draw y axis
   if( !is.na(ylab) )
   {
-    yaxt = axTicks(2)
-    axis(2, lwd=0, lwd.ticks=1, at=yaxt)
-    title(ylab=ylab)
+    yaxt = graphics::axTicks(2)
+    graphics::axis(2, lwd=0, lwd.ticks=1, at=yaxt)
+    graphics::title(ylab=ylab)
   }
 
   # add main title and subtitle
-  tline = par('mgp')[1]-1
-  mtext(ppars[['main']], side=3, line=tline, adj=0, font=2)
-  mtext(ppars[['sub']], side=3, line=tline-1, adj=0)
+  tline = graphics::par('mgp')[1]-1
+  graphics::mtext(ppars[['main']], side=3, line=tline, adj=0, font=2)
+  graphics::mtext(ppars[['sub']], side=3, line=tline-1, adj=0)
 
   # draw inner frame around grid and outer frame (flush with axes)
-  rect(min(xygl[['x']]), min(xygl[['y']]), max(xygl[['x']]), max(xygl[['y']]), border=bcol)
-  if( !is.na(fcol) ) box(col=fcol)
+  graphics::rect(min(yxgl[['x']]), min(yxgl[['y']]), max(yxgl[['x']]), max(yxgl[['y']]), border=bcol)
+  if( !is.na(fcol) ) graphics::box(col=fcol)
 
   # restore old plot settings and finish
-  par(old.par)
+  if(reset) graphics::par(old.par)
   return( invisible() )
 }
 
@@ -197,6 +233,7 @@ pkern_plot = function(z, dims=NULL, xy=NULL, ds=1, smoothed=FALSE, maxx=300, ppa
 #' parentheses.
 #'
 #' @param pars a kernel parameters list ("k", "kp"), or list of two of them ("x", "y")
+#' @param nsig number of signficant figures to use when printing model parameter values
 #'
 #' @return a character string or list (depending on the contents of `pars`, see details)
 #' @export
@@ -213,7 +250,7 @@ pkern_plot = function(z, dims=NULL, xy=NULL, ds=1, smoothed=FALSE, maxx=300, ppa
 #' kname = c('mat', 'sph')
 #' pars = pkern_corr(kname)
 #' pkern_toString(pars)
-#' pkern_toString(modifyList(pars, list(nug=0.5)))
+#' pkern_toString(utils::modifyList(pars, list(nug=0.5)))
 #'
 pkern_toString = function(pars, nsig=3)
 {
@@ -247,7 +284,7 @@ pkern_toString = function(pars, nsig=3)
   }
 
   # handle 2-dimensional case by recursive call, concatenate results
-  xy.list = lapply(pars[c('x', 'y')], pkern_toString)
+  xy.list = lapply(pars[c('y', 'x')], pkern_toString)
   k = paste(sapply(xy.list, \(xy) xy[['k']]), collapse=' x ')
   kp = paste(sapply(xy.list, \(xy) xy[['kp']]), collapse=' x ')
 
@@ -263,26 +300,27 @@ pkern_toString = function(pars, nsig=3)
 
 #' Make a heatmap of covariances/correlations around a grid's central point
 #'
-#' This function displays a separable kernel by building a grid of size `dims`,
+#' This function displays a separable kernel by building a grid of size `gdim`,
 #' assigning to each cell the covariance (or correlation) with the central cell,
-#' then passing the result to `graphics::image` for visualization.
+#' then passing the result to `graphics::image` for visualization. Covariance
+#' parameters from both kernels are printed as a subtitle, with values rounded
+#' to 3 decimal places.
 #'
-#' `pars` should be a list containing elements "x" and "y", which are lists of parameters
-#' for the x and y component kernels (recognized by `pkern_corr`). Optionally, `pars` can
-#' also include a (positive numeric) pointwise variance term in "v". Covariance parameters
-#' from both kernels are printed as a subtitle, with values rounded to 3 decimal places.
+#' `pars` should be a list containing elements "y" and "x", which are lists of parameters
+#' for the y and x component kernels (recognized by `pkern_corr`). Optionally, `pars` can
+#' also include a (positive numeric) pointwise variance and nugget effect (numerics "v"
+#' and "nug"). If `pars` contains an element named "ds", it supercedes any argument to `ds`.
+#' If `v` and `nug` are supplied, the legend title is set to "covariance", otherwise it is
+#' set to "correlation".
 #'
-#' When `dims` is omitted, it is set to the smallest size such that the plot shows the
-#' effective range of the kernel components in both the x and y directions. if either
-#' entry of `dims` is an even number, it incremented by 1 in order so that "central"
-#' is  unambiguous.
+#' When `gdim` is omitted, it is set to the smallest size such that the plot shows the
+#' effective range of the kernel components in both the y and x directions. if either
+#' entry of `gdim` is an even number, it incremented by 1 so that "central point"
+#' is unambiguous.
 #'
-#' If `v` and `nug` are not supplied, plot labels are changed to show "correlation".
-#'
-#' @param pars list of two parameter lists "x" and "y", and (optionally) "v", "nug"
-#' @param dims c(nx, ny), the number of x and y lags to include
-#' @param smoothed logical, whether to smooth the image (passed to `pkern_plot`)
-#' @param maxx integer or integer vector, plotting resolution (passed to `pkern_plot`)
+#' @param pars list of two parameter lists "y" and "x", and (optionally) "v", "nug"
+#' @param gdim c(ni, nj), the number of y and x lags to include
+#' @param ds c(dy, dx), the y and x distances between adjacent grid lines
 #' @param ppars list of plotting arguments (passed to `pkern_plot`)
 #'
 #' @return returns nothing but prints a contour plot of the specified kernel
@@ -291,10 +329,11 @@ pkern_toString = function(pars, nsig=3)
 #' @examples
 #' pars = pkern_bds(c('gxp', 'mat'))
 #' pkern_kplot(pars)
-#' pkern_kplot(pars, dims=c(50,30))
-#' pkern_kplot(c(pars, list(v=2, nug=0.5)), dims=c(50,30))
-#' pkern_kplot(c(pars, list(v=2, nug=0.5)), dims=c(50,30), smoothed=TRUE)
-pkern_kplot = function(pars, dims=NULL, ds=1, smoothed=FALSE, maxx=200, ppars=list())
+#' gdim = c(30,50)
+#' pkern_kplot(pars, gdim)
+#' pkern_kplot(c(pars, list(v=2, nug=0.5)), gdim)
+#' pkern_kplot(c(pars, list(v=2, nug=0.5)), gdim, ppars=list(smoothed=TRUE))
+pkern_kplot = function(pars, gdim=NULL, ds=1, ppars=list())
 {
   # duplicate distance scaling factors as needed
   if( 'ds' %in% names(pars) ) ds = pars[['ds']]
@@ -313,26 +352,22 @@ pkern_kplot = function(pars, dims=NULL, ds=1, smoothed=FALSE, maxx=200, ppars=li
   titles = pkern_toString(pars)
 
   # when grid size not indicated, set it to show the effective range
-  if( is.null(dims) )
-  {
-    nx = round(2*pars[['x']][['kp']][1]/pkern_rho(0.05, pars[['x']], ds[1]))
-    ny = round(2*pars[['y']][['kp']][1]/pkern_rho(0.05, pars[['y']], ds[2]))
-    dims = c(nx, ny)
-  }
+  if( is.null(gdim) ) gdim = mapply( \(p, s) round(2*p[['kp']][1]/pkern_rho(0.05, p, s)),
+                                     p=pars[c('y', 'x')],
+                                     s=ds)
 
-  # increment dims as needed and find the row, column, and index of central cell
-  dims = dims + 1 - (dims %% 2)
-  ij.central = setNames(rev( 1 + ( (dims - 1) / 2 ) ), c('i', 'j'))
-  idx.central = pkern_mat2vec(ij.central, dims[2])
+  # increment gdim as needed and find the row, column, and index of central cell
+  gdim = gdim + 1 - (gdim %% 2)
+  ijc = 1 + ( ( stats::setNames(gdim, c('i', 'j')) - 1 ) / 2 )
+  idx.ijc = pkern_mat2vec(ijc, gdim)
 
   # compute the required component kernel values and their kronecker product
-  kx = pkern_corrmat(pars[['x']], dims[1], ds=ds[1], j=ij.central['j'])
-  ky = pkern_corrmat(pars[['y']], dims[2], ds=ds[2], i=ij.central['i'])
+  ky = pkern_corrmat(pars[['y']], gdim[1], ds=ds[1], i=ijc[1])
+  kx = pkern_corrmat(pars[['x']], gdim[2], ds=ds[2], j=ijc[2])
   z = nug + ( v * as.vector( kronecker(kx, ky) ) )
 
   # set up axis labels and titles
-  x = ds[1] * ( seq(dims[1]) - ij.central['j'] )
-  y = ds[2] * ( seq(dims[2]) - ij.central['i'] )
+  yx = Map( \(d, s, idx) s * ( seq(d) - idx ), d=gdim, s=ds, idx=ijc)
   ppars.default = list(main=bquote(.( titles[['main']] )~'kernel'~.( titles[['nug']] )),
                        sub=titles[['kp']],
                        leg=ktype,
@@ -341,11 +376,8 @@ pkern_kplot = function(pars, dims=NULL, ds=1, smoothed=FALSE, maxx=200, ppars=li
                        glcol='black')
 
   # draw the plot and finish
-  pkern_plot(z, dims, xy=list(x,y),
-             smoothed=smoothed,
-             maxx=maxx,
-             ppars=modifyList(ppars.default, ppars))
-
+  ppars.out = utils::modifyList(ppars.default, ppars)
+  pkern_plot(z, gdim, yx=yx, ppars=ppars.out)
   return(invisible())
 }
 
@@ -355,7 +387,7 @@ pkern_kplot = function(pars, dims=NULL, ds=1, smoothed=FALSE, maxx=200, ppars=li
 #' Plots the output of `pkern_vario` or `pkern_xvario`, optionally includind the theoretical
 #' semivariogram values for a model specified in `pars` (eg the return value of `pkern_vario_fit`).
 #'
-#' `pars` should be a list containing named elements: "x" and "y", lists of x and y kernel
+#' `pars` should be a list containing named elements: "y" and "x", lists of y and x kernel
 #' parameters in form recognized by `pkern_corr`; "v", the pointwise variance in the absence
 #' of a nugget effect and, optionally, "nug", the variance of the nugget effect.
 #'
@@ -363,7 +395,7 @@ pkern_kplot = function(pars, dims=NULL, ds=1, smoothed=FALSE, maxx=200, ppars=li
 #'
 #'    "title" character or vector of two, title(s) for the plot(s)
 #'    "shade" logical, indicating to shade points according to the number of samples
-#'    "seplim" length-2 numeric vector, the x limits for the scatterplot
+#'    "dmax" positive numeric, upper limit for x in scatterplot
 #'    "svlim" length-2 numeric vector, the y limits for the scatterplot
 #'
 #' @param vario list of semivariance data, the return value of `pkern_vario` or `pkern_xvario`
@@ -374,6 +406,16 @@ pkern_kplot = function(pars, dims=NULL, ds=1, smoothed=FALSE, maxx=200, ppars=li
 #' @export
 #'
 #' @examples
+#' gdim = c(100, 50)
+#' pars = pkern_corr('gau') |> utils::modifyList(list(v=1))
+#' vec = pkern_sim(pars, gdim)
+#'
+#' # sample first 10 lags and plot
+#' vario = pkern_vario(gdim, vec, sep=seq(10))
+#'
+#' pkern_vario_plot(vario[['x']], pars)
+#' pkern_vario_plot(vario[['y']], pars)
+#' pkern_vario_plot(vario, pars)
 pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
 {
   # intialize empty list `plotpars` as needed and set some defaults
@@ -381,17 +423,27 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
   if( is.null(plotpars[['shade']]) ) plotpars[['shade']] = TRUE
 
   # identify the semivariance directions provided in vario
-  nm.vario = c('x', 'y', 'd1', 'd2')
-  is.vario = setNames(nm.vario %in% names(vario), nm.vario)
+  nm.yx = c(y='y', x='x')
+  nm.dyx = c('d1', 'd2')
+  nm.vario = c(nm.yx, nm.dyx)
+  is.vario = stats::setNames(nm.vario %in% names(vario), nm.vario)
 
   # handle 2-dimensional case
-  if( all( is.vario[c('x', 'y')] ) )
+  if( all( is.vario[nm.yx] ) )
   {
-    # assign names to pars if they are missing
-    nm.pars = c('x', 'y', 'v')
-    if( !is.null(pars) & !all( nm.pars %in% names(pars) ) ) names(pars) = nm.pars
+    # clean up pars if supplied
+    if( !is.null(pars) )
+    {
+      # if a single kernel supplied, take its product
+      if( all( c('k', 'kp') %in% names(pars) ) ) pars = list(y=pars, x=pars)
 
-    # extract componentwise parameters
+      # assume order "y" "x" unless otherwise indicated by names
+      if( !all( nm.yx %in% names(pars) ) ) names(pars) = nm.yx
+      if( is.null(pars[['v']]) ) pars[['v']] = pars[['y']][['v']]
+      if( is.null(pars[['nug']]) ) pars[['nug']] = pars[['y']][['nug']]
+    }
+
+    # split parameters into component lists
     xpars = c( pars[['x']], list( v=pars[['v']], nug=pars[['nug']] ) )
     ypars = c( pars[['y']], list( v=pars[['v']], nug=pars[['nug']] ) )
 
@@ -400,16 +452,16 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
     if( is.null(plotpars[['title']]) )
     {
       title.def = TRUE
-      plotpars[['title']] = c(x='x', y='y')
+      plotpars[['title']] = nm.yx
     }
 
-    # set default (common) x-axis limits for the scatterplots
-    seplim.def = FALSE
-    if( is.null(plotpars[['seplim']]) )
+    # set default common x-axis limit for the scatterplots
+    dmax.def = FALSE
+    if( is.null(plotpars[['dmax']]) )
     {
-      seplim.def = TRUE
-      sepmax = sapply( vario[c("x", "y")], \(xy) max( xy[['sep']] ) )
-      plotpars[['seplim']] = c(0, max(sepmax))
+      dmax.def = TRUE
+      sepmax = sapply( vario[nm.yx], \(xy) max( xy[['sep']] ) )
+      plotpars[['dmax']] = max(sepmax)
     }
 
     # same for y-axis
@@ -417,47 +469,47 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
     if( is.null(plotpars[['svlim']]) )
     {
       svlim.def = TRUE
-      svmax = sapply( vario[c("x", "y")], \(xy) max( xy[['sv']] ) )
+      idx.valid = lapply( vario[nm.yx], \(xy) xy[['sep']] < plotpars[['dmax']] )
+      svmax = mapply(\(yx, i) max( yx[['sv']][i] ), yx=vario[nm.yx], i=idx.valid)
       plotpars[['svlim']] = c(0, max(svmax))
     }
 
     # update default plot settings for diagonals
     if( all( is.vario ) )
     {
-      # update x-axis limits as needed
+      # update axis limits as needed
       if( svlim.def )
       {
-        sepmax = sapply( vario[c("d1", "d2")], \(xy) max( xy[['sep']] ) )
-        plotpars[['seplim']][2] = max(plotpars[['seplim']][2], sepmax)
-      }
+        # x axis
+        sepmax = sapply( vario[nm.dyx], \(xy) max( xy[['sep']] ) )
+        if( dmax.def ) plotpars[['dmax']] = max(plotpars[['dmax']], sepmax)
 
-      # update y-axis limits as needed
-      if( svlim.def )
-      {
-        svmax = sapply( vario[c("d1", "d2")], \(xy) max( xy[['sv']] ) )
-        plotpars[['svlim']][2] = max(plotpars[['svlim']][2], svmax)
+        # y axis
+        idx.valid = lapply( vario[nm.vario], \(xy) xy[['sep']] < plotpars[['dmax']] )
+        svmax = mapply(\(xy, i) max( xy[['sv']][i] ), xy=vario[nm.vario], i=idx.valid)
+        plotpars[['svlim']] = range(plotpars[['svlim']], svmax)
       }
 
       # assign plot titles as needed
       if( title.def )
       {
-        dstr = paste0('(', round( atan( vario[['ds']][2] / vario[['ds']][1] )*180/pi, 1), ' degrees)')
-        plotpars[['title']] = c(plotpars[['title']], d1=paste('x', dstr), d2=paste('y', dstr))
+        dstr = paste0('(', round( atan( vario[['ds']][1] / vario[['ds']][2] )*180/pi, 1), ' degrees)')
+        plotpars[['title']] = c(plotpars[['title']], d1=paste('y', dstr), d2=paste('x', dstr))
       }
     }
 
     # split `plotpars` into its components
-    nm.toplot = setNames(nm=names(is.vario)[is.vario])
+    nm.toplot = stats::setNames(nm=names(is.vario)[is.vario])
     plotpars.list = lapply(nm.toplot, \(pp) {
-      modifyList(plotpars, list(title=plotpars[['title']][pp]))
+      utils::modifyList(plotpars, list(title=plotpars[['title']][pp]))
     })
 
     # initialize either a 2 or 4 pane layout
-    par( mfrow = c(sum(is.vario)/2, 2) )
+    graphics::par(mfrow = c(sum(is.vario)/2, 2))
 
-    # recursive calls to add "x" and "y" plots
-    pkern_vario_plot(vario[['x']], pars=xpars, plotpars=plotpars.list[['x']])
+    # recursive calls to add "y" and "x" plots
     pkern_vario_plot(vario[['y']], pars=ypars, plotpars=plotpars.list[['y']])
+    pkern_vario_plot(vario[['x']], pars=xpars, plotpars=plotpars.list[['x']])
 
     # recursive calls to add diagonal plots
     if( all( is.vario ) )
@@ -468,14 +520,15 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
     }
 
     # reset plot panel layout before finishing, returning nothing
-    par(mfrow=c(1,1))
+    graphics::par(mfrow=c(1,1))
     return(invisible())
   }
 
   # 1-dimension case:
 
   # unpack plotting limits
-  xlim = plotpars[['seplim']]
+  if( is.null(plotpars[['dmax']]) ) plotpars[['dmax']] = max(vario[['sep']])
+  xlim = c(0, plotpars[['dmax']])
   ylim = plotpars[['svlim']]
   main = plotpars[['title']]
 
@@ -494,7 +547,7 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
 
     # map point shading to the number of point pairs sampled if requested
     colmap = 'black'
-    if( plotpars[['shade']] ) colmap = rev( gray.colors( max(n) ) )[n]
+    if( plotpars[['shade']] ) colmap = rev( grDevices::gray.colors( max(n) ) )[n]
 
     # make the scatterplot of sampled semivariances
     plot(sep, sv, xlab='lag', ylab='semivariance',
@@ -515,25 +568,25 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
     sep = seq(xlim[1], xlim[2], length.out=1e2)
     if( all( c('k', 'kp') %in% names(pars) ) ) fit = pkern_tvario(pars, v=v, nug=nug, d=sep)
 
-    # handle requests along a diagonal (both x and y components included in pars)
-    if( all( c('x', 'y') %in% names(pars) ) )
+    # handle requests along a diagonal (both y and x components included in pars)
+    if( all( nm.yx %in% names(pars) ) )
     {
       # find unit distance along diagonals
       ds = vario[['ds']]
       udist = sqrt(sum(ds^2))
 
-      # find the equivalent displacement along x and y directions
-      sepx = ds[1] * sep / udist
-      sepy = ds[2] * sep / udist
+      # find the equivalent displacement along y and x directions
+      sepy = ds[1] * sep / udist
+      sepx = ds[2] * sep / udist
 
       # compute appropriately scaled kernel values
-      fitx = pkern_tvario(pars[['x']], v=sqrt(v), d=sepx)
       fity = pkern_tvario(pars[['y']], v=sqrt(v), d=sepy)
+      fitx = pkern_tvario(pars[['x']], v=sqrt(v), d=sepx)
       fit = nug + ( fitx * fity )
     }
 
     # add line plot showing semivariance at requested lags
-    lines(sep, fit)
+    graphics::lines(sep, fit)
   }
 
   return(invisible())

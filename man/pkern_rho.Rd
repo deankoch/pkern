@@ -9,7 +9,7 @@ pkern_rho(cval, pars, d = 1, upper = 1000 * d)
 \arguments{
 \item{cval}{numeric between 0 and 1, the correlation}
 
-\item{pars}{a kernel parameter list recognized by \code{pkern_corr}}
+\item{pars}{a 1D kernel parameter list (with elements "k", "kp") recognized by \code{pkern_corr}}
 
 \item{d}{positive numeric, the distance at which to evaluate the kernel}
 
@@ -26,6 +26,6 @@ pars = pkern_corr('exp')
 cval = 0.5
 pkern_rho(cval, pars, d=1)
 pkern_rho(cval, pars, d=10)
-pkern_corr(modifyList(pars, list(kp=pkern_rho(0.5, pars, d=10))), d=10)
+pkern_corr(utils::modifyList(pars, list(kp=pkern_rho(0.5, pars, d=10))), d=10)
 
 }

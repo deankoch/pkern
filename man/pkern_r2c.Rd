@@ -5,7 +5,7 @@
 \title{Swap grid indices from row-vectorized to column-vectorized order}
 \usage{
 pkern_r2c(
-  dims,
+  gdim,
   in.byrow = TRUE,
   out.byrow = FALSE,
   flipx = FALSE,
@@ -13,7 +13,7 @@ pkern_r2c(
 )
 }
 \arguments{
-\item{dims}{c(nx, ny), the number of x and y grid lines in source grid}
+\item{gdim}{c(ni, nj), the number of rows and columns in the grid}
 
 \item{in.byrow}{logical indicating if source indexing is row-vectorized}
 
@@ -24,18 +24,32 @@ pkern_r2c(
 \item{flipy}{logical indicating to flip the grid top-to-bottom}
 }
 \value{
-a reordering for the vectorized grid. ie a permutation of seq(prod(dims))
+a reordering for the vectorized grid. ie a permutation of \code{seq(prod(gdim))}
 }
 \description{
-\code{pkern} uses column-vectorization with y decreasing, to mirror standard mathematical
-notation for matrices. This utility function is for converting to and from this ordering.
+Returns an indexing vector for swapping between various possible vectorization orderings.
 }
 \details{
-dims can be a length-2 vector (as described below) or a RasterLayer object, from which
-the dimensions are extracted. In the latter case
+\code{pkern} uses column-vectorization, with y decreasing, to mirror mathematical notation
+for matrices where rows are numbered from top to bottom. Packages \code{raster} and \code{graphics}
+have different conventions, so this function is useful for reordering vectorizations when
+switching between methods.
+
+\code{gdim} can be a length-2 vector or a RasterLayer object, from which the dimensions are
+extracted.
 }
 \examples{
-dims = c(12, 13)
-permutation = pkern_r2c(dims, in.byrow=TRUE, out.byrow=FALSE)
-matrix(permutation, nrow=dims[1], byrow=TRUE) |> as.vector()
+
+# with column vectorized input and no flips, the function does no reindexing
+gdim = c(12, 13)
+all( pkern_r2c(gdim, in.byrow=FALSE) == seq(prod(gdim)) )
+
+# flip a grid horizontally and vertically
+matrix(pkern_r2c(gdim, in.byrow=FALSE, flipx=TRUE), gdim)
+matrix(pkern_r2c(gdim, in.byrow=FALSE, flipy=TRUE), gdim)
+
+# default behaviour is to convert from row to column vectorization
+roworder = pkern_r2c(gdim, in.byrow=FALSE, out.byrow=TRUE)
+print(roworder)
+print(matrix(roworder, gdim[1], byrow=TRUE))
 }

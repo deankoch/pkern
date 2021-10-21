@@ -9,10 +9,10 @@ pkern_fromRaster(r, what = "all")
 \arguments{
 \item{r}{a RasterLayer to vectorize}
 
-\item{what}{character, one of: 'dims', 'ds', 'u', 'crs', 'xy', 'values' or 'all'}
+\item{what}{character, one of: 'gdim', 'ds', 'u', 'crs', 'yx', 'values' or 'all'}
 }
 \value{
-For default \code{what=='all'}, a named list of length six (see details)
+For default \code{what=='all'}, a named list containing 6 objects (see details)
 }
 \description{
 Calls to raster::values or raster::getValues produce the data in row-vectorized
@@ -22,19 +22,18 @@ passed to other pkern_* functions
 \details{
 The return value depends on argument \code{what}:
 
-"dims": returns \code{c(nx, ny)}, the length-2 vector of dimensions (in reverse order)
-"ds": returns \code{c(dx, dy)}, the x and y distances between grid lines (ie the resolution)
+"gdim": returns integer vector \code{c(i, j)}, the number of y and x grid lines
+"ds": returns \code{c(dy, dx)}, the x and y distances between grid lines (ie the resolution)
 "crs": returns the CRS code for the raster (if any)
-"u": returns a character string representing the units for "ds" (extracted from "crs")
-"xy": returns \code{list(x, y)}, a list of vectors containing the x and y grid line positions
+"yx": returns \code{list(y, x)}, a list of vectors containing the y and x grid line positions
 "values": returns a vector containing the raster data in column-vectorized order
 "all": returns a named list containing the above three objects
 }
 \examples{
-require(raster)
+if( requireNamespace('raster') ) {
 r.in = system.file('external/rlogo.grd', package='raster') |> raster::raster(band=1)
 pkern.in = pkern_fromRaster(r.in)
-pkern.in$values |> matrix(nrow=pkern.in$dims[2]) |> pkern_plot()
-pkern_toRaster(pkern.in, template=r.in)
-pkern_toRaster(pkern_fromRaster(r.in, what='values'), template=r.in)
+pkern_plot(pkern.in)
+pkern.in$values |> matrix(pkern.in$gdim) |> pkern_plot()
+}
 }

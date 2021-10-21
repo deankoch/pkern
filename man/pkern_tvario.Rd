@@ -7,7 +7,7 @@
 pkern_tvario(pars, v, nug = 0, d = NULL)
 }
 \arguments{
-\item{pars}{list of kernel parameters, in form recognized by \code{pkern_corr}}
+\item{pars}{list of kernel parameters ("k" and "kp"), in form recognized by \code{pkern_corr}}
 
 \item{v}{positive numeric, the pointwise variance absent a nugget effect}
 
@@ -20,7 +20,7 @@ either a vector the same length as \code{d}, or an anonymous function of distanc
 }
 \description{
 Convenience function for getting theoretical semivariance values for a set of
-spatial lags, assuming (intrinsic) stationarity.
+spatial lags along one dimension, assuming (intrinsic) stationarity.
 }
 \details{
 Kernel parameters \code{pars} are passed to the correlation function (\code{pkern_corr})
@@ -32,7 +32,7 @@ When \code{d} is NULL, the function instead returns the semivariance function as
 anonymous function of distance.
 }
 \examples{
-d = 1:10
+d = seq(1e2)/10
 pars = pkern_corr('mat')
 pkern_tvario(pars, v=1, d=d)
 pkern_tvario(pars, v=2, nug=0.5, d=d)

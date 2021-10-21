@@ -4,7 +4,6 @@
 # Functions for converting gridded data to and from RasterLayer format
 #
 
-
 #' Check if raster package is loaded and print error message otherwise
 #'
 #' @return nothing
@@ -27,42 +26,41 @@ pkern_checkRaster = function()
 #'
 #' The return value depends on argument `what`:
 #'
-#' "dims": returns `c(nx, ny)`, the length-2 vector of dimensions (in reverse order)
-#' "ds": returns `c(dx, dy)`, the x and y distances between grid lines (ie the resolution)
+#' "gdim": returns integer vector `c(ny, nx)`, the number of y and x grid lines
+#' "ds": returns `c(dy, dx)`, the x and y distances between grid lines (ie the resolution)
 #' "crs": returns the CRS code for the raster (if any)
-#' "u": returns a character string representing the units for "ds" (extracted from "crs")
-#' "xy": returns `list(x, y)`, a list of vectors containing the x and y grid line positions
+#' "yx": returns `list(y, x)`, a list of vectors containing the y and x grid line positions
 #' "values": returns a vector containing the raster data in column-vectorized order
 #' "all": returns a named list containing the above three objects
 #'
 #' @param r a RasterLayer to vectorize
-#' @param what character, one of: 'dims', 'ds', 'u', 'crs', 'xy', 'values' or 'all'
+#' @param what character, one of: 'gdim', 'ds', 'u', 'crs', 'yx', 'values' or 'all'
 #'
-#' @return For default `what=='all'`, a named list of length six (see details)
+#' @return For default `what=='all'`, a named list containing 6 objects (see details)
 #' @export
 #'
 #' @examples
-#' require(raster)
+#' if( requireNamespace('raster') ) {
 #' r.in = system.file('external/rlogo.grd', package='raster') |> raster::raster(band=1)
 #' pkern.in = pkern_fromRaster(r.in)
-#' pkern.in$values |> matrix(nrow=pkern.in$dims[2]) |> pkern_plot()
-#' pkern_toRaster(pkern.in, template=r.in)
-#' pkern_toRaster(pkern_fromRaster(r.in, what='values'), template=r.in)
+#' pkern_plot(pkern.in)
+#' pkern.in$values |> matrix(pkern.in$gdim) |> pkern_plot()
+#' }
 pkern_fromRaster = function(r, what='all')
 {
   # stop with an error message if raster package is unavailable
   pkern_checkRaster()
 
   # extract dimensions and return if requested
-  dims = dim(r)[2:1] |> stats::setNames(c('x', 'y'))
-  if( what == 'dims' ) return(dims)
+  gdim = dim(r)[1:2] |> stats::setNames(c('i', 'j'))
+  if( what == 'gdim' ) return(gdim)
 
-  # extract resolution and return if requested
-  ds = raster::res(r) |> stats::setNames(c('x', 'y'))
+  # notice return from raster::res is in reverse order (dx, dy)
+  ds = raster::res(r)[2:1] |> stats::setNames(c('y', 'x'))
   if( what == 'ds' ) return(ds)
 
   # extract CRS string if available
-  crs.r = rgdal::CRSargs( raster::crs(r) )
+  crs.r = ifelse(requireNamespace('rgdal', quietly=TRUE), rgdal::CRSargs(raster::crs(r)), NA)
   if( what == 'crs' ) return(crs.r)
 
   # attempt to parse resolution units from CRS string
@@ -78,34 +76,37 @@ pkern_fromRaster = function(r, what='all')
   if( what == 'u' ) return(u)
 
   # extract grid line positions (as needed)
-  if( what != 'values' ) gxy = list(x=raster::xFromCol(r, seq(dims[1])),
-                                    y=raster::yFromRow(r, rev(seq(dims[2]))) )
+  if( what != 'values' )
+  {
+    yasc = sort( raster::yFromRow(r, seq(gdim[1]) ) )
+    xasc = sort( raster::xFromCol(r, seq(gdim[2]) ) )
+    yx = list(y=yasc, x=xasc)
 
-  # finish grid line mode
-  if( what == 'xy' ) return(gxy)
+    # finish grid line mode
+    if( what == 'yx' ) return(yx)
+  }
 
   # indexing vector to get column-vectorized version of values
-  cvec.idx = pkern_r2c(dims)
+  cvec.idx = pkern_r2c(gdim)
 
   # extract vectorized data and finish
-  rvec = raster::values(r)[cvec.idx]
+  rvec = raster::getValues(r)[cvec.idx]
   if(what == 'values') return(rvec)
-  return( list(dims=dims, ds=ds, crs=crs.r, u=u, xy=gxy, values=rvec) )
+  return( list(gdim=gdim, ds=ds, crs=crs.r, u=u, yx=yx, values=rvec) )
 }
-
 
 #' Convert column-vectorized grid to RasterLayer
 #'
 #' @param rvec either the column-vectorized data or a list containing it (in element "values")
-#' @param dims c(nx, ny), the number of x and y grid lines in the full grid
+#' @param gdim c(ni, nj), the number rows and columns in the full grid
 #' @param template optional RasterLayer to use as template (for setting crs, resolution etc)
 #'
 #' Produces a RasterLayer from a vector or matrix. This essentially a wrapper for various
 #' `raster::raster` calls where the input data is in column-vectorized form.
 #'
-#' `rvec` can either be a matrix (in which case `dims` can be omitted) or its vectorized
+#' `rvec` can either be a matrix (in which case `gdim` can be omitted) or its vectorized
 #' equivalent, or a list containing elements returned by `pkern_fromRaster`. If the list
-#' as an element named "dims", it replaces any argument supplied to `dims`. Other elements
+#' has an element named "gdim", it replaces any argument supplied to `gdim`. Other elements
 #' of the list (eg 'crs') are passed on to the RasterLayer construction call as needed.
 #'
 #' When template is supplied, it supercedes any properties (eg 'crs') supplied in `rvec`.
@@ -114,12 +115,13 @@ pkern_fromRaster = function(r, what='all')
 #' @export
 #'
 #' @examples
-#' require(raster)
-#' r.in = system.file('external/rlogo.grd', package='raster') |> raster(band=1)
+#' if( requireNamespace('raster') ) {
+#' r.in = system.file('external/rlogo.grd', package='raster') |> raster::raster(band=1)
 #' pkern.in = pkern_fromRaster(r.in)
-#' pkern_toRaster(pkern.in)
-#' r.in
-pkern_toRaster = function(rvec=NULL, dims=NULL, template=NULL)
+#' print(pkern_toRaster(pkern.in))
+#' print(r.in)
+#' }
+pkern_toRaster = function(rvec=NULL, gdim=NULL, template=NULL)
 {
   # stop with an error message if raster package is unavailable
   pkern_checkRaster()
@@ -129,74 +131,57 @@ pkern_toRaster = function(rvec=NULL, dims=NULL, template=NULL)
   has.properties = is.list(rvec)
 
   # assign dimensions from matrix input
-  if( is.null(dims) & is.matrix(rvec) ) dims = rev(dim(rvec))
+  if( is.null(gdim) & is.matrix(rvec) ) gdim = rev(dim(rvec))
 
   # unpack list input
   if( is.list(rvec) )
   {
-    # unpack the data (overwrites argument to dims)
-    if( !is.null( rvec[['dims']] ) ) dims = rvec[['dims']]
+    # unpack the data (overwrites argument to `gdim`)
+    if( !is.null( rvec[['gdim']] ) ) gdim = rvec[['gdim']]
     rcrs = ifelse( is.null(rvec[['crs']]), '', rvec[['crs']])
     ds = rvec[['ds']]
-    xy = rvec[['xy']]
+    yx = rvec[['yx']]
 
     # rvec should be a matrix or vector from here on
     rvec = rvec[['values']]
   }
 
-  # extract `dims` from template when supplied
-  if( is.null(dims) )
+  # extract `gdim` from template when supplied
+  if( is.null(gdim) )
   {
     # make sure we have a template then extract its dimensions in correct order
-    if( !has.template ) stop('could not determine grid size. Try setting dims')
-    dims = raster::dim(template)[2:1]
+    if( !has.template ) stop('could not determine grid size. Try setting gdim')
+    gdim = dim(template)[1:2]
   }
 
   # matricize data as needed
   has.values = !is.null(rvec)
-  if( (!is.matrix(rvec)) & has.values ) rvec = matrix(rvec, dims[2])
+  if( (!is.matrix(rvec)) & has.values ) rvec = matrix(rvec, gdim)
 
   # the raster call is simple with a template
-  if( (has.template | !has.properties) & has.values ) return(raster::raster(zmat, template=template))
+  if( (has.template | !has.properties) & has.values ) return(raster::raster(rvec, template=template))
 
   # compute dimensional stuff when properties supplied
   if( has.properties )
   {
-    # set defaults for ds and xy
+    # set defaults for ds and yx
     if( is.null(ds) ) ds = c(1,1)
-    if( is.null(xy) ) xy = mapply(\(d,s) c(1, d)-(s/2), d=dims, s=ds, SIMPLIFY=FALSE)
+    if( is.null(yx) ) yx = Map(\(d,s) c(1, d)-(s/2), d=gdim, s=ds)
 
     # extract coordinate "boundaries" as required by raster
-    xyb = mapply(\(g,s) range(s*g) + (c(-1, 1) * s/2), g=xy, s=ds, SIMPLIFY=FALSE)
+    yxb = Map(\(g,s) range(s*g) + (c(-1, 1) * s/2), g=yx, s=ds)
 
     # without a template the call has separate arguments for the four extent points
     if( has.values )
     {
       # build the raster and return
-      return( raster::raster(zmat, xyb[[1]][1], xyb[[1]][2], xyb[[2]][1], xyb[[2]][2], crs=rcrs) )
+      return( raster::raster(rvec, yxb[[2]][1], yxb[[2]][2], yxb[[1]][1], yxb[[1]][2], crs=rcrs) )
     }
   }
 
   # without values we can use a simpler looking call by passing an extent object
-  ext = raster::extent(do.call(c, xyb))
+  ext = raster::extent(do.call(c, yxb))
   return( raster::raster(crs=rcrs, ext=ext, resolution=ds) )
 }
 
-
-#' Snap points to a subgrid in a RasterLayer
-#'
-#' @param pts, numeric vector or n x 2 matrix (with columns for x and y) of point coordinates
-#' @param g, RasterLayer
-#' @param regular, logical, indicating to select a regular set of grid lines
-#'
-#' @return a RasterLayer containing the data from `pts`
-#' @export
-#'
-#' @examples
-pkern_rasterize = function(pts, g, regular)
-{
-
-
-
-}
 

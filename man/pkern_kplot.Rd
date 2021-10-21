@@ -4,23 +4,14 @@
 \alias{pkern_kplot}
 \title{Make a heatmap of covariances/correlations around a grid's central point}
 \usage{
-pkern_kplot(
-  pars,
-  dims = NULL,
-  ds = 1,
-  smoothed = FALSE,
-  maxx = 200,
-  ppars = list()
-)
+pkern_kplot(pars, gdim = NULL, ds = 1, ppars = list())
 }
 \arguments{
-\item{pars}{list of two parameter lists "x" and "y", and (optionally) "v", "nug"}
+\item{pars}{list of two parameter lists "y" and "x", and (optionally) "v", "nug"}
 
-\item{dims}{c(nx, ny), the number of x and y lags to include}
+\item{gdim}{c(ni, nj), the number of y and x lags to include}
 
-\item{smoothed}{logical, whether to smooth the image (passed to \code{pkern_plot})}
-
-\item{maxx}{integer or integer vector, plotting resolution (passed to \code{pkern_plot})}
+\item{ds}{c(dy, dx), the y and x distances between adjacent grid lines}
 
 \item{ppars}{list of plotting arguments (passed to \code{pkern_plot})}
 }
@@ -28,27 +19,30 @@ pkern_kplot(
 returns nothing but prints a contour plot of the specified kernel
 }
 \description{
-This function displays a separable kernel by building a grid of size \code{dims},
+This function displays a separable kernel by building a grid of size \code{gdim},
 assigning to each cell the covariance (or correlation) with the central cell,
-then passing the result to \code{graphics::image} for visualization.
+then passing the result to \code{graphics::image} for visualization. Covariance
+parameters from both kernels are printed as a subtitle, with values rounded
+to 3 decimal places.
 }
 \details{
-\code{pars} should be a list containing elements "x" and "y", which are lists of parameters
-for the x and y component kernels (recognized by \code{pkern_corr}). Optionally, \code{pars} can
-also include a (positive numeric) pointwise variance term in "v". Covariance parameters
-from both kernels are printed as a subtitle, with values rounded to 3 decimal places.
+\code{pars} should be a list containing elements "y" and "x", which are lists of parameters
+for the y and x component kernels (recognized by \code{pkern_corr}). Optionally, \code{pars} can
+also include a (positive numeric) pointwise variance and nugget effect (numerics "v"
+and "nug"). If \code{pars} contains an element named "ds", it supercedes any argument to \code{ds}.
+If \code{v} and \code{nug} are supplied, the legend title is set to "covariance", otherwise it is
+set to "correlation".
 
-When \code{dims} is omitted, it is set to the smallest size such that the plot shows the
-effective range of the kernel components in both the x and y directions. if either
-entry of \code{dims} is an even number, it incremented by 1 in order so that "central"
-is  unambiguous.
-
-If \code{v} and \code{nug} are not supplied, plot labels are changed to show "correlation".
+When \code{gdim} is omitted, it is set to the smallest size such that the plot shows the
+effective range of the kernel components in both the y and x directions. if either
+entry of \code{gdim} is an even number, it incremented by 1 so that "central point"
+is unambiguous.
 }
 \examples{
 pars = pkern_bds(c('gxp', 'mat'))
 pkern_kplot(pars)
-pkern_kplot(pars, dims=c(50,30))
-pkern_kplot(c(pars, list(v=2, nug=0.5)), dims=c(50,30))
-pkern_kplot(c(pars, list(v=2, nug=0.5)), dims=c(50,30), smoothed=TRUE)
+gdim = c(30,50)
+pkern_kplot(pars, gdim)
+pkern_kplot(c(pars, list(v=2, nug=0.5)), gdim)
+pkern_kplot(c(pars, list(v=2, nug=0.5)), gdim, ppars=list(smoothed=TRUE))
 }

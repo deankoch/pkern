@@ -23,8 +23,8 @@ distances in \code{d}. Parameter list entry \code{pars$kp} supplies the kernel p
 
 (1 parameter)
 
-"exp": exponential (special case of "gex" with "p"=1 and \code{d<-abs(d)})
-"gau": gaussian/stable (special case of "gex" with "p"=2)
+"exp": exponential (special case of "gex" with shape "p"=1)
+"gau": gaussian/stable (special case of "gex" with shape "p"=2)
 "sph": spherical (AKA stable/Gaussian for p=2)
 
 (2 parameters)

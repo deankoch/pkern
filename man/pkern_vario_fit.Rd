@@ -6,28 +6,31 @@
 \usage{
 pkern_vario_fit(
   vario,
-  xpars = "mat",
-  ypars = xpars,
+  ypars = "gau",
+  xpars = ypars,
   v = NULL,
   nug = NULL,
-  ninitial = 5
+  ninitial = 10,
+  dmax = Inf
 )
 }
 \arguments{
 \item{vario}{list, the return value from a call to \code{pkern_vario}}
 
-\item{xpars}{character or list, recognizable (as \code{pars}) by \code{pkern_corr}}
-
 \item{ypars}{character or list, recognizable (as \code{pars}) by \code{pkern_corr}}
+
+\item{xpars}{character or list, recognizable (as \code{pars}) by \code{pkern_corr}}
 
 \item{v}{length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for variance}
 
 \item{nug}{length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for nugget}
 
 \item{ninitial}{positive integer, the number of initial parameter sets tested (see details)}
+
+\item{dmax}{positive numeric, point pairs with separation distances exceeding \code{dmax} are ignored}
 }
 \value{
-
+TODO
 }
 \description{
 Pipe the results of a \code{pkern_vario} call to this function to estimate model
@@ -55,4 +58,24 @@ in prediction functions like \code{pkern_cmean}.
 When \code{ninitial > 1}, the least squares optimization call is repeated for additional
 sets of initial values, chosen uniformly at random within their upper and lower
 bounds. Try increasing this to resolve issues of convergence to incorrect local optima.
+}
+\examples{
+gdim = c(1e2, 2e2)
+pars = pkern_corr('gau') |> utils::modifyList(list(v=1))
+vec = pkern_sim(pars, gdim)
+
+# sample first 10 lags and plot
+vario = pkern_vario(gdim, vec, sep=seq(10))
+pkern_vario_plot(vario, pars)
+
+# fit the separable gaussian kernel
+pars.fitted = pkern_vario_fit(vario)
+pkern_vario_plot(vario, pars.fitted)
+pkern_plot(pars.fitted)
+
+# fit a different separable kernel
+pars.fitted2 = pkern_vario_fit(vario, ypars='sph', xpars='mat')
+pkern_vario_plot(vario, pars.fitted2)
+pkern_plot(pars.fitted2)
+
 }

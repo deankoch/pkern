@@ -7,7 +7,7 @@
 pkern_unpack(pars, kp = NULL)
 }
 \arguments{
-\item{pars}{list of "x" and "y" kernel parameter lists (each containing vector "kp")}
+\item{pars}{list of "y" and "x" kernel parameter lists (each containing vector "kp")}
 
 \item{kp}{vector of combined kernel parameters (or NA)}
 }
@@ -15,7 +15,7 @@ pkern_unpack(pars, kp = NULL)
 numeric vector of parameters, or \code{pars} modified appropriately
 }
 \description{
-when \code{kp} is NULL, the function concatenates the two (x and y) component kernel parameter
+when \code{kp} is NULL, the function concatenates the two ("y" and "x") component kernel parameter
 sets into a single vector. When this vector is passed back as \code{kp}, the function does the
 inverse, copying parameter values from a vector to the corresponding list entry in \code{pars}
 and returning them in a list

@@ -1,21 +1,32 @@
 #
 # pkern_raster.R
-# Dean Koch, Sep 2021
-# Functions for computationally intensive stuff
+# Dean Koch, Oct 2021
+# Functions for computationally intensive linear algebra
 #
 
 
-# efficient quadratic form computer: `t(x) %*% M %*% y`
-pkern_qf = function(M, x, y)
+#' efficient quadratic form computer: `t(x) %*% M %*% y`
+#'
+#' @param M numeric matrix
+#' @param x numeric vector
+#' @param y numeric vector
+#' @param sparse logical, indicates to use Matrix::Matrix representations of large matrices
+#'
+#' @return TODO
+#' @export
+#'
+#' @examples
+#' # TODO
+pkern_qf = function(M, x, y, sparse=TRUE)
 {
-  # Efficient computation of the quadratic form `t(X) %*% M %*% Y`
+  # Efficient computation of the quadratic form `t(x) %*% M %*% Y`
   # where M is a numeric matrix with conforming dimensions
   #
   # based on the trick used in emulator::quad.form with Rfast::Crossprod
   # for efficiency with large matrices, where I see around a 2-4X speed speedup
 
   # coerce everything to matrices with appropriate dimensions
-  M = as.matrix(M)
+  if(!sparse) M = as.matrix(M)
   ninner = dim(M)[1]
   nouter = dim(M)[2]
   if( is.vector(x) ) x = matrix(x, ninner)
@@ -27,202 +38,255 @@ pkern_qf = function(M, x, y)
   if( !conforms.inner | !conforms.right ) stop('dimensions do not conform')
 
   # run computation
-  return( as.vector(Rfast::Crossprod(Rfast::Crossprod(M, x), y)) )
+  if(sparse) return( as.vector(crossprod(crossprod(M, x), y)) )
+  return( as.vector( Rfast::Crossprod(Rfast::Crossprod(M, x), y) ) )
 }
 
 
-# left-multiplication with a Kronecker product: evaluates (X (x) Y) * vector
-pkern_kprod = function(X, Y, z, trans=FALSE)
+
+#' Left-multiplication with a Kronecker product: evaluates (X (x) Y) * vector
+#'
+#' Evaluates a Kronecker product times a vector by the standard trick of representing
+#' the vector as a matrix M and evaluating `Y %*% M %*% t(X)`.
+#'
+#' For computational efficiency, the function computes the result by a composition
+#' of cross-products with the transposed input component matrices. The argument
+#' `trans=TRUE` indicates that `t(X)` and `t(Y)` have been passed to `X` and `Y`,
+#' so that the transpose step (which is slow for large matrices) can be skipped.
+#'
+#' @param X matrix or Matrix object, the x-component matrix
+#' @param Y matrix or Matrix object, the y-component matrix
+#' @param z numeric vector, the vector to left-multiply
+#' @param trans logical, indicating the inputs `X` and `Y` are transposed
+#' @param sparse logical, indicates to use Matrix::Matrix representations of large matrices
+#'
+#' @return TODO
+#' @export
+#'
+#' @examples
+#' # TODO
+pkern_kprod = function(X, Y, z, trans=FALSE, sparse=TRUE)
 {
   # handle transposed mode
-  if(trans) return( pkern_qf(matrix(z, nrow(Y), nrow(X)), Y, X) )
-  return( pkern_qf(matrix(z, ncol(Y), ncol(X)), Rfast::transpose(Y), Rfast::transpose(X)) )
+  if(trans & !sparse) return( pkern_qf(matrix(z, nrow(Y), nrow(X)), Y, X, sparse=FALSE) )
+  if(trans & sparse) return( pkern_qf(Matrix::Matrix(as.vector(z), nrow(Y), nrow(X)), Y, X) )
+
+  # handle sparse, non-transposed
+  if(sparse) return( pkern_qf(Matrix::Matrix(z, ncol(Y), ncol(X)), t(Y), t(X)) )
+
+  # handle non-sparse, non-transposed
+  return( pkern_qf(matrix(z, ncol(Y), ncol(X)), Rfast::transpose(Y), Rfast::transpose(X), sparse=FALSE) )
 }
 
 
-# uses Rccp libraries in Rfast package and ...
-
-# conditional mean of points on a grid given a sample taken over a subgrid
-pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
+#' Compute important indexing vectors relating to a subgrid within a larger grid
+#'
+#' Regular subgrids have computationally convenient properties that we can exploit
+#' when predicting onto a supergrid
+#'
+#' TODO: flesh out documentation
+#' (cross) covariance matrices
+#'
+#' The length of `obs` should equal the product of the lengths of the grid line vectors in
+#' `gxy`, and its elements should be in column-vectorized order. Only the locations of the NAs
+#' (and not the other contents) of `obs` matter.
+#'
+#' @param gdim integer vector c(ni, nj) the size of the outer grid
+#' @param map list of integer vectors "i" and "j", row and column indices of the subgrid
+#' @param pars (optional) list of "x" and "y" kernel parameters
+#' @param zobs (optional) vector, containing NAs where data are missing in the subgrid
+#' @param makev logical, indicates to compute variance matrix components for points off subgrid
+#' @param sparse logical, indicates to use Matrix::Matrix representations of large matrices
+#'
+#' @return a large list of vectors and matrices
+#' @export
+#'
+#' @examples
+#' # TODO
+pkern_precompute = function(gdim, map, pars=NULL, zobs=NULL, makev=FALSE, sparse=TRUE)
 {
-  # Fast conditional mean computer for problems where sampled locations form a subgrid
-  #
-  # Uses method of Gilboa et. al, 2015 where eigendecomposition of the covariance
-  # matrix of sampled locations is used with a nugget effect
-  #
-  # ARGUMENTS:
-  #
-  # dims: vector of two integers (nx, ny), the dimensions of the full grid
-  # pars: list containing kernel parameters "x" and "y", nugget size "nug", and resolution "ds"
-  # zobs: numeric vector of observed data, possibly with NAs
-  # gxy: list of two integer vectors, the x and y grid lines of the subgrid
-  # precompute: either logical (default FALSE), or a list of precomputed objects (see details)
-  #
-  # DETAILS:
-  #
-  # zobs should be supplied in the usual column-vectorized order.
-  #
-  # The length of zobs must equal the product of the lengths of the vectors in gxy
-  # (ie the number of grid line intersections), and the grid line numbers in gxy
-  # should be ordered subsets of the sequences seq(dims[1]) and seq(dims[2])
-  #
-  # the function returns a numeric vector of length prod(dims), containing the
-  # observed data from zobs and the mean values at all other grid points, conditional
-  # on zobs (in column-vectorized order).
-  #
+  # ordering is i/y first, j/x second, by default assume all of subgrid is sampled
+  yx.nm = c('y', 'x')
+  cpars = pars[yx.nm]
+  pvar = ifelse( is.null(pars[['v']]), 1, sqrt(pars[['v']]))
+  nmap = sapply(map, length)
+  if( is.null(zobs) ) zobs = seq( prod(nmap) )
+  if( !all( c('i', 'j') %in% names(map) ) ) map = stats::setNames(map, c('i', 'j'))
 
-  # the number of points in the sampled subgrid
-  nsg = length(zobs)
+  # sort x and y grid line indices for zobserved data and find their complements
+  map = lapply(map, sort)
+  mapc = mapply(\(s, g) seq(g)[-s], g=gdim, s=map)
 
-  # check if precomputed matrices and indices were supplied
-  if( !is.logical(precompute) )
+  # index of subgrid points in full grid, and all points on one of its grid lines
+  idx.s = pkern_idx_sg(gdim, map)
+  idx.sj = pkern_idx_sg(gdim, utils::modifyList(map, list(i=NULL)))
+  idx.si = pkern_idx_sg(gdim, utils::modifyList(map, list(j=NULL)))
+
+  # partition non-subgrid points into three sets depending on overlap with grid lines
+  idx.o = seq( prod(gdim) )[ -c(idx.s, idx.sj, idx.si) ]
+  idx.oj = idx.sj[ !( idx.sj %in% idx.s ) ]
+  idx.oi = idx.si[ !( idx.si %in% idx.s ) ]
+
+  # indices of sampled and unsampled points within the subgrid
+  idx.sobs = which( !is.na(zobs) )
+  idx.smiss = seq( length(zobs) )[-idx.sobs]
+
+  # set default subgrid resolution (distances between grid lines) as needed
+  dsub = pars[['ds']]
+  if( is.null(dsub) ) dsub = c(1,1)
+
+  # calculate full grid resolution (distances between grid lines)
+  dfull = dsub / sapply(map, \(s) diff(s[1:2]) )
+
+  # build component marginal correlation matrices for the subgrid (at dsub resolution)
+  vs = Map( \(p, n, d) { pvar * pkern_corrmat(p, n, d, sparse=sparse) },
+            p=cpars, n=nmap, d=dsub) |> stats::setNames(nm=yx.nm)
+
+  # build component marginal correlation matrices for points off subgrid (slow!)
+  vo = NULL
+  if(makev) vo = Map(\(p, n, d, i, j) { pvar * pkern_corrmat(p, n, d, i, j, sparse=sparse) },
+                     p=cpars, n=gdim, d=dfull, i=mapc, j=mapc) |> stats::setNames(nm=yx.nm)
+
+  # build component cross-correlation matrices for points on vs off subgrid lines
+  vso = Map( \(p, n, d, i, j) { pvar * pkern_corrmat(p, n, d, i, j, sparse=sparse) },
+             p=cpars, n=gdim, d=dfull, i=map, j=mapc) |> stats::setNames(nm=yx.nm)
+
+  # use faster method when all of the subgrid is sampled
+  if( !anyNA(zobs) )
   {
-    # check for invalid input
-    if( !is.list(precompute) ) stop('"precompute" must be a list')
-
-    # unpack correlation matrices
-    vx = precompute[['vx']]
-    vy = precompute[['vy']]
-    vx.cross = precompute[['vx.cross']]
-    vy.cross = precompute[['vy.cross']]
-    vs.cross = precompute[['vs.cross']]
-
-    # eigendecomposition(s)
-    ed = precompute[['ed']]
-
-    # unpack indexing vectors
-    idx.on = precompute[['idx.on']]
-    idx.off = precompute[['idx.off']]
-    idx.xoff = precompute[['idx.xoff']]
-    idx.yoff = precompute[['idx.yoff']]
-    idx.sg.obs = precompute[['idx.sg.obs']]
-
-    # don't return the precomputed data in this case
-    precompute = FALSE
-
-    # TODO: verify that zobs agrees with the (possibly precomputed) index of NAs
+    # eigendecompositions of component matrices
+    ed = lapply(vs, \(v) eigen(v, symmetric=TRUE))
+    vsc = NULL
 
   } else {
 
-    # computationally expensive steps which are independent of `zobs`:
+    # missing data case requires first evaluating the variance kronecker product
+    vs.full = kronecker(vs[['x']], vs[['y']])
 
-    ## compute important indices in vectorized output grid
+    # eigendecomposition of full covariance matrix of subgrid
+    ed = eigen(vs.full[idx.sobs, idx.sobs], symmetric=TRUE)
 
-    # sort x and y grid line indices for observed data and find their complements
-    gx = sort( gxy[[1]] )
-    gy = sort( gxy[[2]] )
-    gxc = seq( dims[1] )[-gx]
-    gyc = seq( dims[2] )[-gy]
-    nx = length(gx)
-    ny = length(gy)
+    # we also need the (within subgrid) cross-covariance between sampled and unsampled points
+    vsc = vs.full[idx.smiss, idx.sobs]
 
-    # index of subgrid points in full grid, and all points on one of its grid lines
-    idx.on = pkern_idx_sg(dims, i=gy, j=gx)
-    idx.on.x = pkern_idx_sg(dims, i=NULL, j=gx)
-    idx.on.y = pkern_idx_sg(dims, i=gy, j=NULL)
+  }
 
-    # partition non-subgrid points into three sets depending on overlap with grid lines
-    idx.off = seq( prod(dims) )[ -c(idx.on, idx.on.x, idx.on.y) ]
-    idx.xoff = idx.on.x[ !( idx.on.x %in% idx.on ) ]
-    idx.yoff = idx.on.y[ !( idx.on.y %in% idx.on ) ]
+  # return everything in list
+  idx.list = list(s=idx.s, o=idx.o, oj=idx.oj, oi=idx.oi, sobs=idx.sobs)
+  v.list = list(vs=vs, vo=vo, vso=vso, vsc=vsc, ed=ed)
+  return(c(idx.list, v.list))
+}
 
-    ## compute correlation matrices
 
-    # find relative increase in resolution going from subgrid to full grid
-    dsx = diff( gx[1:2] )
-    dsy = diff( gy[1:2] )
+#' Compute conditional mean of points on a grid given a sample taken over a subgrid
+#'
+#' Given a separable spatial covariance model (`pars`), and a sample (`zobs`) on a
+#' a regular subgrid (`map`) of the grid of dimensions `gdim`, the function computes the
+#' expected value of all n (`prod(gdim)`) points in the full grid.
+#'
+#' For this type of problem the full n-dimensional covariance matrix (V) can be represented
+#' using kronecker products of dimension `gdim[1]^2` and `gdim[2]^2` (eg. as described in
+#' Gilboa et al., 2015; and Koch et al., 2020), dramatically speeding up calculations and
+#' reducing memory demands.
+#'
+#' `zobs` should be supplied in column-vectorized order, and its length must equal the
+#' product of the lengths of the vectors in `map` (ie the number of points in the subgrid).
+#' Unsampled points in the subgrid should be indicated by NAs in `zobs`.
+#'
+#' The subgrid on which `zobs` is located must be specified in the indexing vectors `map$y`
+#' and `map$x`, which map to subsets of `seq(gdim[1])` and `seq(gdim[2])`.
+#'
+#' Nugget effects are supported by adding adding `pars$nug` to the diagonal of the eigenvalue
+#' matrix in the eigendecomposition of V. Note that a small nugget effect will often solve
+#' computational issues arising from numerically singular covariance matrices (a common problem
+#' with large spatial covariance models).
+#'
+#' @param zobs numeric vector of observed data, possibly with NAs
+#' @param gdim integer vector (ny, nx), the size of the full grid
+#' @param pars list of kernel parameter lists "y" and "x", nugget "nug", and distance scaling "ds"
+#' @param map list of two integer vectors, indexing the y and x grid lines of the regular subgrid
+#' @param pc either logical (default FALSE), or a list of precomputed objects (see details)
+#' @param sparse logical, indicates to use Matrix::Matrix representations of large matrices
+#' @param mvec logical, see details (TODO)
+#'
+#' @return TODO
+#' @export
+#'
+#' @examples
+#' # TODO
+pkern_cmean = function(zobs, gdim, pars, map, pc=FALSE, sparse=TRUE, mvec=FALSE)
+{
+  # the number of points in the sampled subgrid, and index of missing elements
+  nsg = length(zobs)
+  sobs = which( !is.na(zobs) )
 
-    # regularize range parameters for computations over integer lattice
-    pars[['x']][['kp']][1] = pars[['x']][['kp']][1] / pars[['ds']][1]
-    pars[['y']][['kp']][1] = pars[['y']][['kp']][1] / pars[['ds']][2]
+  # handle requests for precomputed objects
+  if( is.logical(pc) )
+  {
+    # prepare matrices and indexing vectors
+    pcout = pkern_precompute(gdim, map, pars, zobs=zobs, makev=FALSE, sparse=sparse)
+    if( pc ) { return(pcout) } else { return(pkern_cmean(zobs, gdim, pars, map, pcout, sparse)) }
 
-    # build component marginal correlation matrices for the subgrid
-    vx = pkern_corrmat(pars[['x']], nx)
-    vy = pkern_corrmat(pars[['y']], ny)
+  } else {
 
-    # build component cross-correlation matrices for points on vs off subgrid lines
-    vx.cross = pkern_corrmat(pars[['x']], dims[1], ds=1/dsx, j=gxc, i=gx)
-    vy.cross = pkern_corrmat(pars[['y']], dims[2], ds=1/dsy, j=gyc, i=gy)
+    # precomputed objects supplied: check for invalid input
+    if( !is.list(pc) ) stop('pc must be a list')
 
-    ## compute eigendecomposition(s)
+    # check that we have same pattern of NAs in precomputed objects
+    sobs.in = pc[['sobs']]
+    if( !identical(sobs, sobs.in) ) stop('missing data in zobs must match that used to create pc')
+  }
 
-    # slower method when not all of the subgrid is sampled
-    if( anyNA(zobs) )
-    {
-      # indices of sampled and unsampled within the subgrid
-      idx.sg.obs = which( !is.na(zobs) )
-      idx.sg.unobs = seq(nsg)[-idx.sg.obs]
+  # initialize predictions vector and add the observed points
+  zpred = rep(as.numeric(NA), prod(gdim))
+  zpred[ pc[['s']] ] = zobs
 
-      # missing data case requires first evaluating the variance kronecker product
-      v = kronecker(vx, vy)
-      ed = eigen(v[idx.sg.obs, idx.sg.obs], symmetric=TRUE)
+  # omit any NA points from zobs
+  zdata = zobs[sobs]
 
-      # we also need the (within subgrid) cross-covariance between sampled and unsampled points
-      vs.cross = v[idx.sg.unobs, idx.sg.obs]
+  # missing data case: not all points in subgrid are sampled
+  if( length( sobs ) < nsg )
+  {
+    # pointwise variances are equal to the eigenvalues plus the nugget variance
+    pwv = pars[['nug']] + pc[['ed']][['values']]
+
+    # pad output vector with zeros (equivalent to subsetting cross-correlation matrices below)
+    zdata.mod = rep(0, nsg)
+
+    # multiply observed data by inverse covariance matrix via eigen-decomposition
+    if(mvec) {
+
+      pwv = pars[['nug']] + pc[['ed']][['values']][zdata]
+      zdata.mod[sobs] = ( t(pc[['ed']][['vectors']]) %*% zdata ) / sqrt(pwv)
 
     } else {
 
-      # with no missing data we can do eigendecompositions on component matrices
-      idx.sg.obs = seq(nsg)
-      ed = list(x=eigen(vx, symmetric=TRUE), y=eigen(vy, symmetric=TRUE))
-      vs.cross = NULL
+      zdata.mod[sobs] = pc[['ed']][['vectors']] %*% ( (t(pc[['ed']][['vectors']]) %*% zdata) / pwv )
+
     }
-  }
 
-  # return the list of precomputed objects if requested
-  if( precompute ) return(list(vx=vx,
-                               vy=vy,
-                               ed=ed,
-                               vx.cross=vx.cross,
-                               vy.cross=vy.cross,
-                               vs.cross=vs.cross,
-                               idx.on=idx.on,
-                               idx.off=idx.off,
-                               idx.xoff=idx.xoff,
-                               idx.yoff=idx.yoff,
-                               idx.sg.obs=idx.sg.obs))
-
-  # initialize predictions vector and add the observed points
-  zout = rep(as.numeric(NA), prod(dims))
-  zout[idx.on] = zobs
-
-  # missing data case
-  if( length(idx.sg.obs) < nsg )
-  {
-    # omit the NA points from zobs
-    zobs.crop = zobs[idx.sg.obs]
-
-    # pointwise variances are equal to the eigenvalues plus the nugget variance
-    pwv = pars[['nug']] + ed[['values']]
-
-    # pad output vector with zeros (equivalent to subsetting cross-correlation matrices below)
-    zobs.indep = rep(0, nsg)
-
-    # transform `zobs` by product with inverse covariance to get mutual independence
-    zobs.indep[idx.sg.obs] = ed[['vectors']] %*% ( ( t(ed[['vectors']]) %*% zobs.crop ) / pwv )
-
-    # compute and assign conditional mean of unsampled subgrid points
-    zout[ idx.on[-idx.sg.obs] ] = vs.cross %*% zobs.indep[idx.sg.obs]
+    # multiply by cross covariance to get conditional mean of unsampled subgrid points
+    zpred[ pc[['s']][-sobs] ] = pc[['vsc']] %*% zdata.mod[sobs]
 
   } else {
 
     # kronecker product trick to get pointwise variances
-    pwv = pars[['nug']] + kronecker(ed[['x']][['values']], ed[['y']][['values']])
+    pwv = pars[['nug']] + kronecker(pc[['ed']][['x']][['values']], pc[['ed']][['y']][['values']])
 
-    # kronecker product trick to get product with covariance inverse
-    zobs.ortho = pkern_kprod(ed[['x']][['vectors']], ed[['y']][['vectors']], zobs, trans=TRUE) / pwv
-    zobs.indep = pkern_kprod(ed[['x']][['vectors']], ed[['y']][['vectors']], zobs.ortho, trans=FALSE)
+    # kronecker product trick to get product with inverse covariance matrix
+    edx = pc[['ed']][['x']][['vectors']]
+    edy = pc[['ed']][['y']][['vectors']]
+    zdata.mod = pkern_kprod(edx, edy, pkern_kprod(edx, edy, zdata, trans=T, sparse)/pwv, trans=F)
   }
 
-  # compute predictions separately on the three subsets
-  zout[idx.xoff] = pkern_kprod(vx, vy.cross, zobs.indep, trans=TRUE)
-  zout[idx.yoff] = pkern_kprod(vx.cross, vy, zobs.indep, trans=TRUE)
-  zout[idx.off] = pkern_kprod(vx.cross, vy.cross, zobs.indep, trans=TRUE)
+  # compute predictions separately on the three subsets (third one is slowest by far)
+  zpred[ pc[['oj']] ] = pkern_kprod(pc[['vs']][['x']], pc[['vso']][['y']], zdata.mod, trans=T, sparse)
+  zpred[ pc[['oi']] ] = pkern_kprod(pc[['vso']][['x']], pc[['vs']][['y']], zdata.mod, trans=T, sparse)
+  zpred[ pc[['o']] ] = pkern_kprod(pc[['vso']][['x']], pc[['vso']][['y']], zdata.mod, trans=T, sparse)
 
   # finish
-  return(zout)
+  return(zpred)
 }
-
 
 #
 #' Simulate grid point values of a random field with separable covariance kernel
@@ -231,7 +295,7 @@ pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
 #' covariance kernel `pars` over the regular grid of size `dims`.
 #'
 #' Random vectors are generated by first drawing an iid normal vector of length
-#' `n = prod(dims)` (using `base::rnorm`), then taking its product with the covariance
+#' `n = prod(dims)` (using `base::stats::rnorm`), then taking its product with the covariance
 #' matrix square root (via eigendecompositions). The result is returned (invisibly)
 #' as a matrix.
 #'
@@ -257,7 +321,7 @@ pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
 #' numerically non-singular and allow simulation to proceed.
 #'
 #' @param pars a kernel parameters list ("k", "kp"), or list of two of them ("x", "y")
-#' @param dims integer vector c(nx, ny), the grid size
+#' @param gdim integer vector c(ny, nx), the grid size
 #' @param ds positive numeric or vector of two, the distance scaling factor(s)
 #' @param precompute logical or list, for caching computationally expensive operations
 #' @param makeplot logical, whether to plot the results
@@ -269,21 +333,24 @@ pkern_cmean = function(zobs, dims, pars, gxy, precompute=FALSE)
 #' # basic usage with Gaussian kernel and default settings
 #' pars = pkern_corr('gau')
 #' sim = pkern_sim(pars)
-#' str(sim)
-#' pkern_sim(pars, dims=c(1e2, 2e2))
+#' utils::str(sim)
+#'
+#' # bigger example
+#' gdim = c(ny=100, nx=50)
+#' pkern_sim(pars, gdim=gdim)
 #'
 #' # store eigendecompositions to speed up repeated simulations
-#' pre = pkern_sim(pars, dims=c(5e2, 5e2), precompute=TRUE, makeplot=FALSE)
-#' str(pre)
+#' pre = pkern_sim(pars, gdim, precompute=TRUE, makeplot=FALSE)
+#' utils::str(pre)
 #' pkern_sim(pars, precompute=pre)
 #'
-#' # example of numerically singular matrices triggering nugget effect
-#' pars = modifyList(pars, list(kp=1e2))
-#' pkern_sim(pars)
-pkern_sim = function(pars, dims=c(25,25), ds=1, precompute=FALSE, makeplot=TRUE)
+#' # resolution can be adjusted via `ds`
+#'  pkern_sim(pars, gdim, ds=c(1/4, 1/2))
+#' # in this example nugget effect is added to the numerically singular matrix
+pkern_sim = function(pars, gdim=c(25,25), ds=1, precompute=FALSE, makeplot=TRUE)
 {
   # if only one component kernel is supplied, use it for both x and y
-  if( all( c('k', 'kp') %in% names(pars) ) ) pars = list(x=pars, y=pars)
+  if( all( c('k', 'kp') %in% names(pars) ) ) pars = list(y=pars, x=pars)
 
   # assign distance scaling with `pars` overwriting anything in argument `ds`
   if( 'ds' %in% names(pars) ) ds = pars[['ds']]
@@ -299,21 +366,21 @@ pkern_sim = function(pars, dims=c(25,25), ds=1, precompute=FALSE, makeplot=TRUE)
     if( !is.list(precompute) ) stop('"precompute" must be a list')
 
     # unpack x and y component correlation matrices and their eigendecompositions
+    gdim = precompute[['gdim']]
     v = precompute[['v']]
     ed = precompute[['ed']]
-    dims = precompute[['dims']]
     ds = precompute[['ds']]
     precompute = FALSE
 
   } else {
 
     # build x and y component correlation matrices, compute their eigendecompositions
-    v = mapply(\(p, d, s) pkern_corrmat(p, d, s), p=pars[c('x', 'y')], d=dims, s=ds, SIMPLIFY=FALSE)
+    v = Map(\(p, d, s) pkern_corrmat(p, d, s), p=pars[c('y', 'x')], d=gdim, s=ds)
     ed = lapply(v, \(vmat) eigen(vmat, symmetric=TRUE))
   }
 
   # return the list of precomputed objects if requested
-  if( precompute ) return( list(v=v, ed=ed, dims=dims, ds=ds) )
+  if( precompute ) return( list(v=v, ed=ed, gdim=gdim, ds=ds) )
 
   # kronecker product trick to get pointwise variances
   pwv = pars[['nug']] + kronecker(ed[['x']][['values']], ed[['y']][['values']])
@@ -328,21 +395,21 @@ pkern_sim = function(pars, dims=c(25,25), ds=1, precompute=FALSE, makeplot=TRUE)
   }
 
   # generate independent standard normal data
-  z = rnorm( prod(dims) )
+  z = stats::rnorm( prod(gdim) )
 
   # equivalent to multiplying by full covariance matrix square root
-  z.ortho = sqrt(pwv) * pkern_kprod(ed[['x']][['vectors']], ed[['y']][['vectors']], z, trans=TRUE)
-  z.corr = pkern_kprod(ed[['x']][['vectors']], ed[['y']][['vectors']], z.ortho, trans=FALSE)
+  z.ortho = sqrt(pwv) * pkern_kprod(ed[['x']][['vectors']], ed[['y']][['vectors']], z, trans=TRUE, sparse=FALSE)
+  z.corr = pkern_kprod(ed[['x']][['vectors']], ed[['y']][['vectors']], z.ortho, trans=FALSE, sparse=FALSE)
 
   # reshape as matrix and draw plot if requested
-  z.corr.mat = matrix(z.corr, dims[2])
+  z.corr.mat = matrix(z.corr, gdim[1])
   if( makeplot )
   {
     if( pars[['nug']] == 0 ) pars[['nug']] = NULL
     titles = pkern_toString(pars)
     main = bquote('simulated'~.(titles[['main']])~'random field'~.(titles[['nug']]))
-    xy = mapply( \(d, s) c(1, s*seq(d)[-d]), d=dims, s=ds, SIMPLIFY=FALSE)
-    pkern_plot(z.corr.mat, xy=xy, ppars=list(main=main, sub=titles[['kp']]))
+    yx = Map(\(d, s) c(1, s*seq(d)[-d]), d=gdim, s=ds)
+    pkern_plot(z.corr.mat, gdim, ds=ds, ppars=list(main=main, sub=titles[['kp']]))
   }
 
   # finish, returning data matrix
@@ -351,73 +418,79 @@ pkern_sim = function(pars, dims=c(25,25), ds=1, precompute=FALSE, makeplot=TRUE)
 
 
 #
-#' Reduce the resolution of a regular grid by separable convolution
+#' Reduce the resolution of a regular grid
 #'
-#' Aggregates the data in `z` by convolving it with the separable spatial kernel
-#' defined by `pars`, producing a smaller output matrix containing every `afact`th
-#' grid line. ie. only the x grid lines numbered 1, afact[1], 2*afact[1], ... etc.
+#' Returns a subgrid of `z` containing every `afact`th grid line. ie. only the rows
+#' numbered `1`, `afact[1]`, `2*afact[1]`, .., and the columns numbered `1`, `afact[2]`,
+#' `2*afact[2]`, ... are returned. This is mainly intended for reducing the size of
+#' images before sending them to `graphics::image`.
 #'
-#' This is a heuristic algorithm intended for reducing the size of images before
-#' sending them to `graphics::image`.
+#' If `pars` is supplied, the function aggregates the data in `z` by convolving it
+#' with the separable spatial kernel defined by `pars`. This can produce nicer looking
+#' results than the default behaviour, and is also useful for revealing the locations of
+#' sparse NAs in very large grids (as NAs are propegated in the convolution).
 #'
-#' @param z either a numeric matrix with dimensions `dims`, or its column-vectorization
-#' @param dims integer vector c(nx, ny), the grid size
-#' @param afact integer or vector of two integers, the aggregation factors
-#' @param pars (optional) list of "x" and "y" kernel parameters
-#' @param tol numeric between 0 and 1, tolerance for NAs
+#' @param z either a numeric matrix with dimensions `gdim`, or its column-vectorization
+#' @param gdim integer vector c(ni, nj), the number of rows and columns in the grid
+#' @param afact integer or vector of two integers, the aggregation factors along rows and columns
+#' @param pars (optional) list of "y" and "x" kernel parameters or NA
 #' @param discrete logical, indicating to round output to nearest integer
 #'
-#' @return numeric matrix of dimensions `floor(dims/afact)`, the aggregated grid
+#' @return numeric matrix of dimensions `floor(gdim/afact)`, the aggregated grid
 #' @export
 #'
 #' @examples
-pkern_agg = function(z, dims=NULL, afact=2, pars=NULL, tol=0.05, discrete=FALSE)
+#' # TODO
+pkern_agg = function(z, gdim=NULL, afact=2, pars=NULL, discrete=FALSE)
 {
   # duplicate aggregation factor and set grid size as needed
   if( length(afact) == 1 ) afact = rep(afact, 2)
-  if( is.null(dims) ) dims = dim(z)
-  if( is.null(dims) ) stop('could not determine grid size. Check argument dims')
-
-  # set default kernel parameters as needed
-  xynm = c('x', 'y')
-  if( is.null(pars) ) pars = 'gau'
-  if( length(pars) == 1 | ( !all( xynm %in% names(pars) ) ) ) pars = setNames(rep(pars, 2), xynm)
-  pars = pkern_bds(pars)
-
-  # adjust range parameters to assign (effectively) zero weight outside afact neighbourhood
-  pars[['x']][['kp']][1] = pkern_rho(1e-32, pars[['x']], d=afact[1]/2)
-  pars[['y']][['kp']][1] = pkern_rho(1e-32, pars[['y']], d=afact[2]/2)
+  if( is.null(gdim) ) gdim = dim(z)
+  if( is.null(gdim) ) stop('could not determine grid size. Check argument gdim')
 
   # set up dimensions of new grid
-  ij = setNames(mapply( \(d, b) seq(1, d, b), d=rev(dims), b=afact, SIMPLIFY=FALSE), c('i', 'j'))
-  dims.sg = rev(sapply(ij, length))
+  ij = stats::setNames(mapply( \(d, b) seq(1, d, b), d=gdim, b=afact, SIMPLIFY=FALSE), c('i', 'j'))
+  sgdim = sapply(ij, length)
 
-  # set up neighbourhood weights matrices
-  X = Matrix::Matrix( pkern_corrmat(pars[['x']], dims[1], j=ij[['j']]) )
-  Y = Matrix::Matrix( pkern_corrmat(pars[['y']], dims[2], i=ij[['i']]) )
+  # set default kernel as needed
+  if( is.null(pars) ) pars = 'gau'
+  if( !anyNA(pars) )
+  {
+    # set default kernel parameters as needed
+    yxnm = c('y', 'x')
+    if( length(pars) == 1 | (!all(yxnm %in% names(pars))) ) pars = stats::setNames(rep(pars, 2), yxnm)
+    pars = pkern_bds(pars)
 
-  # compute normalization constants - set NAs wherever there is a division by zero
-  cx = 1 / Matrix::colSums(X)
-  cy = 1 / Matrix::rowSums(Y)
-  cx[is.infinite(cx)] = NA
-  cy[is.infinite(cy)] = NA
+    # adjust range parameters to assign (effectively) zero weight outside afact neighbourhood
+    neighb.range = mapply( \(p, d) pkern_rho(1e-32, p, d), p=pars[yxnm], d=afact/2)
+    pars[['y']][['kp']][1] = neighb.range[1]
+    pars[['x']][['kp']][1] = neighb.range[2]
 
-  # normalize convolution matrices - note that zero weight -> NA -> NA row
-  X = X %*% Matrix::Diagonal(dims.sg[1], cx)
-  Y = Matrix::Diagonal(dims.sg[2], cy) %*% Y
+    # set up neighbourhood weights matrices
+    Y = Matrix::Matrix( pkern_corrmat(pars[['y']], gdim[1], i=ij[['i']]) )
+    X = Matrix::Matrix( pkern_corrmat(pars[['x']], gdim[2], j=ij[['j']]) )
 
-  # # convolve with sparse indicator matrix of NAs
-  # miss = Matrix::Matrix(0L, dims[2], dims[1])
-  # miss[is.na(z)] = 1L
-  # missout = Y %*% miss %*% X
+    # compute normalization constants - set NAs wherever there is a division by zero
+    cx = 1 / Matrix::colSums(X)
+    cy = 1 / Matrix::rowSums(Y)
+    cx[is.infinite(cx)] = NA
+    cy[is.infinite(cy)] = NA
 
-  # convolve with data
-  zout = as.vector( Y %*% matrix(z, dims[2]) %*% X )
+    # normalize convolution matrices - note that zero weight -> NA -> NA row
+    Y = Matrix::Diagonal(sgdim[1], cy) %*% Y
+    X = X %*% Matrix::Diagonal(sgdim[2], cx)
 
-  # for discrete (integer-valued) data we want integer output
-  if(discrete) zout = round(zout)
+    # convolve with data
+    zout = as.vector( Y %*% matrix(z, gdim) %*% X )
 
-  # assign NA to any point where over 5% of its weight comes from NA source points
-  #zout[Matrix::which(missout > tol)] = NA
+    # for discrete (integer-valued) data we want integer output
+    if(discrete) zout = round(zout)
+
+  } else {
+
+    # when pars is NA we just do a regular sampling of the grid, a la `raster::plot`
+    zout = z[pkern_idx_sg(gdim, ij)]
+  }
+
   return( list(z=zout, ij=ij) )
 }

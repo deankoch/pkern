@@ -21,7 +21,7 @@ Plots the output of \code{pkern_vario} or \code{pkern_xvario}, optionally includ
 semivariogram values for a model specified in \code{pars} (eg the return value of \code{pkern_vario_fit}).
 }
 \details{
-\code{pars} should be a list containing named elements: "x" and "y", lists of x and y kernel
+\code{pars} should be a list containing named elements: "y" and "x", lists of y and x kernel
 parameters in form recognized by \code{pkern_corr}; "v", the pointwise variance in the absence
 of a nugget effect and, optionally, "nug", the variance of the nugget effect.
 
@@ -29,6 +29,18 @@ of a nugget effect and, optionally, "nug", the variance of the nugget effect.
 
 "title" character or vector of two, title(s) for the plot(s)
 "shade" logical, indicating to shade points according to the number of samples
-"seplim" length-2 numeric vector, the x limits for the scatterplot
+"dmax" positive numeric, upper limit for x in scatterplot
 "svlim" length-2 numeric vector, the y limits for the scatterplot
+}
+\examples{
+gdim = c(100, 50)
+pars = pkern_corr('gau') |> utils::modifyList(list(v=1))
+vec = pkern_sim(pars, gdim)
+
+# sample first 10 lags and plot
+vario = pkern_vario(gdim, vec, sep=seq(10))
+
+pkern_vario_plot(vario[['x']], pars)
+pkern_vario_plot(vario[['y']], pars)
+pkern_vario_plot(vario, pars)
 }

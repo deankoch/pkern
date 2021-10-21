@@ -4,21 +4,21 @@
 \alias{pkern_toRaster}
 \title{Convert column-vectorized grid to RasterLayer}
 \usage{
-pkern_toRaster(rvec = NULL, dims = NULL, template = NULL)
+pkern_toRaster(rvec = NULL, gdim = NULL, template = NULL)
 }
 \arguments{
 \item{rvec}{either the column-vectorized data or a list containing it (in element "values")}
 
-\item{dims}{c(nx, ny), the number of x and y grid lines in the full grid}
+\item{gdim}{c(ni, nj), the number rows and columns in the full grid}
 
 \item{template}{optional RasterLayer to use as template (for setting crs, resolution etc)
 
 Produces a RasterLayer from a vector or matrix. This essentially a wrapper for various
 \code{raster::raster} calls where the input data is in column-vectorized form.
 
-\code{rvec} can either be a matrix (in which case \code{dims} can be omitted) or its vectorized
+\code{rvec} can either be a matrix (in which case \code{gdim} can be omitted) or its vectorized
 equivalent, or a list containing elements returned by \code{pkern_fromRaster}. If the list
-as an element named "dims", it replaces any argument supplied to \code{dims}. Other elements
+has an element named "gdim", it replaces any argument supplied to \code{gdim}. Other elements
 of the list (eg 'crs') are passed on to the RasterLayer construction call as needed.
 
 When template is supplied, it supercedes any properties (eg 'crs') supplied in \code{rvec}.}
@@ -30,9 +30,10 @@ a RasterLayer containing the data from \code{rvec}
 Convert column-vectorized grid to RasterLayer
 }
 \examples{
-require(raster)
-r.in = system.file('external/rlogo.grd', package='raster') |> raster(band=1)
+if( requireNamespace('raster') ) {
+r.in = system.file('external/rlogo.grd', package='raster') |> raster::raster(band=1)
 pkern.in = pkern_fromRaster(r.in)
-pkern_toRaster(pkern.in)
-r.in
+print(pkern_toRaster(pkern.in))
+print(r.in)
+}
 }

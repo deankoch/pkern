@@ -4,27 +4,35 @@
 \alias{pkern_vec2mat}
 \title{Inverse column-vectorization indices}
 \usage{
-pkern_vec2mat(idx, ny)
+pkern_vec2mat(idx, ni, out = "matrix")
 }
 \arguments{
 \item{idx}{a vector of positive integers}
 
-\item{ny}{number of rows in the matrix}
+\item{ni}{number of rows in the matrix}
+
+\item{out}{either 'matrix' or 'list'}
 }
 \value{
-a two column matrix of integers (row and column numbers) with length(idx) rows
+a two column matrix of integers (row and column numbers) with \code{length(idx)} rows
 }
 \description{
-Column vectorization (as in base::as.vector) builds a length(mn) vector by stacking
-the columns of an m X n matrix. The (i,j)th element of the matrix is mapped to the
-\code{(i + ny*(j-1))}th element of the vector. This function is the inverse of that mapping.
-It finds the (i,j) associated with a given element after column-vectorization
+This function is for doing the inverse of \code{as.vector(amatrix)}. It returns the row and
+column numbers (i,j) associated with a given vector element after column-vectorization.
+}
+\details{
+If a grid size vector \code{c(ni, nj)} is passed to \code{ni}, the function uses its first element.
 }
 \examples{
-m = 5
-n = 6
-matrix.indexing = matrix(1:prod(m, n), m)
+
+# show how elements are ordered in `base::matrix`
+ni = 5
+nj = 6
+matrix.indexing = matrix(1:prod(ni, nj), ni)
+print(matrix.indexing)
 as.vector(matrix.indexing)
-pkern_vec2mat(2, m) # finds the matrix indices for the second component
-pkern_vec2mat(6:10, m) # the function is vectorized
+
+# doing the inverse
+pkern_vec2mat(2, ni)
+pkern_vec2mat(c(1,2,7), ni)
 }

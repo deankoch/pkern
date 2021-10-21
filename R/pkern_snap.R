@@ -4,6 +4,8 @@
 # Functions for snapping points to a grid
 #
 
+
+
 #' Plots a set of 1 or 2d points and their snapped versions
 #'
 #' The function plots the points in `pts` over the grid lines in `g`, with the option of
@@ -49,7 +51,7 @@
 #' # vector g (1d case)
 #' g = seq(1, 100, by=2)
 #' ng = length(g)
-#' pts = g + rnorm(ng)
+#' pts = g + stats::rnorm(ng)
 #' pkern_snap_plot(g, pts)
 #'
 #' # plot again with with default snapping (assumes g and pts have same order)
@@ -63,7 +65,7 @@
 #' sep = c(2, 3)
 #' g = Map(\(d, s) seq(1, d, by=s), d=gdim, s=sep)
 #' xy = expand.grid(g)
-#' pts = xy + rnorm(prod(dim(xy)))
+#' pts = xy + stats::rnorm(prod(dim(xy)))
 #' pkern_snap_plot(g, pts)
 #'
 #' # plot again with a mapping from pts to g
@@ -73,9 +75,10 @@
 pkern_snap_plot = function(g, pts=NULL, ppars=list())
 {
   # coerce various input types and set expected column order for 2d case
+  if( any(c('sf','sfc', 'sfg') %in% class(pts) ) ) pts = sf::st_coordinates(pts)[,2:1]
   if( is.data.frame(pts) ) pts = as.matrix(pts)
   if( is.matrix(pts) ) pts = apply(pts, 2, identity, simplify=FALSE)
-  yxnm = setNames(nm=c('y', 'x'))
+  yxnm = stats::setNames(nm=c('y', 'x'))
 
   # unpack g as list
   map = NULL
@@ -98,7 +101,7 @@ pkern_snap_plot = function(g, pts=NULL, ppars=list())
         # unpack mapping info and/or assign defaults
         is.1d = FALSE
         if( is.null(map) ) map = Map(\(p, s) match(p, s), p=expand.grid(g), s=g)
-        if( is.null(pts) ) pts = Map(\(s, i) p[i], s=g, i=map)
+        if( is.null(pts) ) pts = Map(\(s, i) s[i], s=g, i=map)
         if( any( sapply(map, length) != sapply(pts, length) ) ) stop(err.msg)
 
       } else {
@@ -113,7 +116,7 @@ pkern_snap_plot = function(g, pts=NULL, ppars=list())
   }
 
   # unpack plotting parameters and set defaults
-  gcol = ifelse( is.null(ppars[['gcol']] ), 'grey70', ppars[['gcol']])
+  gcol = ifelse( is.null(ppars[['gcol']] ), NA, ppars[['gcol']])
   mcol = ifelse( is.null(ppars[['mcol']] ), 'grey40', ppars[['mcol']])
   dcol = ifelse( is.null(ppars[['dcol']] ), 'black', ppars[['dcol']])
   pcol = ifelse( is.null(ppars[['pcol']] ), 'grey50', ppars[['pcol']])
@@ -132,19 +135,19 @@ pkern_snap_plot = function(g, pts=NULL, ppars=list())
     {
       # scatterplot of points and grid lines with connecting lines showing snap position
       plot(x=ilim, y=plim, xlab='input order', ylab='y coordinate', pch=NA)
-      abline(h=g, col=gcol)
-      abline(h=g[unique(map)], col=mcol)
-      if( !is.null(map) ) lapply(pseq, \(y) lines(x=rep(y,2), y=c(pts[y], g[map[y]]), col=dcol) )
-      points(pseq, pts, col=pcol)
+      graphics::abline(h=g, col=gcol)
+      graphics::abline(h=g[unique(map)], col=mcol)
+      if( !is.null(map) ) lapply(pseq, \(y) graphics::lines(x=rep(y,2), y=c(pts[y], g[map[y]]), col=dcol) )
+      graphics::points(pseq, pts, col=pcol)
 
     } else {
 
       # same as above but with arguments reversed (vertical grid lines)
       plot(x=plim, y=ilim, xlab='x coordinate', ylab='input order', pch=NA)
-      abline(v=g, col=gcol)
-      abline(v=g[unique(map)], col=mcol)
-      if( !is.null(map) ) lapply(pseq, \(x) lines(x=c(pts[x], g[map[x]]), y=rep(x,2), col=dcol) )
-      points(pts, pseq, col=pcol)
+      graphics::abline(v=g, col=gcol)
+      graphics::abline(v=g[unique(map)], col=mcol)
+      if( !is.null(map) ) lapply(pseq, \(x) graphics::lines(x=c(pts[x], g[map[x]]), y=rep(x,2), col=dcol) )
+      graphics::points(pts, pseq, col=pcol)
     }
 
     # finish
@@ -161,15 +164,177 @@ pkern_snap_plot = function(g, pts=NULL, ppars=list())
   plim = lapply(yxnm, \(d) range(g[[d]], pts[[d]]) )
 
   # create the plot, add grid lines
-  plot(plim, pch=NA, xlab='x', ylab='y')
-  abline(h=g[['y']], v=g[['x']], col=gcol)
-  abline(h=g[['y']][ unique(map[['y']]) ], v=g[['x']][ unique(map[['x']]) ], col=mcol)
+  plot(plim, pch=NA, xlab='x', ylab='y', asp=1)
+  graphics::abline(h=g[['y']], v=g[['x']], col=gcol)
+  graphics::abline(h=g[['y']][ unique(map[['y']]) ], v=g[['x']][ unique(map[['x']]) ], col=mcol)
 
   # add snapping vectors and finish
   yxvec = lapply(yxnm, \(d) lapply(pseq, \(i) c(pts[[d]][i], g[[d]][ map[[d]][i] ]) ) )
-  Map(\(x, y) lines(x=x, y=y, col=dcol), x=yxvec[['x']], y=yxvec[['y']])
-  points(pts, col=pcol)
+  Map(\(x, y) graphics::lines(x=x, y=y, col=dcol), x=yxvec[['x']], y=yxvec[['y']])
+  graphics::points(pts, col=pcol)
   return( invisible() )
+}
+
+# TODO: flesh out documentation and simplify output
+#' Snap an irregular set of 2d points to nearest regular subgrid
+#'
+#' Snaps points to a subgrid, either by calling `pkern_snap_1d` twice, or by using the
+#' hungarian algorithm on the 2d problem
+#'
+#' output list contains:
+#'  `gdim`, the input grid dimensions (ny, nx)
+#'  `sep`, the estimated spacing (number of grid lines between subgrid lines) for the subgrid
+#'  `drange`, the range of snapping distances overall (in same units as `g`)
+#'  `vec`, integer vector, the mapping from `pts` to `g` in vectorized order
+#'  `g`, list of integer vectors, dimension-wise coordinates of the grid lines
+#'  `map`, list of integer vectors, dimension-wise mapping from `pts` to `g`
+#'  `dist`, list of numeric vectors, dimension-wise snapping distances
+#'  `sg`, list with information about the subgrid:
+#'    `gdim`, the subgrid dimensions (ny, nx)
+#'    `g`, the subgrid lines (a subset of `g` in parent list)
+#'    `map`, dimension-wise mapping from `pts` to `sg$g`
+#'    `vec`, mapping from `pts` to `sg$g` in vectorized order
+#'
+#' @param g list of two vectors ("x" and "y"), the grid line coordinates (ascending order)
+#' @param pts list of two vectors ("x" and "y"), the 2d point coordinates (any order)
+#' @param sep integer vector, where `sep-1` is the number of grid lines between subgrid lines
+#' @param distinct logical, indicating to attempt a 1-to-1 mapping
+#' @param quiet logical indicating to suppress console messages
+#' @param bias nonegative numeric passed to `pkern_estimate_sep` (when `sep` not supplied)
+#'
+#' @return a list (see details)
+#' @export
+#'
+#' @examples
+#' # define a grid of coordinates and add jitter to a subgrid
+#' gdim = c(y=100, x=100)
+#' nsep = c(y=5, x=8)
+#' g = Map(\(p, s) seq(1, p, by=s), p=gdim, s=nsep)
+#' ng = prod(sapply(g, length))
+#' pts = expand.grid(g) + stats::rnorm(2*ng)
+#'
+#' # plot grid and the point set generated from it
+#' pkern_snap_plot(list(g=g), pts)
+#'
+#' # snap to grid lines, allowing duplicates
+#' snap = pkern_snap(g, pts, distinct=FALSE)
+#' pkern_snap_plot(snap, pts)
+#'
+#' # snap to grid lines, eliminate duplicates
+#' snap.distinct = pkern_snap(g, pts)
+#' pkern_snap_plot(snap.distinct, pts)
+#'
+#' # another example with and more jitter and too many points
+#' pts = expand.grid(g) + stats::rnorm(2*ng, sd=3)
+#' pts = pts[sample(ng, 50),]
+#' pkern_snap_plot(g, pts)
+#' snap = pkern_snap(g, pts, sep=3, distinct=FALSE)
+#' pkern_snap_plot(snap, pts)
+#'
+#' # uncomment this line to demonstrate error handling
+#' #snap.distinct = pkern_snap(g, pts, sep=3)
+#'
+#' # call again with smaller sep
+#' snap.distinct = pkern_snap(g, pts, sep=c(2,1))
+#' pkern_snap_plot(snap.distinct, pts)
+#'
+#' # call again with sep determined automatically
+#' snap.distinct = pkern_snap(g, pts)
+#' pkern_snap_plot(snap.distinct, pts)
+#'
+#' # `bias` tunes how many grid lines are assigned
+#' snap.distinct = pkern_snap(g, pts, bias=1)
+#' pkern_snap_plot(snap.distinct, pts)
+#'
+pkern_snap = function(g, pts, sep=NULL, distinct=TRUE, quiet=FALSE, bias=0)
+{
+  # handle various input grid types to get list of grid lines
+  if( 'RasterLayer' %in% class(g) ) g = pkern_fromRaster(g, 'yx')
+  if( !is.null( g[['yx']] ) ) g = g[['yx']]
+  if( !is.null( g[['g']] ) ) g = g[['g']]
+
+  # coerce various point input types and set expected column order
+  yxnm = stats::setNames(nm=c('y', 'x'))
+  if( any(c('sf','sfc', 'sfg') %in% class(pts) ) ) pts = sf::st_coordinates(pts)[,2:1]
+  if( is.data.frame(pts) ) pts = as.matrix(pts)
+  if( is.matrix(pts) ) pts = apply(pts, 2, identity, simplify=FALSE)
+  if( !all( yxnm %in% names(pts) ) ) names(pts)[1:2] = yxnm
+
+  # auto-detect sep or coerce as needed
+  if( is.null(sep) ) sep = Map(\(gl, p) pkern_estimate_sep(gl, p, distinct=FALSE, bias=bias), g, pts)
+  if( length(sep) == 1 ) sep = rep(sep, 2)
+  if( !all( yxnm %in% names(sep) ) ) names(sep)[1:2] = yxnm
+
+  # count grid lines and catch invalid requests
+  msg.unbalanced = 'More input points than grid points. Try distinct=FALSE and/or decrease sep'
+  ng = sapply(g, length)
+  npts = sapply(pts, length) |> unique()
+  if( length(npts) > 1 ) stop('y and x coordinate vectors not of equal length')
+  if( ( npts > prod(ng) ) & distinct ) stop(msg.unbalanced)
+
+  # separately process x and y dimensions with 1d snapper, reshape the output list
+  yxsnap = Map(\(yx, p, s) pkern_snap_1d(yx, p, s, distinct=F), yx=g, p=pts, s=sep)
+  snap = Map(\(y, x) stats::setNames(list(y, x), yxnm), yxsnap[['y']], yxsnap[['x']])
+
+  # to identify duplicates, convert y-x mapping to vectorized index of subgrid (y flipped)
+  map.vec = pkern_mat2vec(snap[['map']], prod(sapply(snap[['g']], length)))
+  is.distinct = !any( diff(sort(map.vec)) == 0 )
+
+  # handle requests for unique mapping when the dimension-wise snapping produced duplicates
+  if( distinct & !is.distinct )
+  {
+    syx.range = Map(\(m, s, gl) c(max(1, min(m)-s), min(max(m)+s, length(gl))), snap[['map']], sep, g)
+    syx = Map(\(m, s, r) as.numeric(seq(r[1], r[2], s)), snap[['map']], sep, syx.range)
+    syx.gdim = sapply(syx, length)
+    if( prod(syx.gdim) < npts ) stop(msg.unbalanced)
+
+    # find coordinates of grid lines, then of individual (column vectorized) grid points
+    yx = Map(\(gl, m) gl[m], g, syx)
+    yx.coords = pkern_coords(yx, out='list', nosort=TRUE, quiet=TRUE)
+
+    # find (x and y component) squared distances between subgrid points and input pts
+    yx.sqdist.list = Map(\(gl, p) Rfast::Outer(gl, p, '-')^2, yx.coords, pts)
+
+    # find optimal mapping by Hungarian algorithm
+    result.hungarian = RcppHungarian::HungarianSolver(Reduce('+', yx.sqdist.list))
+    map = result.hungarian[['pairs']][, 2]
+
+    # extract dimension-wise mapping and overwrite values in snap
+    snap[['g']] = yx
+    snap[['map']] = pkern_vec2mat(map, syx.gdim, out='list') |> stats::setNames(yxnm)
+
+    # recompute dimension-wise snapping distances
+    snap[['dist']] = Map(\(gl, m, p) abs( p - gl[m] ), gl=snap[['g']], m=snap[['map']], p=pts)
+  }
+
+  # add some summary info to output list
+  snap[['gdim']] = ng
+  snap[['drange']] = range( Reduce('+', snap[['dist']]) )
+
+  # compute separation distance
+  snap[['sep']] = stats::setNames(sep, yxnm)
+
+  # add a sublist with info about the subgrid
+  snap[['sg']] = list()
+  snap[['sg']][['g']] = Map(\(m, gl) sort(unique(gl[m])), snap[['map']], snap[['g']])
+  snap[['sg']][['gdim']] = sapply(snap[['sg']][['g']], length)
+  snap[['sg']][['map']] = Map(\(gl, m, sgl) match(gl[m], sgl),
+                              gl=snap[['g']],
+                              m=snap[['map']],
+                              sgl=snap[['sg']][['g']])
+
+  # add mapping to vectorized form of full grid
+  gmap.flipy = snap[['map']]
+  gmap.flipy[['y']] = ng[1] - gmap.flipy[['y']] + 1
+  snap[['vec']] = pkern_mat2vec(gmap.flipy, ng)
+
+  # ... and of subgrid
+  sgmap.flipy = snap[['sg']][['map']]
+  sgmap.flipy[['y']] = snap[['sg']][['gdim']][1] - sgmap.flipy[['y']] + 1
+  snap[['sg']][['vec']] = pkern_mat2vec(sgmap.flipy, snap[['sg']][['gdim']])
+
+  # reorder output in return
+  return(snap[c('gdim', 'sep', 'drange', 'vec', 'g', 'map', 'dist', 'sg')])
 }
 
 
@@ -180,40 +345,29 @@ pkern_snap_plot = function(g, pts=NULL, ppars=list())
 #' that every `sep`th grid point in `g` belongs to the subgrid.
 #'
 #' The function returns a list containing:
-#'  `g` vector of grid line locations
+#'  `g` vector of grid line coordinates
 #'  `map` output mapping vector, of same length as `pts` but with values in `seq(g)`
-#'  `dupe` vector of all elements of "map" that appear more than once
-#'  `empty` vector of values in "g" which are mapped by no element of "map"
 #'  `dist` vector of squared snapping distances (corresponding to `pts`)
 #'
-#' The output mapping (`map`) is selected by least sum of squared snapping distances
-#' (SSSD), where the snapping distance for the `i`th point is `abs( pts[i] - g[map[i]] )`.
+#' The output mapping (`map`) is selected by least total cost (sum over all input points),
+#' where the cost of a point is equal to the squared distance between the point and its
+#' snapped (on-grid) location.
 #'
-#' Note that there are `sep` possible alignments for the subgrid - eg with `sep=2`, the
-#' subgrid could begin at `g[1]`, or at `g[2]`. The function checks all options by brute
-#' force, returning the one that yields least SSSD.
+#' To align the subgrid, the function calculates the cost of each possible offset and
+#' selects the least cost option. eg. if `sep=2`, the least coordinate in the subgrid
+#' can be set to `g[1]` (offset 0) or `g[2]` (offset 1). In general there are `sep`
+#' possible offsets, which are all tested in a loop.
 #'
-#' When `distinct==TRUE`, the function first snaps by least distance, then reassigns
-#' duplicate mappings (where a grid point in `g` is mapped to more than one point in `pts`)
-#' using the following heuristic algorithm:
-#'
-#' 1) identify all duplicates in `map` and for each compute distances to nearest empty `g`
-#' 2) select the least distance `dupe`, `empty` pair (or, in case of ties, the first)
-#' 3) shift all mappings between `dupe` and `empty`, towards `empty` (see `pkern_shift`)
-#' 4) if `map` still contains at least one duplicate and one empty grid point, go to (1)
-#'
-#' The function then returns the mapping with least SSSD among those with no duplicate
-#' mappings remaining. Note that when `length(g)/sep < length(pts)`, all mappings will have
-#' at least one duplicate (the algorithm will terminate when it runs out of empty grid
-#' points), so the function then returns the best SSSD solution among those with the
-#' least number of duplicates.
+#' When `distinct==TRUE`, the function calls an implementation of the Hungarian algorithm
+#' (from R package `RcppHungarian`) to find an optimal assignment. Note that this can be
+#' slow for large grids or large numbers of points.
 #'
 #' @param g vector of grid line locations in ascending order
 #' @param pts vector of point locations in 1D
 #' @param sep integer, where `sep-1` is the number of grid lines between subgrid lines
 #' @param distinct logical, indicating to attempt a 1-to-1 mapping
 #'
-#' @return list with elements "g", "map", "dupe", "empty", and "dist" (see below)
+#' @return list with elements "g", "map", and "dist" (see below)
 #' @export
 #'
 #' @examples
@@ -225,7 +379,7 @@ pkern_snap_plot = function(g, pts=NULL, ppars=list())
 #'
 #' # sample part of the subgrid and add noise
 #' npts = round( (3/4) * length(sg) )
-#' pts = sort(sample(sg, npts)) + rnorm(npts)
+#' pts = sort(sample(sg, npts)) + stats::rnorm(npts)
 #' pkern_snap_plot(g, pts)
 #'
 #' # snap to subgrid and plot result
@@ -247,362 +401,180 @@ pkern_snap_1d = function(g, pts, sep=1, distinct=TRUE)
   g = as.numeric(g)
   ng = length(g)
   npts = length(pts)
-  if( length(g) == 1 ) return( rep(1, npts) )
-
-  # establish mapping to and from ascending order and sort `pts`
-  idx.order = order(pts)
-  idx.unorder = match(seq_along(pts), idx.order)
-  pts = pts[idx.order]
+  if( length(g) == 1 )  return(g=g, map=rep(1, npts), dist=g[[1]]-pts)
 
   # list of candidate subgrid lines, one for each possible origin (grid line numbers)
   sg.list = lapply(seq(sep), function(x) seq(x, length(g), by=sep))
   sg.n = sapply(sg.list, length)
 
-  # find cross-distance matrices for pts vs subgrid lines and minimum distance mapping
-  dmat.list = lapply(sg.list, \(i) abs(Rfast::Outer(pts, g[i], '-'))^2 )
-  map.dmin = lapply(dmat.list, \(d) apply(d, 2, which.min) )
+  # find cross-distance matrices for pts vs subgrid lines
+  dmat.list = lapply(sg.list, \(i) abs(Rfast::Outer(g[i], pts, '-'))^2 )
 
-  # for each mapping, identify empty and duplicate elements (by grid line number)
-  map.initial = Map(\(m, sg) list(map=m, g=sg), m=map.dmin, sg=sg.list)
-  table.initial = lapply(map.initial, \(map) pkern_shift(map, shift=FALSE))
-
-  # identify candidates with duplicates and those that can be remedied
-  is.dupe = sapply(table.initial, \(ini) length(ini[['dupe']]) > 0)
-
-  # remap duplicate mappings to empty grid lines, if requested
-  table.final = table.initial
-  if( distinct & any(is.dupe) )
-  {
-    # loop over fixable grids
-    for( idx.sg in which(is.dupe) )
-    {
-      can.shift = TRUE
-      while( can.shift )
-      {
-        # unpack mapping table and coerce to numeric (class required by Rfast)
-        map = table.final[[idx.sg]][['map']]
-        empty = as.numeric( table.final[[idx.sg]][['empty']] )
-        dupe = as.numeric( table.final[[idx.sg]][['dupe']] )
-
-        # a shift is always possible if there is at least one empty and one duplicate
-        can.shift = ( length(empty) * length(dupe) ) > 0
-        if( can.shift )
-        {
-          # identify nearest empty cell to shift towards
-          empty.tofill = empty[ apply(abs(Rfast::Outer(dupe, empty, '-')), 2, which.min) ]
-          dupe.tofix = dupe[ which.min( abs( dupe - empty.tofill ) ) ]
-
-          # perform the shift and overwrite mapping in table list
-          table.final[[idx.sg]] = pkern_shift(map, g=sg.list[[idx.sg]], dupe.tofix)
-        }
-      }
-    }
-  }
-
-  # extract the squared snapping distances for each mapping
-  map.list = lapply(table.final, \(tab) tab[['map']])
-  dfinal = Map(\(m, d) sapply(seq_along(m), \(j) d[m[j],j]), m=map.list, d=dmat.list)
-
-  # compute sums of squared snap distance for each candidate
-  ssfinal = sapply(dfinal, sum)
-
-  # find minimum number of duplicates among the candidates
-  ndupe = sapply(table.final, \(tab) length( tab[['dupe']] ))
-  is.mindupe = ndupe == min(ndupe)
-
-  # extract the candidate subgrid with minimum total distance
-  if( distinct ) ssfinal[ which(!is.mindupe) ] = Inf
-  idx.best = which.min(ssfinal)
-  table.best = table.final[[ idx.best ]]
-
-  # find its mapping to `g`, then reorder this mapping to match input `pts` order
-  map.sorted = sg.list[[idx.best]][ table.best[['map']] ]
-  table.best[['map']] = table.best[['map']][ idx.unorder ]
-
-  # replace grid line numbers with grid line coordinates
-  table.best[['g']] = g[ table.best[['g']] ]
-  table.best[['dupe']] = g[ table.best[['dupe']] ]
-  table.best[['empty']] = g[ table.best[['empty']] ]
-
-  # add squared snapping distance vector
-  table.best[['dist']] = dfinal[[idx.best]][ idx.unorder ]
-
-  # reorder this mapping to match input `pts` order
-  return( table.best )
-}
-
-
-#' Snap an irregular set of 2d points to nearest regular subgrid
-#'
-#' @param g list of two vectors ("x" and "y") of grid line locations, in ascending order
-#' @param pts list of two vectors ("x" and "y"), the 2d point coordinates
-#' @param sep integer vector, where `sep-1` is the number of grid lines between subgrid lines
-#' @param distinct logical, indicating to attempt a 1-to-1 mapping
-#'
-#' @return
-#' @export
-#'
-#' @examples
-#' # define a grid of coordinates and add jitter to a subgrid
-#' gdim = c(100, 100)
-#' ds = c(5, 5)
-#' g = Map(\(p, s) seq(1, p, by=s), p=gdim, s=ds)
-#' ng = prod(sapply(g, length))
-#' pts = expand.grid(g) + rnorm(2*ng)
-#'
-#' # plot grid and the point set generated from it
-#' pkern_snap_plot(list(g=g), pts)
-#'
-#' # snap to grid lines, allowing duplicates
-#' snap = pkern_snap_2d(g, pts, distinct=FALSE)
-#' pkern_snap_plot(snap, pts)
-#'
-#' # snap to grid lines, eliminate duplicates
-#' snap.distinct = pkern_snap_2d(g, pts)
-#' pkern_snap_plot(snap.distinct, pts)
-#'
-#' # another example with a sparse set of points and more jitter
-#' pts = expand.grid(g) + rnorm(2*ng, sd=3)
-#' pts = pts[sample(ng, 50),]
-#' pkern_snap_plot(g, pts)
-#' snap = pkern_snap_2d(g, pts, sep=3, distinct=FALSE)
-#' pkern_snap_plot(snap, pts)
-#'
-#' # attempt to get distinct mapping
-#' snap.distinct = pkern_snap_2d(g, pts, sep=3, distinct=TRUE)
-#' pkern_snap_plot(snap.distinct, pts)
-#'
-#'
-pkern_snap_2d = function(g, pts, sep=1, distinct=TRUE, quiet=FALSE)
-{
-  # coerce various input types and set expected column order for 2d case
-  if( length(sep) == 1 ) sep = rep(sep, 2)
-  if( is.data.frame(pts) ) pts = as.matrix(pts)
-  if( is.matrix(pts) ) pts = apply(pts, 2, identity, simplify=FALSE)
-  yxnm = setNames(nm=c('y', 'x'))
-  if( !all( yxnm %in% names(pts) ) ) names(pts)[1:2] = yxnm
-  if( !all( yxnm %in% names(sep) ) ) names(sep)[1:2] = yxnm
-
-  # separately process x and y dimensions with 1d snapper and reshape output list
-  yxsnap = Map(\(yx, p, s) pkern_snap_1d(yx, p, s, distinct=F), yx=g, p=pts, s=sep)
-  snap = Map(\(y, x) setNames(list(y, x), yxnm), yxsnap[[1]], yxsnap[[2]])
-
-  # subgrid dimensions (with separation sep)
-  gdim = sapply(snap[['g']], length)
-  ng = prod(gdim)
-
-  # run 1d snapper again along rows and columns with distinct==TRUE
+  # allow duplication in mapping or not?
   if( distinct )
   {
-    # count empties and duplicates to establish progress bar
-    if( !quiet )
-    {
-      map.vec = pkern_mat2vec2(snap[['map']], gdim)
-      empty.vec = which( !( seq(ng) %in% map.vec ) )
-      table.vec = Rfast::Table(map.vec, names=TRUE)
-      dupe.vec = as.integer( names(table.vec[table.vec > 1]) )
-      ndupe = length(dupe.vec)
-      nprocess = max(ndupe, ndupe - length(empty.vec))
-      cat( paste('\nprocessing', nprocess, 'duplicated snapping points\n') )
-      pb = txtProgressBar(max=nprocess, style=3)
-    }
+    # without duplication: Hungarian algorithm solves the unbalanced assignment problem
+    result.hungarian = lapply(dmat.list, RcppHungarian::HungarianSolver)
+    map.dmin = lapply(result.hungarian, \(m) m[['pairs']][, 2])
 
-    # iteratively swap mappings to move points to empty grid cells
-    has.empty = has.dupe = TRUE
-    while( has.empty & has.dupe )
-    {
-      # identify duplicate and empty grid points from vectorized indices
-      map.vec = pkern_mat2vec2(snap[['map']], gdim)
-      empty.vec = which( !( seq(ng) %in% map.vec ) )
-      table.vec = Rfast::Table(map.vec, names=TRUE)
-      dupe.vec = as.integer( names(table.vec[table.vec > 1]) )
-      has.empty = length(empty.vec) > 0
-      has.dupe = length(dupe.vec) > 0
-      if( !has.empty | !has.dupe ) break()
+    # replace 0's (unassigned) with NA
+    for(i in seq_along(map.dmin) ) { map.dmin[[i]][ map.dmin[[i]] == 0 ] = NA }
 
-      # update progress bar
-      if( !quiet )
-      {
-        idx.progress = nprocess - max(length(dupe.vec), length(dupe.vec) - length(empty.vec))
-        setTxtProgressBar(pb, idx.progress)
-      }
+  } else {
 
-      # identify the input point having worst snapping distance to a duplicate
-      idx.dupe = which( map.vec %in% dupe.vec )
-      idx.worst = idx.dupe[ which.max( Reduce('+', snap[['dist']])[idx.dupe] ) ]
-
-      #points(pts[[2]][idx.worst], pts[[1]][idx.worst], col='red', pch=16)
-
-      # identify all duplicates in this set
-      idx.candidate = which( map.vec %in% map.vec[idx.dupe] )
-
-      # find coordinates of empty grid points and their distances to this set
-      yx.empty = Map(\(p, e) p[e], p=snap[['g']], e=pkern_vec2mat2(empty.vec, gdim, out='list'))
-      dworst = Reduce('+', Map(\(p, e) Rfast::Outer(p[idx.candidate], e, '-')^2, p=pts, e=yx.empty))
-
-      # identify the least distance and the empty/duplicate pair it corresponds to
-      idx.pair = pkern_vec2mat2(which.min(dworst), length(empty.vec))
-      idx.mod = idx.candidate[ idx.pair[2] ]
-      idx.empty = idx.pair[1]
-
-      #points(pts[[2]][idx.mod], pts[[1]][idx.mod], col='red', pch=16)
-      #points(yx.empty[[2]][idx.empty], yx.empty[[1]][idx.empty], col='blue', pch=4)
-
-      # find the shift direction and length (with respect to current mapping)
-      dshift = Map(\(gp, m, e) e[idx.empty] - gp[m[idx.mod]], snap[['g']], snap[['map']], yx.empty)
-      idx.dim = which.max( abs(unlist(dshift)) )
-      int.shift = ( 2 * as.integer( dshift[[idx.dim]] > 0 ) ) - 1
-
-      # update the mapping and the squared distance
-      snap[['map']][[idx.dim]][idx.mod] = snap[['map']][[idx.dim]][idx.mod] + int.shift
-      dist.new = Map(\(p, gp, m) (p[idx.mod] - gp[m[idx.mod]])^2, pts, snap[['g']], snap[['map']])
-      snap[['dist']][[idx.dim]][idx.mod] = dist.new[[idx.dim]]
-    }
-
-    # print 100% progress once finished
-    if( !quiet ) setTxtProgressBar(pb, nprocess)
-
+    # with duplication: snap to nearest grid line
+    map.dmin = lapply(dmat.list, \(d) apply(d, 1, which.min) )
   }
-  return(snap)
+
+  # extract squared snapping distances for each point, total score for each candidate
+  dsnap = Map(\(d, m) sapply(seq_along(m), \(j) d[j, m[j]]), d=dmat.list, m=map.dmin)
+  dtotal = sapply(dsnap, \(d) sum(d, na.rm=TRUE))
+
+  # find number of unassigned points and identify candidates having the fewest...
+  norphan = sapply(map.dmin, \(m) sum(is.na(m)))
+  is.fewest = norphan == min(norphan)
+
+  # ...other candidates are scored so they never get selected
+  if( distinct ) dtotal[ which(!is.fewest) ] = Inf
+
+  # identify the eligible candidate subgrid with minimum total distance
+  idx.best = which.min(dtotal)
+
+  # find its mapping to `g`
+  maptog = sg.list[[ idx.best ]][ map.dmin[[idx.best]] ]
+
+  # return in list
+  return( list(g=g, map=maptog, dist=sqrt(dsnap[[ idx.best ]])) )
+
 }
 
 
-#' Shift operation for discrete mapping (helper for `pkern_snap_1d`)
+
+#' Estimate separation distance between grid lines
 #'
-#' This function identifies the unassigned integer in `g` (ie not appearing in `map`)
-#' that is closest to the element `dupe` in `g[map]`. All mappings between this element
-#' (call it `empty`) and `dupe` are then incremented towards `empty`.
+#' Estimates the subgrid resolution best matching an irregular set of points.
+#' Helper function for `pkern_snap_1d`
+#' TODO: flesh out documentation here and tidy inner loop in code
 #'
-#' When `dupe` appears more than once in `g[map]`, the effect of the function is to
-#' replace all but one of the duplicate mappings by shifting them - and any intervening
-#' mappings - towards the nearest empty grid point number in `g`. This reassignment
-#' results in exactly one point mapping to `empty`, and it eliminates `dupe` as a
-#' duplicate.
+#' @param g vector of grid line locations in ascending order
+#' @param pts vector of point locations in 1D
+#' @param distinct logical, indicating to look for 1-to-1 mappings
+#' @param bias nonegative numeric, a tuning parameter
+#' @param dlim length-2 positive numeric, lower/upper bounds for separation distance
 #'
-#' The function returns a list with elements:
-#'
-#'  "map", the new mapping vector (of same length as `map`)
-#'  "g", grid line numbers for the outer grid (same as input `g`, if provided)
-#'  "empty", the new indices of "g" values not appearing in "map"
-#'  "dupe", the new duplicate "map" values (if any)
-#'
-#' Note that when `dupe` appears > 2 times in `map`, this operation generates a new,
-#' smaller duplicate set in the output map with value `dupe +/- 1`. Since the net effect
-#' is to reduce the number of duplicates by 1, the function can be run recursively to
-#' eliminate all duplicates, provided that `length(map) < length(g)`
-#'
-#' For convenience, arguments `map`, `g`, and `dupe` can be passed together as a list
-#' to the function's first argument `map`. If `g` is missing it is set to the integer
-#' sequence from 1 to `max(map)`, and if `dupe` is missing it is set to the first
-#' duplicate element in `map`.
-#'
-#' @param map integer vector, an indexing of `g`
-#' @param g numeric vector, grid line numbers in ascending order
-#' @param dupe integer, the duplicate `x[map]` value to amend
-#' @param shift logical, if FALSE, the function returns info about input mapping `map`
-#'
-#' @return list with elements "map", "g", "empty", "dupe"
+#' @return the estimated value of `sep`
 #' @export
 #'
 #' @examples
+#' sep = 25
+#' ng = 10*sep
+#' g = seq(ng)
+#' sg = seq(sample(sep, 1), ng, by=sep)
 #'
-#' # create a mapping that contains at least one duplicate
-#' g = seq(1, 20, by=2)
-#' pts = sample(g, 11, replace=TRUE) |> sort()
-#' map = match(pts, g)
-#' pkern_snap_plot(list(g=g, map=map))
+#' # sample part of the subgrid and add noise
+#' npts = round( (3/4) * length(sg) )
+#' pts = sort(sample(sg, npts)) + stats::rnorm(npts)
+#' pkern_snap_plot(g, pts)
 #'
-#' # extract info about duplication
-#' result0 = pkern_shift(map, g, shift=FALSE)
-#' print(result0)
+#' # estimate separation and plot result
+#' sep = pkern_estimate_sep(g, pts)
+#' sep
+#' snap = pkern_snap_1d(g, pts, sep)
+#' pkern_snap_plot(snap, pts)
 #'
-#' # apply the shift operation twice
-#' result1 = pkern_shift(result0)
-#' result2 = pkern_shift(result1)
+#' # add duplication
+#' ndupe = 10
+#' pts = sapply(pts, \(p) p + stats::rnorm(ndupe)) |> c()
 #'
-#' # plot the reassignment done at each stage
-#' par(mfrow=c(2,1))
-#' pkern_snap_plot(list(g=g, map=result1$map), g[map])
-#' pkern_snap_plot(list(g=g, map=result2$map), g[result1$map])
-#' par(mfrow=c(1,1))
+#' # fit again
+#' pkern_snap_plot(g, pts)
+#' sep = pkern_estimate_sep(g, pts, distinct=FALSE)
+#' sep
+#' snap = pkern_snap_1d(g, pts, sep=sep, distinct=FALSE)
+#' pkern_snap_plot(snap, pts)
 #'
-#' # run the algorithm until there are no more empty slots
-#' result = result0
-#' while( ( length( result$empty ) > 0 ) & ( length( result$dupe ) > 0 ) ) {
-#' result = pkern_shift(result)
-#' }
-#'
-#' # plot the result
-#' par(mfrow=c(3,1))
-#' pkern_snap_plot(list(g=g, map=map))
-#' pkern_snap_plot(result, g[map])
-#' pkern_snap_plot(result, g[result$map])
-#' par(mfrow=c(1,1))
-pkern_shift = function(map, g=NULL, dupe=NULL, shift=TRUE)
+pkern_estimate_sep = function(g, pts, distinct=TRUE, bias=0, dlim=NULL)
 {
-  # unpack list input
-  if( is.list(map) )
+  # snap the points at finest detail level `(sep=1`) and sort the mapping
+  snap.result = pkern_snap_1d(g, pts, sep=1, distinct=FALSE)
+  map.order = order(snap.result[['map']])
+  map = snap.result[['map']][map.order]
+  dist = snap.result[['dist']][map.order]
+
+  # find differences between adjacent mappings
+  nmap = length(map)
+  dmap = diff(map)
+
+  # 2-means clustering
+  if( nmap > 3 )
   {
-    g = map[['g']]
-    dupe = map[['dupe']]
-    map = map[['map']]
+    # identify the cluster representing among-grid-line differences
+    gcl = stats::kmeans(dmap, 2, nstart=100)
+    idx.cl = gcl[['cluster']] == which.max(gcl[['centers']])
+    if(distinct) idx.cl = !idx.cl
+
+    # find grid resolution and set default bounds for distance as needed
+    gres = diff(g[1:2])
+    if(is.null(dlim))
+    {
+      # guess distance limits based on input points - these won't be appropriate in every situation
+      if(distinct) dlim = min(stats::dist(pts)) * c(1, 2)
+      if(!distinct) dlim = range(dmap[idx.cl]) * gres
+    }
+
+    # find grid resolution and convert dlim to (integer) separation range to test
+    seplim = pmax(round(dlim/gres), 1)
+    if(distinct) seplim[2] = min(seplim[2], ceiling(length(g)/nmap))
+    septest = seq(seplim[1], seplim[2])
+
+    # identify the best separation
+    idx.best = 1
+    if(length(septest) > 1)
+    {
+      # express pointwise differences mod sep, compute score allowing some noise around sep
+      mapmod = lapply(septest, \(s) dmap[idx.cl] %% s )
+
+
+     # septest |> head()
+      #mapmod |> head()
+     # Map(\(m, s) pmin(m, abs(m-s)), m=mapmod, s=septest) |> head()
+
+
+      mapmod2 = Map(\(m, s) pmin(m, abs(m-s)), m=mapmod, s=septest)
+      mapcost = sapply(mapmod2, stats::mad)
+
+
+
+
+      #mapcost = mapply(\(m, s)  stats::median( pmin(m, abs(m-s)) ), m=mapmod, s=septest)
+
+      #mapcost = lapply(mapmod, stats::median)
+
+
+      # bias adjustment to favour sparser grids
+      if( bias > 0 ) mapcost = mapcost * ( (septest-1)^(-bias^2) )
+
+
+      #plot(septest, mapcost, pch=NA)
+      #lines(septest, mapcost)
+      #abline(v= septest[which.min(mapcost)], col='red')
+
+
+
+      idx.best = which.min(mapcost)
+    }
+
+    # select the minimum cost option
+    dsep = septest[idx.best]
+
+  } else {
+
+    # rounded median separation (used for nmap <= 3)
+    dsep = stats::median(dmap) |> round() |> max(1)
+
   }
 
-  # set defaults as needed (if dupe is a vector, use its first element)
-  if( is.null(g) ) g = seq( max(map) )
-  if( is.null(dupe) ) dupe = g[ as.integer( names(table(map))[ which.max(table(map)) ] ) ]
-  if( length(dupe) > 1 ) dupe = dupe[1]
-
-  # find empty grid points
-  empty = g[ which( !( seq_along(g) %in% map ) ) ]
-
-  # general sanity check
-  if( !all( map %in% seq_along(g) ) ) stop('at least one element of map not found in g')
-
-  # sanity checks for shift (note that dupe is ignored when shift=FALSE)
-  if( shift )
-  {
-    if( length(empty) == 0 ) stop('all of g is already mapped in map')
-    if( length(dupe) == 0 ) stop('no duplicates in map')
-    if( !( dupe %in% g[map] ) ) stop('dupe was not found in map')
-  }
-
-  # overwrite `map` in ascending order but save inverse ordering
-  idx.order = order(map)
-  idx.unorder = match(seq_along(map), idx.order)
-  map = map[idx.order]
-
-  # apply shift operation if requested
-  if( shift )
-  {
-    # size of the duplicate set
-    n.dupe = sum(g[map]==dupe)
-
-    # identify empty cell to shift towards, and shift direction
-    empty.tofill = empty[ which.min( abs(dupe - empty) ) ]
-    int.shift = (2 * as.integer(dupe < empty.tofill) ) - 1
-
-    # identify set of points to modify in `map` and their indices
-    toshift = dupe:(empty.tofill-int.shift)
-    idx.toshift = which(g[map] %in% toshift)
-
-    # select one of the duplicate mappings to remain unchanged
-    idx.keep = match(dupe, g[map]) + as.integer( int.shift < 0 ) * (n.dupe - 1)
-    idx.toshift = idx.toshift[ idx.toshift != idx.keep ]
-
-    # shift the indices
-    map[idx.toshift] = map[idx.toshift] + int.shift
-
-  }
-
-  # compute output vectors
-  list.out = list(g = g,
-                  map = map[idx.unorder],
-                  dupe = unique( g[ map[ which( diff(map) == 0 ) ] ] ),
-                  empty = g[ which( !( seq_along(g) %in% map ) ) ] )
-
-  # finish
-  return(list.out)
+  return(dsep)
 }
 
 

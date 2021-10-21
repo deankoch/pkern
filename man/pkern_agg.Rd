@@ -2,32 +2,36 @@
 % Please edit documentation in R/pkern_computation.R
 \name{pkern_agg}
 \alias{pkern_agg}
-\title{Reduce the resolution of a regular grid by separable convolution}
+\title{Reduce the resolution of a regular grid}
 \usage{
-pkern_agg(z, dims = NULL, afact = 2, pars = NULL, tol = 0.05, discrete = FALSE)
+pkern_agg(z, gdim = NULL, afact = 2, pars = NULL, discrete = FALSE)
 }
 \arguments{
-\item{z}{either a numeric matrix with dimensions \code{dims}, or its column-vectorization}
+\item{z}{either a numeric matrix with dimensions \code{gdim}, or its column-vectorization}
 
-\item{dims}{integer vector c(nx, ny), the grid size}
+\item{gdim}{integer vector c(ni, nj), the number of rows and columns in the grid}
 
-\item{afact}{integer or vector of two integers, the aggregation factors}
+\item{afact}{integer or vector of two integers, the aggregation factors along rows and columns}
 
-\item{pars}{(optional) list of "x" and "y" kernel parameters}
-
-\item{tol}{numeric between 0 and 1, tolerance for NAs}
+\item{pars}{(optional) list of "y" and "x" kernel parameters or NA}
 
 \item{discrete}{logical, indicating to round output to nearest integer}
 }
 \value{
-numeric matrix of dimensions \code{floor(dims/afact)}, the aggregated grid
+numeric matrix of dimensions \code{floor(gdim/afact)}, the aggregated grid
 }
 \description{
-Aggregates the data in \code{z} by convolving it with the separable spatial kernel
-defined by \code{pars}, producing a smaller output matrix containing every \code{afact}th
-grid line. ie. only the x grid lines numbered 1, afact\link{1}, 2*afact\link{1}, ... etc.
+Returns a subgrid of \code{z} containing every \code{afact}th grid line. ie. only the rows
+numbered \code{1}, \code{afact[1]}, \code{2*afact[1]}, .., and the columns numbered \code{1}, \code{afact[2]},
+\code{2*afact[2]}, ... are returned. This is mainly intended for reducing the size of
+images before sending them to \code{graphics::image}.
 }
 \details{
-This is a heuristic algorithm intended for reducing the size of images before
-sending them to \code{graphics::image}.
+If \code{pars} is supplied, the function aggregates the data in \code{z} by convolving it
+with the separable spatial kernel defined by \code{pars}. This can produce nicer looking
+results than the default behaviour, and is also useful for revealing the locations of
+sparse NAs in very large grids (as NAs are propegated in the convolution).
+}
+\examples{
+# TODO
 }

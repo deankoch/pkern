@@ -2,14 +2,14 @@
 % Please edit documentation in R/pkern_covariance.R
 \name{pkern_bds}
 \alias{pkern_bds}
-\title{Suggest bounds for parameters of x and y component kernels for a grid model}
+\title{Suggest bounds for parameters of y and x component kernels for a separable grid model}
 \usage{
 pkern_bds(pars, ds = NA, cmin = 0.05, cini = 0.9, cmax = cini + (1 - cini)/2)
 }
 \arguments{
 \item{pars}{kernel parameter list (recognized by \code{pkern_corr}) or list of two of them}
 
-\item{ds}{vector c(dx, dy) or positive numeric, the resolution of the sampled grid}
+\item{ds}{vector c(dy, dx) or positive numeric, the distances between adjacent grid lines}
 
 \item{cmin}{positive numeric, minimum allowable correlation between adjacent grid points}
 
@@ -21,15 +21,16 @@ pkern_bds(pars, ds = NA, cmin = 0.05, cini = 0.9, cmax = cini + (1 - cini)/2)
 kernel parameter list containing "kp", "lower", "upper", or list of two such lists
 }
 \description{
-This function takes a kernel parameter list (\code{pars}) and adds vectors "kp"
-(initial values), "lower" and "upper" (bounds), wherever they are missing. As
-a shortcut, \code{pars} can also be a character string (or vector of two), naming
-the desired kernel(s) (see \code{pkern_corr}).
+\code{pars} should be a kernel parameter list, or a list of two of them (named "y", "x").
+The function adds vectors "kp" (initial values), "lower" and "upper" (bounds), wherever
+they are missing. As a shortcut, \code{pars} can also be a character string (or vector of two)
+naming the desired kernel(s), in which case the function sets a suggested initial value
+(see \code{pkern_corr}).
 }
 \details{
 Bounds for shape parameters are hard-coded, whereas the bounds for the range parameter
 are determined based on the grid resolution (\code{ds}, the distance between grid lines in
-x and y directions) and a user supplied correlation range; \code{cmin} is the minimum allowable
+y and x directions) and a user supplied correlation range; \code{cmin} is the minimum allowable
 correlation between adjacent grid points, and \code{cmax} is the maximum. The corresponding "rho"
 values are then estimated using \code{pkern_rho} (via a grid search over the permissible
 shape parameters, if there are any)

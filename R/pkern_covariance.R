@@ -1,6 +1,6 @@
 #
 # pkern_raster.R
-# Dean Koch, Sep 2021
+# Dean Koch, Oct 2021
 # Functions for handling separable covariance functions
 #
 
@@ -14,8 +14,8 @@
 #'
 #' (1 parameter)
 #'
-#' "exp": exponential (special case of "gex" with "p"=1 and `d<-abs(d)`)
-#' "gau": gaussian/stable (special case of "gex" with "p"=2)
+#' "exp": exponential (special case of "gex" with shape "p"=1)
+#' "gau": gaussian/stable (special case of "gex" with shape "p"=2)
 #' "sph": spherical (AKA stable/Gaussian for p=2)
 #'
 #' (2 parameters)
@@ -127,7 +127,7 @@ pkern_corr = function(pars, d=NA)
 #' Solve for range parameter given a correlation value
 #'
 #' @param cval numeric between 0 and 1, the correlation
-#' @param pars a kernel parameter list recognized by `pkern_corr`
+#' @param pars a 1D kernel parameter list (with elements "k", "kp") recognized by `pkern_corr`
 #' @param d positive numeric, the distance at which to evaluate the kernel
 #' @param upper positive numeric, an upper limit for the search
 #'
@@ -139,26 +139,28 @@ pkern_corr = function(pars, d=NA)
 #' cval = 0.5
 #' pkern_rho(cval, pars, d=1)
 #' pkern_rho(cval, pars, d=10)
-#' pkern_corr(modifyList(pars, list(kp=pkern_rho(0.5, pars, d=10))), d=10)
+#' pkern_corr(utils::modifyList(pars, list(kp=pkern_rho(0.5, pars, d=10))), d=10)
 #'
 pkern_rho = function(cval, pars, d=1, upper=1e3*d)
 {
   # anonymous function for inverting kernel with respect to range parameter
-  fn = function(rho) abs( pkern_corr(modifyList(pars, list(kp=c(rho, pars[['kp']][-1]))), d) - cval)
-  return(optimize(fn, lower=0, upper=upper)$minimum)
+  fn = function(rho) abs( pkern_corr(utils::modifyList(pars, list(kp=c(rho, pars[['kp']][-1]))), d) - cval)
+  return(stats::optimize(fn, lower=0, upper=upper)$minimum)
 }
 
 
-#' Suggest bounds for parameters of x and y component kernels for a grid model
+
+#' Suggest bounds for parameters of y and x component kernels for a separable grid model
 #'
-#' This function takes a kernel parameter list (`pars`) and adds vectors "kp"
-#' (initial values), "lower" and "upper" (bounds), wherever they are missing. As
-#' a shortcut, `pars` can also be a character string (or vector of two), naming
-#' the desired kernel(s) (see `pkern_corr`).
+#' `pars` should be a kernel parameter list, or a list of two of them (named "y", "x").
+#' The function adds vectors "kp" (initial values), "lower" and "upper" (bounds), wherever
+#' they are missing. As a shortcut, `pars` can also be a character string (or vector of two)
+#' naming the desired kernel(s), in which case the function sets a suggested initial value
+#' (see `pkern_corr`).
 #'
 #' Bounds for shape parameters are hard-coded, whereas the bounds for the range parameter
 #' are determined based on the grid resolution (`ds`, the distance between grid lines in
-#' x and y directions) and a user supplied correlation range; `cmin` is the minimum allowable
+#' y and x directions) and a user supplied correlation range; `cmin` is the minimum allowable
 #' correlation between adjacent grid points, and `cmax` is the maximum. The corresponding "rho"
 #' values are then estimated using `pkern_rho` (via a grid search over the permissible
 #' shape parameters, if there are any)
@@ -172,7 +174,7 @@ pkern_rho = function(cval, pars, d=1, upper=1e3*d)
 #' `cini` and 1. `cini` is by default set to
 #'
 #' @param pars kernel parameter list (recognized by `pkern_corr`) or list of two of them
-#' @param ds vector c(dx, dy) or positive numeric, the resolution of the sampled grid
+#' @param ds vector c(dy, dx) or positive numeric, the distances between adjacent grid lines
 #' @param cmin positive numeric, minimum allowable correlation between adjacent grid points
 #' @param cini positive numeric, initial correlation between adjacent grid points
 #' @param cmax positive numeric, maximum allowable correlation between adjacent grid points
@@ -204,7 +206,7 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
     # convert to expected list format for recursive call and handle unexpected input
     if( length(pars) == 1 ) return( pkern_bds(list(k=pars), ds=ds, cmin=cmin, cini=cini, cmax=cmax) )
     if( length(pars) != 2 ) stop('expected vector of two kernel names in pars')
-    pars = lapply(setNames(pars, c('x', 'y')), \(p) list(k=p))
+    pars = lapply(stats::setNames(pars, c('y', 'x')), \(p) list(k=p))
     return( pkern_bds(pars, ds=ds, cmin=cmin, cini=cini, cmax=cmax) )
   }
 
@@ -224,8 +226,8 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
       # Whittle-Matern (note "mat" becomes indistinguishable from "gau" as shp->Inf)
       if( pars[['k']] == 'mat' )
       {
-        # these bounds reflect a range of numerical stability
-        bds.shp = c(0.5, 40)
+        # these bounds are suggestions based on experimentation
+        bds.shp = c(1, 40)
         nm.shp = 'kap'
       }
 
@@ -239,8 +241,8 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
 
       # set up a grid of test values and find rho for each one, then take min/max
       shp.test = seq(bds.shp[1], bds.shp[2], length.out = 100)
-      rhomin = min( sapply(shp.test, \(p) pkern_rho(cmin, modifyList(pars, list(kp=c(NA, p))), ds)) )
-      rhomax = max( sapply(shp.test, \(p) pkern_rho(cmax, modifyList(pars, list(kp=c(NA, p))), ds)) )
+      rhomin = min( sapply(shp.test, \(p) pkern_rho(cmin, utils::modifyList(pars, list(kp=c(NA, p))), ds)) )
+      rhomax = max( sapply(shp.test, \(p) pkern_rho(cmax, utils::modifyList(pars, list(kp=c(NA, p))), ds)) )
 
       # append bounds as needed
       if( is.null( pars[['lower']] ) ) pars[['lower']] = c(rhomin, bds.shp[1])
@@ -250,7 +252,7 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
       if( is.null( pars[['kp']] ) )
       {
         shp.ini = mean( c(pars[['lower']][2], pars[['upper']][2]) )
-        rho.ini = pkern_rho(cini, modifyList(pars, list(kp=c(NA, shp.ini))), ds)
+        rho.ini = pkern_rho(cini, utils::modifyList(pars, list(kp=c(NA, shp.ini))), ds)
         pars[['kp']] = c(rho.ini, shp.ini)
       }
 
@@ -270,9 +272,9 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
 
     # name the elements of "kp", "lower", "upper"
     nm = c('rho', nm.shp)
-    pars[['kp']] = setNames(pars[['kp']], nm)
-    pars[['lower']] = setNames(pars[['lower']], nm)
-    pars[['upper']] = setNames(pars[['upper']], nm)
+    pars[['kp']] = stats::setNames(pars[['kp']], nm)
+    pars[['lower']] = stats::setNames(pars[['lower']], nm)
+    pars[['upper']] = stats::setNames(pars[['upper']], nm)
 
     # order the output
     idx.first = match(c('k', 'kp', 'lower', 'upper'), names(pars))
@@ -282,28 +284,23 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
     return(pars)
   }
 
-  # else assume pars is a list containing two parameter lists "x" and "y"
-  if( !all( c('x', 'y') %in% names(pars) ) ) stop('expected parameter lists "x" and "y" in pars')
+  # else assume pars is a list containing two parameter lists "y" and "x"
+  if( !all( c('y', 'x') %in% names(pars) ) ) stop('expected parameter lists "y" and "x" in pars')
 
-  # recursive calls to build x and y component bounds
-  pars.out = modifyList(pars, list(x = pkern_bds(pars[['x']], ds[1], cmin=cmin, cmax=cmax),
-                                   y = pkern_bds(pars[['y']], ds[2], cmin=cmin, cmax=cmax)) )
-
-  # return results in list
-  return( pars.out )
+  # recursive calls to build x and y component bounds and return results in list
+  pars.new = Map(\(p, s) pkern_bds(p, s, cmin, cini, cmax), p=pars[c('y', 'x')], s=ds)
+  return( utils::modifyList(pars, stats::setNames(pars.new, c('y', 'x')) ) )
 }
-
-
 
 
 #' Vectorize x and y component parameters
 #'
-#' when `kp` is NULL, the function concatenates the two (x and y) component kernel parameter
+#' when `kp` is NULL, the function concatenates the two ("y" and "x") component kernel parameter
 #' sets into a single vector. When this vector is passed back as `kp`, the function does the
 #' inverse, copying parameter values from a vector to the corresponding list entry in `pars`
 #' and returning them in a list
 #'
-#' @param pars list of "x" and "y" kernel parameter lists (each containing vector "kp")
+#' @param pars list of "y" and "x" kernel parameter lists (each containing vector "kp")
 #' @param kp vector of combined kernel parameters (or NA)
 #'
 #' @return numeric vector of parameters, or `pars` modified appropriately
@@ -316,19 +313,19 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
 pkern_unpack = function(pars, kp=NULL)
 {
   # vectorization in order x, y
-  if( is.null(kp) ) return( c(pars[['x']][['kp']], pars[['y']][['kp']]) )
+  if( is.null(kp) ) return( c(pars[['y']][['kp']], pars[['x']][['kp']]) )
 
   # determine number of parameters from each kernel
-  npx = length(pars[['x']][['kp']])
   npy = length(pars[['y']][['kp']])
+  npx = length(pars[['x']][['kp']])
 
   # unpack values from numeric vector kp
-  kpx = kp[ seq(npx) ]
-  kpy = kp[ npx + seq(npy) ]
+  kpy = kp[ seq(npy) ]
+  kpx = kp[ npy + seq(npx) ]
 
   # overwrite x and y kernel parameter lists
-  pars[['x']] = modifyList(pars[['x']], list(kp=kpx))
-  pars[['y']] = modifyList(pars[['y']], list(kp=kpy))
+  pars[['y']] = utils::modifyList(pars[['y']], list(kp=kpy))
+  pars[['x']] = utils::modifyList(pars[['x']], list(kp=kpx))
   return(pars)
 }
 
@@ -338,11 +335,13 @@ pkern_unpack = function(pars, kp=NULL)
 #' An effient implementation that uses symmetry and Toeplitz structure arising
 #' from assumption of stationarity.
 #'
-#' @param pars list or parameters (in the form accepted by `pkern_corr`)
+#' @param pars list of kernel parameters "k" and "kp" (see `pkern_corr`)
 #' @param n positive integer, the number of points on the 1D line
 #' @param ds positive numeric, the distance between adjacent grid lines
 #' @param i vector, a subset of `seq(n)` indicating rows to return
 #' @param j vector, a subset of `seq(n)` indicating columns to return
+#' @param sparse logical
+#'
 #'
 #' @return the n x n correlation matrix, or its subset as specified in `i`, `j`
 #' @export
@@ -353,7 +352,7 @@ pkern_unpack = function(pars, kp=NULL)
 #' pkern_corrmat(pars, n=10, i=2:4, j=2:4)
 #' pkern_corrmat(pars, n=3)
 #' pkern_corrmat(pars, n=3, ds=2)
-pkern_corrmat = function(pars, n, ds=1, i=seq(n), j=seq(n))
+pkern_corrmat = function(pars, n, ds=1, i=seq(n), j=seq(n), sparse=FALSE)
 {
   # compute the set of distances over which we need to evaluate kernel
   du = ds * ( seq(n) - 1 )
@@ -365,7 +364,8 @@ pkern_corrmat = function(pars, n, ds=1, i=seq(n), j=seq(n))
   bigvec = c(dcorr[n:2], dcorr)
 
   # build and return the matrix
-  return(sapply(j, function(x) bigvec[ (n-x) + i ]))
+  if(sparse) return( Matrix::Matrix(sapply(j, function(x) bigvec[ (n-x) + i ])) )
+  return( sapply(j, function(x) bigvec[ (n-x) + i ]) )
 }
 
 

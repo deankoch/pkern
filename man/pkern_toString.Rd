@@ -8,6 +8,8 @@ pkern_toString(pars, nsig = 3)
 }
 \arguments{
 \item{pars}{a kernel parameters list ("k", "kp"), or list of two of them ("x", "y")}
+
+\item{nsig}{number of signficant figures to use when printing model parameter values}
 }
 \value{
 a character string or list (depending on the contents of \code{pars}, see details)
@@ -46,6 +48,6 @@ pkern_toString(pars)
 kname = c('mat', 'sph')
 pars = pkern_corr(kname)
 pkern_toString(pars)
-pkern_toString(modifyList(pars, list(nug=0.5)))
+pkern_toString(utils::modifyList(pars, list(nug=0.5)))
 
 }

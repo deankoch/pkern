@@ -4,10 +4,10 @@
 \alias{pkern_corrmat}
 \title{Construct 1D stationary correlation matrices for regularly spaced data}
 \usage{
-pkern_corrmat(pars, n, ds = 1, i = seq(n), j = seq(n))
+pkern_corrmat(pars, n, ds = 1, i = seq(n), j = seq(n), sparse = FALSE)
 }
 \arguments{
-\item{pars}{list or parameters (in the form accepted by \code{pkern_corr})}
+\item{pars}{list of kernel parameters "k" and "kp" (see \code{pkern_corr})}
 
 \item{n}{positive integer, the number of points on the 1D line}
 
@@ -16,6 +16,8 @@ pkern_corrmat(pars, n, ds = 1, i = seq(n), j = seq(n))
 \item{i}{vector, a subset of \code{seq(n)} indicating rows to return}
 
 \item{j}{vector, a subset of \code{seq(n)} indicating columns to return}
+
+\item{sparse}{logical}
 }
 \value{
 the n x n correlation matrix, or its subset as specified in \code{i}, \code{j}
