@@ -38,7 +38,7 @@ pkern_qf = function(M, x, y, sparse=TRUE)
   if( !conforms.inner | !conforms.right ) stop('dimensions do not conform')
 
   # run computation
-  if(sparse) return( as.vector(crossprod(crossprod(M, x), y)) )
+  if(sparse) return( as.vector(Matrix::crossprod(Matrix::crossprod(M, x), y)) )
   return( as.vector( Rfast::Crossprod(Rfast::Crossprod(M, x), y) ) )
 }
 
@@ -207,18 +207,23 @@ pkern_precompute = function(gdim, map, pars=NULL, zobs=NULL, makev=FALSE, sparse
 #' @param map list of two integer vectors, indexing the y and x grid lines of the regular subgrid
 #' @param pc either logical (default FALSE), or a list of precomputed objects (see details)
 #' @param sparse logical, indicates to use Matrix::Matrix representations of large matrices
-#' @param mvec logical, see details (TODO)
+#' @param mvec positive integer, indexing an eigenvector to process (see details)
 #'
 #' @return TODO
 #' @export
 #'
 #' @examples
 #' # TODO
-pkern_cmean = function(zobs, gdim, pars, map, pc=FALSE, sparse=TRUE, mvec=FALSE)
+pkern_cmean = function(zobs, gdim, pars, map, pc=FALSE, sparse=TRUE, mvec=NA)
 {
+
   # the number of points in the sampled subgrid, and index of missing elements
   nsg = length(zobs)
-  sobs = which( !is.na(zobs) )
+  sobs = which(!is.na(zobs))
+  nobs = length(sobs)
+
+  # set default 0 nugget variance as needed
+  pars[['nug']] = ifelse(is.null(pars[['nug']]), 0, pars[['nug']])
 
   # handle requests for precomputed objects
   if( is.logical(pc) )
@@ -238,14 +243,14 @@ pkern_cmean = function(zobs, gdim, pars, map, pc=FALSE, sparse=TRUE, mvec=FALSE)
   }
 
   # initialize predictions vector and add the observed points
-  zpred = rep(as.numeric(NA), prod(gdim))
+  zpred = vector(mode='numeric', length=prod(gdim))
   zpred[ pc[['s']] ] = zobs
 
   # omit any NA points from zobs
   zdata = zobs[sobs]
 
   # missing data case: not all points in subgrid are sampled
-  if( length( sobs ) < nsg )
+  if( nobs < nsg )
   {
     # pointwise variances are equal to the eigenvalues plus the nugget variance
     pwv = pars[['nug']] + pc[['ed']][['values']]
@@ -253,20 +258,29 @@ pkern_cmean = function(zobs, gdim, pars, map, pc=FALSE, sparse=TRUE, mvec=FALSE)
     # pad output vector with zeros (equivalent to subsetting cross-correlation matrices below)
     zdata.mod = rep(0, nsg)
 
-    # multiply observed data by inverse covariance matrix via eigen-decomposition
-    if(mvec) {
+    # copy eigenvector matrix
+    edv = pc[['ed']][['vectors']]
 
-      pwv = pars[['nug']] + pc[['ed']][['values']][zdata]
-      zdata.mod[sobs] = ( t(pc[['ed']][['vectors']]) %*% zdata ) / sqrt(pwv)
+    # multiply observed data by inverse covariance matrix via eigendecomposition
+    if( is.na(mvec) )
+    {
+      # ordinary case - reciprocal of eigenvalues produces the inverse
+      zdata.mod[sobs] = edv %*% ( (t(edv) %*% zdata) / pwv )
+
+      # multiply by cross covariance to get conditional mean of unsampled subgrid points
+      zpred[ pc[['s']][-sobs] ] = pc[['vsc']] %*% zdata.mod[sobs]
 
     } else {
 
-      zdata.mod[sobs] = pc[['ed']][['vectors']] %*% ( (t(pc[['ed']][['vectors']]) %*% zdata) / pwv )
+      # variance mode: multiply square root inverse variance by unit basis vector
+      zdata.mod[sobs] = c(edv[,mvec] / sqrt(pwv[mvec]))
+
+      # multiply by cross covariance to get conditional variance of unsampled subgrid points
+      zpred[ pc[['s']] ] = sqrt(pars[['nug']]) / nobs
+      zpred[ pc[['s']][-sobs] ] = pc[['vsc']] %*% zdata.mod[sobs]
 
     }
 
-    # multiply by cross covariance to get conditional mean of unsampled subgrid points
-    zpred[ pc[['s']][-sobs] ] = pc[['vsc']] %*% zdata.mod[sobs]
 
   } else {
 
@@ -277,9 +291,13 @@ pkern_cmean = function(zobs, gdim, pars, map, pc=FALSE, sparse=TRUE, mvec=FALSE)
     edx = pc[['ed']][['x']][['vectors']]
     edy = pc[['ed']][['y']][['vectors']]
     zdata.mod = pkern_kprod(edx, edy, pkern_kprod(edx, edy, zdata, trans=T, sparse)/pwv, trans=F)
+
+    if( is.na(mvec) ) stop('not yet implemented')
   }
 
+
   # compute predictions separately on the three subsets (third one is slowest by far)
+  if(sparse) zdata.mod = Matrix::Matrix(zdata.mod)
   zpred[ pc[['oj']] ] = pkern_kprod(pc[['vs']][['x']], pc[['vso']][['y']], zdata.mod, trans=T, sparse)
   zpred[ pc[['oi']] ] = pkern_kprod(pc[['vso']][['x']], pc[['vs']][['y']], zdata.mod, trans=T, sparse)
   zpred[ pc[['o']] ] = pkern_kprod(pc[['vso']][['x']], pc[['vso']][['y']], zdata.mod, trans=T, sparse)
