@@ -4,6 +4,93 @@
 # Functions for plotting objects created with pkern
 #
 
+#' Extract kernel parameters as plot-friendly strings
+#'
+#' Generates a list of useful strings based on the kernel names and parameter values
+#' in `pars` for plot labels and such. `pars` should either specify kernel(s) by name
+#' or else be a parameters list of the form accepted by `pkern_corr`.
+#'
+#' When `pars` is a character string, the function parenthesizes it with square brackets
+#' and returns the resulting string. When `pars` is a vector of character strings, it
+#' collapses the two parenthesized strings into a single vector separated by an "x".
+#'
+#' When `pars` is a list of kernel parameters for a single dimension, the function
+#' returns a named list of two character strings: the kernel name ("k") formatted as
+#' above, and the parameter(s) ("kp") (also square bracketed, in "name = value" format
+#' where "value" is rounded to `nsig` significant digits).
+#'
+#' When `pars` is a list of two such kernel parameter lists (named "x" and "y"), the
+#' function again returns a list with elements "k" and "kp", containing the strings from
+#' each component collapsed with a " x " delimiter (indicating direct product). The third
+#' element, "main", is a language object containing the bolded kernel name, and (if "nug"
+#' is supplied) a fourth element supplies a string "nug" with the nugget effect in
+#' parentheses.
+#'
+#' @param pars a kernel parameters list ("k", "kp"), or list of two of them ("x", "y")
+#' @param nsig number of signficant figures to use when printing model parameter values
+#'
+#' @return a character string or list (depending on the contents of `pars`, see details)
+#' @export
+#'
+#' @examples
+#' kname = 'mat'
+#' pkern_toString(kname)
+#' pkern_toString(rep(kname, 2))
+#' pkern_toString(list(k=kname))
+#'
+#' pars = pkern_corr(kname)
+#' pkern_toString(pars)
+#'
+#' kname = c('mat', 'sph')
+#' pars = pkern_corr(kname)
+#' pkern_toString(pars)
+#' pkern_toString(utils::modifyList(pars, list(nug=0.5)))
+#'
+pkern_toString = function(pars, nsig=3)
+{
+  # handle character input (kernel names)
+  if( is.character(pars) )
+  {
+    # convert to expected list format for recursive call and handle unexpected input
+    if( length(pars) == 1 ) return( paste0('[', pars, ']') )
+    if( length(pars) == 2 ) return( paste(sapply(pars, pkern_toString), collapse=' x ') )
+    stop('invalid argument to pars')
+  }
+
+  # single dimension case
+  if( 'k' %in% names(pars) )
+  {
+    k = pkern_toString(pars[['k']])
+    kp = '[]'
+    if( 'kp' %in% names(pars) )
+    {
+      # single parameter case is always the range parameter rho
+      kp.nm = names( pkern_corr(pars[['k']])[['kp']] )
+      if( is.null(kp.nm) ) kp.nm = 'rho'
+
+      # collapse name value pairs and parenthesize result
+      kp.parts = mapply(\(nm, p) paste(nm, '=', format(p, digits=nsig)), nm=kp.nm, p=pars[['kp']])
+      kp = paste0('[', paste(kp.parts, collapse=', '), ']')
+    }
+
+    # return the vector
+    return( list(k=k, kp=kp) )
+  }
+
+  # handle 2-dimensional case by recursive call, concatenate results
+  xy.list = lapply(pars[c('y', 'x')], pkern_toString)
+  k = paste(sapply(xy.list, \(xy) xy[['k']]), collapse=' x ')
+  kp = paste(sapply(xy.list, \(xy) xy[['kp']]), collapse=' x ')
+
+  # make a title expression with bolding, adding nugget if supplied
+  main = bquote(bold(.(k)))
+  nug = pars[['nug']]
+  if( !is.null(nug) ) nug = paste0('(nugget = ', format(nug, digits=nsig), ')')
+
+  # return as named vector
+  return( list(k=k, kp=kp, main=main, nug=nug) )
+}
+
 
 #' Plot gridded datasets
 #'
@@ -76,11 +163,11 @@ pkern_plot = function(z, gdim=NULL, yx=NULL, ds=1, ppars=list())
   discrete = ifelse( is.null(ppars[['discrete']]), FALSE, ppars[['discrete']])
   reset = ifelse( is.null(ppars[['reset']]), TRUE, ppars[['reset']])
   aggpars = ifelse( is.null(ppars[['aggpars']]), NA, ppars[['aggpars']])
-  maxx = ifelse( is.null(ppars[['maxx']]), 100, ppars[['maxx']])
+  nmax = ifelse( is.null(ppars[['nmax']]), 1e5, ppars[['nmax']])
   smoothed = ifelse( is.null(ppars[['smoothed']]), FALSE, ppars[['smoothed']])
 
   # determine aggregation factors along x and y directions
-  afact = ceiling( gdim/maxx )
+  afact = ceiling( gdim/sqrt(nmax) )
   if( any( afact > 1 ) )
   {
     # aggregate the data as needed
@@ -207,94 +294,6 @@ pkern_plot = function(z, gdim=NULL, yx=NULL, ds=1, ppars=list())
   # restore old plot settings and finish
   if(reset) graphics::par(old.par)
   return( invisible() )
-}
-
-
-#' Extract kernel parameters as plot-friendly strings
-#'
-#' Generates a list of useful strings based on the kernel names and parameter values
-#' in `pars` for plot labels and such. `pars` should either specify kernel(s) by name
-#' or else be a parameters list of the form accepted by `pkern_corr`.
-#'
-#' When `pars` is a character string, the function parenthesizes it with square brackets
-#' and returns the resulting string. When `pars` is a vector of character strings, it
-#' collapses the two parenthesized strings into a single vector separated by an "x".
-#'
-#' When `pars` is a list of kernel parameters for a single dimension, the function
-#' returns a named list of two character strings: the kernel name ("k") formatted as
-#' above, and the parameter(s) ("kp") (also square bracketed, in "name = value" format
-#' where "value" is rounded to `nsig` significant digits).
-#'
-#' When `pars` is a list of two such kernel parameter lists (named "x" and "y"), the
-#' function again returns a list with elements "k" and "kp", containing the strings from
-#' each component collapsed with a " x " delimiter (indicating direct product). The third
-#' element, "main", is a language object containing the bolded kernel name, and (if "nug"
-#' is supplied) a fourth element supplies a string "nug" with the nugget effect in
-#' parentheses.
-#'
-#' @param pars a kernel parameters list ("k", "kp"), or list of two of them ("x", "y")
-#' @param nsig number of signficant figures to use when printing model parameter values
-#'
-#' @return a character string or list (depending on the contents of `pars`, see details)
-#' @export
-#'
-#' @examples
-#' kname = 'mat'
-#' pkern_toString(kname)
-#' pkern_toString(rep(kname, 2))
-#' pkern_toString(list(k=kname))
-#'
-#' pars = pkern_corr(kname)
-#' pkern_toString(pars)
-#'
-#' kname = c('mat', 'sph')
-#' pars = pkern_corr(kname)
-#' pkern_toString(pars)
-#' pkern_toString(utils::modifyList(pars, list(nug=0.5)))
-#'
-pkern_toString = function(pars, nsig=3)
-{
-  # handle character input (kernel names)
-  if( is.character(pars) )
-  {
-    # convert to expected list format for recursive call and handle unexpected input
-    if( length(pars) == 1 ) return( paste0('[', pars, ']') )
-    if( length(pars) == 2 ) return( paste(sapply(pars, pkern_toString), collapse=' x ') )
-    stop('invalid argument to pars')
-  }
-
-  # single dimension case
-  if( 'k' %in% names(pars) )
-  {
-    k = pkern_toString(pars[['k']])
-    kp = '[]'
-    if( 'kp' %in% names(pars) )
-    {
-      # single parameter case is always the range parameter rho
-      kp.nm = names( pkern_corr(pars[['k']])[['kp']] )
-      if( is.null(kp.nm) ) kp.nm = 'rho'
-
-      # collapse name value pairs and parenthesize result
-      kp.parts = mapply(\(nm, p) paste(nm, '=', format(p, digits=nsig)), nm=kp.nm, p=pars[['kp']])
-      kp = paste0('[', paste(kp.parts, collapse=', '), ']')
-    }
-
-    # return the vector
-    return( list(k=k, kp=kp) )
-  }
-
-  # handle 2-dimensional case by recursive call, concatenate results
-  xy.list = lapply(pars[c('y', 'x')], pkern_toString)
-  k = paste(sapply(xy.list, \(xy) xy[['k']]), collapse=' x ')
-  kp = paste(sapply(xy.list, \(xy) xy[['kp']]), collapse=' x ')
-
-  # make a title expression with bolding, adding nugget if supplied
-  main = bquote(bold(.(k)))
-  nug = pars[['nug']]
-  if( !is.null(nug) ) nug = paste0('(nugget = ', format(nug, digits=nsig), ')')
-
-  # return as named vector
-  return( list(k=k, kp=kp, main=main, nug=nug) )
 }
 
 
@@ -546,12 +545,18 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
     sv = vario[['sv']][-1]
 
     # map point shading to the number of point pairs sampled if requested
-    colmap = 'black'
-    if( plotpars[['shade']] ) colmap = rev( grDevices::gray.colors( max(n) ) )[n]
+    #colmap = 'black'
+    #if( plotpars[['shade']] ) colmap = rev( grDevices::gray.colors( max(n) ) )[n]
 
     # make the scatterplot of sampled semivariances
-    plot(sep, sv, xlab='lag', ylab='semivariance',
-         xlim=xlim, ylim=ylim, main=main, pch=16, col=colmap)
+    plot(sep, sv, xlab='lag', ylab='semivariance', xlim=xlim, ylim=ylim, main=main, pch=16)
+
+    # add bubbles indicating sample sizes
+    points(sep, sv, pch=1, cex=n/max(n))
+
+    # # make the scatterplot of sampled semivariances
+    # plot(sep, sv, xlab='lag', ylab='semivariance',
+    #      xlim=xlim, ylim=ylim, main=main, pch=20, col=colmap)
 
   }
 

@@ -84,7 +84,7 @@ pkern_tvario = function(pars, v, nug=0, d=NULL)
 #'
 #' @examples
 #'
-#' gdim = c(1e2, 2e2)
+#' gdim = c(1e2, 50)
 #' pars = pkern_corr('gau') |> utils::modifyList(list(v=1))
 #' sim = pkern_sim(pars, gdim)
 #'
@@ -103,6 +103,7 @@ pkern_xvario = function(gdim, vec, simple=TRUE, method='median', quiet=FALSE, se
   if( !is.list(vec) ) vec = list(vec)
 
   # prepare to sample along different grid line lags in a loop
+  sep = sort(sep)
   n.sep = length(sep)
   plist = vector(mode='list', length=n.sep)
   svx = rep(NA, n.sep)
@@ -140,7 +141,7 @@ pkern_xvario = function(gdim, vec, simple=TRUE, method='median', quiet=FALSE, se
       # calculate number of point pairs to keep from each list element in vec
       n.per = max(1, round(  ( nmax / n[idx.dj] ) * sapply(idx.valid, sum) ) )
 
-      # randomly sample n.per from each element of idx.valid to remain TRUE
+      # randomly sample n.per from each element of idx.valid to get nmax samples (or fewer)
       idx.valid = lapply(idx.valid, \(i) seq_along(i) %in% sample( which(i), min(n.per, sum(i)) ) )
       n[idx.dj] = do.call(sum, idx.valid)
     }
@@ -153,7 +154,7 @@ pkern_xvario = function(gdim, vec, simple=TRUE, method='median', quiet=FALSE, se
     {
       # compute absolute differences of point pairs and append to plist
       dabs = Map(\(p, v) apply(p, 1, \(idx) abs(diff(v[idx])) ), p=plist[[idx.dj]], v=vec)
-      plist[[idx.dj]] = Map(\(p, d) cbind(p, d=d), p=plist[[idx.dj]], d=dabs)
+      if(!simple) plist[[idx.dj]] = Map(\(p, d) cbind(p, d=d), p=plist[[idx.dj]], d=dabs)
 
       # handle various methods
       dabs.vec = unlist(dabs, use.names=FALSE)
@@ -198,7 +199,6 @@ pkern_xvario = function(gdim, vec, simple=TRUE, method='median', quiet=FALSE, se
 #' @param gdim vector c(ny, nx) of positive integers, the number of grid lines
 #' @param vec numeric vector of data, in column vectorized order (length `prod(dims)`)
 #' @param sep list c(dy, dx) of positive integer vectors, grid line lags to sample
-#' @param simple logical, if FALSE the function includes point pair indices in return list
 #' @param method character, one of "mean", "median", "ch", passed to `pkern_xvario`
 #' @param diagonal logical, if TRUE, semivariogram results are returned also for diagonals
 #' @param dmax numeric, maximum grid line separation distance (used to filter results)
@@ -226,14 +226,14 @@ pkern_xvario = function(gdim, vec, simple=TRUE, method='median', quiet=FALSE, se
 #' vario = pkern_vario(gdim, vec, sep=seq(10), ds=ds)
 #' pkern_vario_plot(vario, pars)
 #'
-pkern_vario = function(gdim, vec, sep=NA, simple=TRUE, method='median', diagonal=TRUE,
-                       dmax=Inf, ds=NA, quiet=FALSE, nmax=1e4, vcalc=TRUE)
+pkern_vario = function(gdim, vec, sep=NA, method='median', diagonal=TRUE,
+                       ds=NA, quiet=FALSE, nmax=1e4, vcalc=TRUE)
 {
   # set default sample lags and compute sample variance
   if( anyNA(sep) ) sep = lapply(gdim, \(d) seq(d-1))
   if( !is.list(sep) ) sep = list(y=sep, x=sep)
   if( !is.list(vec) ) vec = list(vec)
-  svar = ifelse(vcalc, stats::var(unlist(vec), na.rm=TRUE), NULL)
+  svar = ifelse(vcalc, stats::var(unlist(vec), na.rm=TRUE), NA)
 
   # set default resolution (1,1)
   if( anyNA(ds) ) ds = c(1,1)
@@ -241,12 +241,12 @@ pkern_vario = function(gdim, vec, sep=NA, simple=TRUE, method='median', diagonal
 
   # compute x semivariances
   if( !quiet ) cat('\nidentifying horizontal lags...')
-  xout = pkern_xvario(gdim, vec, simple, method, quiet, sep=sep[[2]], nmax=nmax)
+  xout = pkern_xvario(gdim, vec, method=method, quiet=quiet, sep=sep[[2]], nmax=nmax)
 
   # repeat in row-vectorized order to get y semivariances
   if( !quiet ) cat('\nidentifying vertical lags...')
   vec.rv = lapply(vec, \(v) v[pkern_r2c(gdim, in.byrow=FALSE, out.byrow=TRUE)])
-  yout = pkern_xvario(rev(gdim), vec.rv, simple, method, quiet, sep=sep[[1]], nmax=nmax)
+  yout = pkern_xvario(rev(gdim), vec.rv, method=method, quiet=quiet, sep=sep[[1]], nmax=nmax)
 
   # scale sep by resolution to get distances, then bundle everything into an output list
   yout[['sep']] = ds[1] * yout[['sep']]
@@ -265,7 +265,7 @@ pkern_vario = function(gdim, vec, sep=NA, simple=TRUE, method='median', diagonal
     gdim45 = dim( pkern_r45(vec[[1]], gdim) )
 
     # recursive call to get component variograms in new coordinate system
-    vario45 = pkern_vario(gdim45, vec45, sep, simple, method, diagonal=FALSE, quiet=quiet, nmax=nmax, vcalc)
+    vario45 = pkern_vario(gdim45, vec45, sep, method=method, quiet=quiet, diagonal=F, nmax=nmax, vcalc=FALSE)
 
     # scale sep values to get distances, then bundle everything into output list
     dsdiag = sqrt( sum( ds^2 ) )
@@ -278,7 +278,7 @@ pkern_vario = function(gdim, vec, sep=NA, simple=TRUE, method='median', diagonal
   list.out = lapply(list.out, \(d) lapply(d, \(z) z[ !is.na(d[['sv']]) ] ) )
 
   # truncate to requested distance maximum
-  if( is.numeric(dmax) ) list.out = lapply(list.out, \(d) lapply(d, \(z) z[ !(d[['sep']] > dmax) ] ))
+  #if( is.numeric(dmax) ) list.out = lapply(list.out, \(d) lapply(d, \(z) z[ !(d[['sep']] > dmax) ] ))
 
   # return results along with estimated variance
   return(c(list.out, list(v=svar, ds=ds)))
