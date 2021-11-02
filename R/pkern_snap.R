@@ -242,20 +242,28 @@ pkern_snap_plot = function(g, pts=NULL, ppars=list())
 #' snap.distinct = pkern_snap(g, pts)
 #' pkern_snap_plot(snap.distinct, pts)
 #'
-#' # `bias` tunes how many grid lines are assigned
-#' snap.distinct = pkern_snap(g, pts, bias=1)
-#' pkern_snap_plot(snap.distinct, pts)
-#'
-pkern_snap = function(g, pts, sep=NULL, distinct=TRUE, quiet=FALSE, bias=0)
+pkern_snap = function(g, pts, sep=NULL, distinct=TRUE, quiet=FALSE, bias=10)
 {
-  # handle various input grid types to get list of grid lines
-  if( 'RasterLayer' %in% class(g) ) g = pkern_fromRaster(g, 'yx')
+  # default unit resolution
+  ds = c(1,1)
+
+  # handle raster grids
+  if( 'RasterLayer' %in% class(g) )
+  {
+    # resolution and grid line locations
+    ds = pkern_fromRaster(g, 'ds')
+    g = pkern_fromRaster(g, 'yx')
+  }
+
+  # handle list input
+  if( !is.null( g[['ds']] ) ) ds = g[['ds']]
   if( !is.null( g[['yx']] ) ) g = g[['yx']]
   if( !is.null( g[['g']] ) ) g = g[['g']]
 
   # coerce various point input types and set expected column order
   yxnm = stats::setNames(nm=c('y', 'x'))
   if( any(c('sf','sfc', 'sfg') %in% class(pts) ) ) pts = sf::st_coordinates(pts)[,2:1]
+  if( any(c('SpatialPoints', 'SpatialPointsDataFrame') %in% class(pts) ) ) pts = sp::coordinates(pts)[,2:1]
   if( is.data.frame(pts) ) pts = as.matrix(pts)
   if( is.matrix(pts) ) pts = apply(pts, 2, identity, simplify=FALSE)
   if( !all( yxnm %in% names(pts) ) ) names(pts)[1:2] = yxnm
@@ -300,41 +308,39 @@ pkern_snap = function(g, pts, sep=NULL, distinct=TRUE, quiet=FALSE, bias=0)
     map = result.hungarian[['pairs']][, 2]
 
     # extract dimension-wise mapping and overwrite values in snap
-    snap[['g']] = yx
-    snap[['map']] = pkern_vec2mat(map, syx.gdim, out='list') |> stats::setNames(yxnm)
+    snap[['mapidx']] = pkern_vec2mat(map, syx.gdim, out='list') |> stats::setNames(yxnm)
+    snap[['map']] = Map(\(m, sgl, gl) match(sgl[m], gl), m=snap[['mapidx']], sgl=yx, gl=g)
 
     # recompute dimension-wise snapping distances
-    snap[['dist']] = Map(\(gl, m, p) abs( p - gl[m] ), gl=snap[['g']], m=snap[['map']], p=pts)
+    snap[['dist']] = Map(\(gl, m, p) abs( p - gl[m] ), gl=yx, m=snap[['mapidx']], p=pts)
   }
 
   # add some summary info to output list
   snap[['gdim']] = ng
   snap[['drange']] = range( Reduce('+', snap[['dist']]) )
 
-  # compute separation distance
+  # copy separation distance
   snap[['sep']] = stats::setNames(sep, yxnm)
+  snap[['ds']] = mapply(\(d, s) d*s, d=ds, s=sep)
 
-  # add a sublist with info about the subgrid
-  snap[['sg']] = list()
-  snap[['sg']][['g']] = Map(\(m, gl) sort(unique(gl[m])), snap[['map']], snap[['g']])
-  snap[['sg']][['gdim']] = sapply(snap[['sg']][['g']], length)
-  snap[['sg']][['map']] = Map(\(gl, m, sgl) match(gl[m], sgl),
-                              gl=snap[['g']],
-                              m=snap[['map']],
-                              sgl=snap[['sg']][['g']])
+  # trim to keep only the relevant subset of and replace g with mapping
+  snap[['gidx']] = Map(\(m, s) seq(min(m), max(m), by=s), m=snap[['map']], s=sep)
+  #snap[['map']] = Map(\(m, i) match(m, i), m=snap[['map']], i=snap[['gidx']])
+  snap[['mapidx']] = Map(\(m, i) match(m, i), m=snap[['map']], i=snap[['gidx']])
+  snap[['sgdim']] = sapply(snap[['gidx']], length)
 
   # add mapping to vectorized form of full grid
-  gmap.flipy = snap[['map']]
+  gmap.flipy = Map(\(gl, m) gl[m], snap[['gidx']], snap[['mapidx']])
   gmap.flipy[['y']] = ng[1] - gmap.flipy[['y']] + 1
   snap[['vec']] = pkern_mat2vec(gmap.flipy, ng)
 
   # ... and of subgrid
-  sgmap.flipy = snap[['sg']][['map']]
-  sgmap.flipy[['y']] = snap[['sg']][['gdim']][1] - sgmap.flipy[['y']] + 1
-  snap[['sg']][['vec']] = pkern_mat2vec(sgmap.flipy, snap[['sg']][['gdim']])
+  sgmap.flipy = snap[['mapidx']]
+  sgmap.flipy[['y']] = snap[['sgdim']][1] - sgmap.flipy[['y']] + 1
+  snap[['sgvec']] = pkern_mat2vec(sgmap.flipy, snap[['sgdim']])
 
   # reorder output in return
-  return(snap[c('gdim', 'sep', 'drange', 'vec', 'g', 'map', 'dist', 'sg')])
+  return(snap[c('gdim', 'sep', 'ds', 'drange', 'vec', 'g', 'map', 'gidx', 'mapidx', 'dist', 'sgdim', 'sgvec')])
 }
 
 
