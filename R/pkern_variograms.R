@@ -289,8 +289,7 @@ pkern_vario = function(gdim, vec, sep=NA, method='median', diagonal=TRUE,
 #'
 #' Pipe the results of a `pkern_vario` call to this function to estimate model
 #' parameters for `xpars` and `ypars`, the x and y component kernels, by weighted
-#' least squares (Cressie, 2015), where `stats::optim` ("L-BFGS-B") with default
-#' settings is used to solve the minimization problem.
+#' least squares using `stats::optim` ("L-BFGS-B") for numerical minimization.
 #'
 #' `xpars` and `ypars` may be specified as character strings (the exponential
 #' "exp" is the default), in which case they are assigned suggested initial values
@@ -308,17 +307,25 @@ pkern_vario = function(gdim, vec, sep=NA, method='median', diagonal=TRUE,
 #' produce ill-conditioned covariance matrices, leading to inaccuracies or errors
 #' in prediction functions like `pkern_cmean`.
 #'
-#' When `ninitial > 1`, the least squares optimization call is repeated for additional
+#' When `add > 0`, the least squares optimization call is repeated for additional
 #' sets of initial values, chosen uniformly at random within their upper and lower
-#' bounds. Try increasing this to resolve issues of convergence to incorrect local optima.
+#' bounds. The best result of these is selected an returned. Try increasing `add`
+#' to resolve issues of convergence to incorrect local optima.
+#'
+#' `fit.method` controls the type of weights assigned to the sum of squares from each
+#' spatial lag: '1' assigns unit weight to all lags (OLS); 'n' weights be sample size;
+#' 'n/d' uses sample size divided by squared distance (the default in `gstat`); and
+#' the default, 'n/v', uses sample size divided by squared theoretical semivariance,
+#' (the robust estimator in Chapter 2.6.2 of Cressie, 1993).
 #'
 #' @param vario list, the return value from a call to `pkern_vario`
 #' @param ypars character or list, recognizable (as `pars`) by `pkern_corr`
 #' @param xpars character or list, recognizable (as `pars`) by `pkern_corr`
 #' @param v length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for variance
 #' @param nug length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for nugget
-#' @param ninitial positive integer, the number of initial parameter sets tested (see details)
+#' @param add positive integer, the number of initial parameter sets tested (see details)
 #' @param dmax positive numeric, point pairs with separation distances exceeding `dmax` are ignored
+#' @param fit.method character string, either '1', 'n', 'n/d', or 'n/v' (the default, see details)
 #'
 #' @return TODO
 #' @export
@@ -342,7 +349,8 @@ pkern_vario = function(gdim, vec, sep=NA, method='median', diagonal=TRUE,
 #' pkern_vario_plot(vario, pars.fitted2)
 #' pkern_plot(pars.fitted2)
 #'
-pkern_vario_fit = function(vario, ypars='gau', xpars=ypars, v=NULL, nug=NULL, ninitial=10, dmax=Inf)
+pkern_vario_fit = function(vario, ypars='gau', xpars=ypars, v=NULL, nug=NULL, add=0, dmax=Inf,
+                           fit.method='n/v')
 {
   # set defaults for variance (first parameter) and nugget (second parameter)
   if( is.null(v) ) v = c(min=1e-9, ini=vario[['v']], max=4*vario[['v']])
@@ -367,23 +375,37 @@ pkern_vario_fit = function(vario, ypars='gau', xpars=ypars, v=NULL, nug=NULL, ni
   if( any( sapply(mvario, length) == 0 ) ) stop(msg.err)
 
   # define anonymous objective function for optimizer
-  fn = function(pvec, p, mv, ds)
+  fn = function(pvec, p, mv, ds, fit.method)
   {
     # pvec, numeric vector of parameters
     # p, list of "x", "y" kernel parameter lists associated with pvec
     # mv, list of matrices ("x", "y" and optionally "d1", "d2") with columns "n", "sep", "sv"
     # ds, numeric vector of grid line spacings in x and y directions
 
-    # extract kernel parameters as lists (omit first element, the variance)
+    # extract kernel parameters as lists (omit first elements, the variance components)
     p = pkern_unpack(p, pvec[-(1:2)])
 
     # generate theoretical semivariance values along x and y for each lag
     ysv = pkern_tvario(pars=p[['y']], v=pvec[1], nug=pvec[2], d=mv[['y']][,'sep'])
     xsv = pkern_tvario(pars=p[['x']], v=pvec[1], nug=pvec[2], d=mv[['x']][,'sep'])
 
+    # set up weights for y direction
+    wy = switch(fit.method,
+                '1' = 1,
+                'n' = mv[['y']][,'n'],
+                'n/v'= mv[['y']][,'n'] / (ysv)^2,
+                'n/d'=( mv[['y']][,'n'] / (mv[['y']][,'sep'])^2 ))
+
+    # set up weights for x direction
+    wx = switch(fit.method,
+                '1' = 1,
+                'n' = mv[['x']][,'n'],
+                'n/v'= mv[['x']][,'n'] / (xsv)^2 ,
+                'n/d'=( mv[['x']][,'n'] / (mv[['x']][,'sep'])^2 ))
+
     # compute weighted sums of squares along both dimensions and return their sum
-    wss.y = sum( ( mv[['y']][,'n'] / (ysv)^2 ) * ( ( mv[['y']][,'sv'] - ysv )^2 ) )
-    wss.x = sum( ( mv[['x']][,'n'] / (xsv)^2 ) * ( ( mv[['x']][,'sv'] - xsv )^2 ) )
+    wss.y = sum( wy * ( ( mv[['y']][,'sv'] - ysv )^2 ) )
+    wss.x = sum( wx * ( ( mv[['x']][,'sv'] - xsv )^2 ) )
 
     # do the same for the 45 degree rotated version if it is supplied
     wss.d1 = wss.d2 = 0
@@ -408,9 +430,24 @@ pkern_vario_fit = function(vario, ypars='gau', xpars=ypars, v=NULL, nug=NULL, ni
       xsv.d2 = pkern_tvario(pars=p[['x']], v=sqrt(pvec[1]), d=d2.xsep)
       d2sv = pvec[2] + ( xsv.d2 * ysv.d2 )
 
+      # set up weights for d1 direction
+      wd1 = switch(fit.method,
+                   '1' = 1,
+                   'n' = mv[['d1']][,'n'],
+                   'n/v'= mv[['d1']][,'n'] / (d1sv)^2,
+                   'n/d'=( mv[['d1']][,'n'] / (mv[['d1']][,'sep'])^2 ))
+
+
+      # set up weights for d2 direction
+      wd2 = switch(fit.method,
+                   '1' = 1,
+                   'n' = mv[['d2']][,'n'],
+                   'n/v'= mv[['d2']][,'n'] / (d2sv)^2 ,
+                   'n/d'=( mv[['d2']][,'n'] / (mv[['d2']][,'sep'])^2 ))
+
       # compute weighted sums of squares along both dimensions and return their sum
-      wss.d1 = sum( ( mv[['d1']][,'n'] / (d1sv)^2 ) * ( ( mv[['d1']][,'sv'] - d1sv )^2 ) )
-      wss.d2 = sum( ( mv[['d2']][,'n'] / (d2sv)^2 ) * ( ( mv[['d2']][,'sv'] - d2sv )^2 ) )
+      wss.d1 = sum( wd1 * ( ( mv[['d1']][,'sv'] - d1sv )^2 ) )
+      wss.d2 = sum( wd2 * ( ( mv[['d2']][,'sv'] - d2sv )^2 ) )
     }
 
     # compute total of weighted sums of squares
@@ -421,17 +458,19 @@ pkern_vario_fit = function(vario, ypars='gau', xpars=ypars, v=NULL, nug=NULL, ni
 
   # make a list of initial values to test
   np = length(pinitial)
-  list.initial = c(list(pinitial), lapply(seq(ninitial), \(ini) plower + stats::runif(np)*(pupper-plower)) )
+  list.ini = list(pinitial)
+  if(add>0) list.ini = c(list.ini, lapply(seq(add), \(ini) plower+stats::runif(np)*(pupper-plower)) )
 
   # run the optimizer for each one
-  list.optim = lapply(list.initial, \(ini) stats::optim(par=ini,
+  list.optim = lapply(list.ini, \(ini) stats::optim(par=ini,
                                                         f=fn,
                                                         method='L-BFGS-B',
                                                         lower=plower,
                                                         upper=pupper,
                                                         p=list(x=xpars, y=ypars),
                                                         mv=mvario,
-                                                        ds=vario[['ds']]))
+                                                        ds=vario[['ds']],
+                                                        fit.method=fit.method))
 
   # select the best fit
   idx.best = which.min( sapply(list.optim, \(result) result$value) )
