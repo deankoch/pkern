@@ -181,7 +181,8 @@ pkern_snap_plot = function(gyx, pts=NULL, ppars=list())
 #' Snap an irregular set of 2d points to nearest regular subgrid
 #'
 #' Snaps points to a subgrid, either by calling `pkern_snap_1d` twice, or by using the
-#' hungarian algorithm on the 2d problem
+#' Hungarian algorithm to solve the grid assignment problem, where the snapping error
+#' (sum of squared snapping distances) is minimized.
 #'
 #' output list contains:
 #'  `gdim`, the input grid dimensions (ny, nx)
@@ -332,35 +333,38 @@ pkern_snap = function(gyx, pts, sep=NULL, distinct=TRUE, quiet=FALSE, bias=10)
   g[['gyx']] = gyx
   g[['pmap']] = pmap
 
-  # copy subgrid line numbers (indices of gyx, including empty subgrid lines)
+  # list of all subgrid line numbers (indices of gyx, including empty subgrid lines)
   g[['gli']] = Map(\(m, s) seq(min(m), max(m), by=s), m=pmap, s=sep)
 
-  # overwrite dimension-wise distances with Euclidean distance
+  # list mapping input points to y and x grid line numbers
+  idx.pmap = Map(\(m,i) match(m,i), m=g[['pmap']], g[['gli']])
+
+  # vector mapping input points to full grid data in column-vectorized order
+  gmap.flipy = Map(\(gl, m) gl[m], g[['gli']], idx.pmap)
+  gmap.flipy[['y']] = g[['gdim']][1] - gmap.flipy[['y']] + 1
+  g[['pvec']] = pkern_mat2vec(gmap.flipy, g[['gdim']])
+
+  # set subgrid spacing with respect to original grid, and subgrid resolution
+  g[['sep']] = stats::setNames(unlist(sep), yxnm)
+  g[['sg']][['gres']] = g[['sep']] * g[['gres']]
+
+  # Euclidean snapping distance
   g[['sg']][['pdist']] = do.call(\(x,y) sqrt(x^2 + y^2), snap[['dist']])
 
   # subgrid dimensions and grid line coordinates
   g[['sg']][['gdim']] = sapply(g[['gli']], length)
   g[['sg']][['gyx']] = Map(\(yx, m) yx[m], yx=gyx, m=g[['gli']])
 
-  # subgrid spacing with respect to original grid, and new resolution
-  g[['sg']][['sep']] = stats::setNames(unlist(sep), yxnm)
-  g[['sg']][['gres']] = g[['sg']][['sep']] * g[['gres']]
-
-  # extract dimension-wise mapping to yx (a subset of the grid lines)
-  idx.pmap = Map(\(m,i) match(m,i), m=g[['pmap']], g[['gli']])
-
-  # add mapping to vectorized form of full grid
-  gmap.flipy = Map(\(gl, m) gl[m], g[['gli']], idx.pmap)
-  gmap.flipy[['y']] = g[['gdim']][1] - gmap.flipy[['y']] + 1
-  g[['sg']][['pvec']] = pkern_mat2vec(gmap.flipy, g[['gdim']])
-
-  # ... and of subgrid
+  # vector mapping input points to subgrid data in column-vectorized order
   idx.pmap[['y']] = g[['sg']][['gdim']][1] - idx.pmap[['y']] + 1
-  g[['sg']][['spvec']] = pkern_mat2vec(idx.pmap, g[['sg']][['gdim']])
+  g[['sg']][['pvec']] = pkern_mat2vec(idx.pmap, g[['sg']][['gdim']])
+
+  # vector mapping subgrid data to input points (inverse of pvec)
+  g[['sg']][['ipvec']] = match(seq(prod(g[['sg']][['gdim']])), g[['sg']][['pvec']])
 
   # reorder output then return
-  g[['sg']] = g[['sg']][c('gdim', 'gres', 'gyx', 'sep', 'pvec', 'spvec', 'pdist')]
-  return(g[c('gdim', 'gres', 'gyx', 'pmap', 'gli', 'sg')])
+  g[['sg']] = g[['sg']][c('gdim', 'gres', 'gyx', 'pvec', 'ipvec', 'pdist')]
+  return(g[c('gdim', 'gres', 'gyx', 'sep', 'pmap', 'gli', 'pvec', 'sg')])
 }
 
 
