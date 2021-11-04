@@ -97,12 +97,12 @@ pkern_toString = function(pars, nsig=3)
 #' A wrapper for graphics::filled.contour and graphics::image (work in progress). This
 #' essentially does the same thing as `raster::plot`, but specialized for the pkern package
 #'
-#' `gdim` and `yx` can be omitted when their values can be derived from `z` (eg. when `z`
-#' is a RasterLayer, but not when it is a vector).
+#' `gdim` and `gyx` can be omitted when their values can be derived from `z` (eg. when `z`
+#' is the output from `pkern_fromRaster` or when is a RasterLayer, but not when it is a vector).
 #'
 #' @param z numeric vector, matrix, RasterLayer, or list
 #' @param gdim c(ni, nj), the number of rows and columns in the grid
-#' @param yx list of numeric vectors, the y and x grid line coordinates
+#' @param gyx list of numeric vectors, the y and x grid line coordinates
 #' @param ds positive numeric vector, distance scaling factors along y and x directions
 #' @param ppars list of optional plotting parameters (see details)
 #'
@@ -111,7 +111,7 @@ pkern_toString = function(pars, nsig=3)
 #'
 #' @examples
 #' # TODO
-pkern_plot = function(z, gdim=NULL, yx=NULL, ds=1, ppars=list())
+pkern_plot = function(z, gdim=NULL, gyx=NULL, ds=1, ppars=list())
 {
   # duplicate distance scaling factors as needed
   if( length(ds) == 1 ) ds = rep(ds, 2)
@@ -123,9 +123,9 @@ pkern_plot = function(z, gdim=NULL, yx=NULL, ds=1, ppars=list())
     gdim = dim(z)[1:2]
     if( 'RasterLayer' %in% class(z) )
     {
-      if( is.null(yx) ) yx = pkern_fromRaster(z, what='yx')
+      if( is.null(gyx) ) gyx = pkern_fromRaster(z, what='gyx')
       if( is.null(gdim) ) gdim = pkern_fromRaster(z, what='gdim')
-      z = pkern_fromRaster(z, what='values')
+      z = pkern_fromRaster(z, what='gval')
     }
   }
 
@@ -133,11 +133,11 @@ pkern_plot = function(z, gdim=NULL, yx=NULL, ds=1, ppars=list())
   if( is.list(z) )
   {
     # output from pkern_fromRaster handled by recursive call
-    if( 'values' %in% names(z) )
+    if( 'gval' %in% names(z) )
     {
       if( !is.null( z[['gdim']] ) ) gdim = z[['gdim']]
-      if( !is.null( z[['yx']] ) ) yx = z[['yx']]
-      return(pkern_plot(z[['values']], gdim, yx, ds, ppars=ppars))
+      if( !is.null( z[['gyx']] ) ) gyx = z[['gyx']]
+      return(pkern_plot(z[['gval']], gdim, gyx, ds, ppars=ppars))
     }
 
     # otherwise assume list is kernel parameters and pass them on to `pkern_kplot`
@@ -146,10 +146,10 @@ pkern_plot = function(z, gdim=NULL, yx=NULL, ds=1, ppars=list())
 
   # set up default grid line values when they are not supplied
   yxnm = stats::setNames(nm=c('y', 'x'))
-  if( is.null(yx) ) yx = lapply(gdim, seq)
-  if( length(yx) != 2 ) stop('could not determine grid size for input z. Try setting gdim')
-  if( is.null(names(yx)) ) yx = stats::setNames(yx, yxnm)
-  if( is.null(gdim) ) gdim = sapply(yx, length)
+  if( is.null(gyx) ) gyx = lapply(gdim, seq)
+  if( length(gyx) != 2 ) stop('could not determine grid size for input z. Try setting gdim')
+  if( is.null(names(gyx)) ) gyx = stats::setNames(gyx, yxnm)
+  if( is.null(gdim) ) gdim = sapply(gyx, length)
 
   # unpack plotting parameters and/or set defaults
   asp = ifelse( is.null(ppars[['asp']]), 1, ppars[['asp']])
@@ -177,19 +177,19 @@ pkern_plot = function(z, gdim=NULL, yx=NULL, ds=1, ppars=list())
 
     # update grid size and grid line locations
     gdim = sapply(ij, length)
-    yx = mapply(\(pos, idx) pos[idx], pos=yx, idx=ij, SIMPLIFY=FALSE)
+    gyx = mapply(\(pos, idx) pos[idx], pos=gyx, idx=ij, SIMPLIFY=FALSE)
   }
 
   # convert vectorization order for compatibility with `graphics::image` and friends
   zmat = matrix(z[pkern_r2c(gdim, in.byrow=FALSE, out.byrow=TRUE, flipx=TRUE)], rev(gdim))
 
-  # adjust yx for supplied distance scaling and sort into ascending order
-  yx = lapply(yx, sort)
-  yx = stats::setNames(mapply(\(d, g) g*d, g=yx, d=ds, SIMPLIFY=FALSE), yxnm)
+  # adjust gyx for supplied distance scaling and sort into ascending order
+  gyx = lapply(gyx, sort)
+  gyx = stats::setNames(mapply(\(d, g) g*d, g=gyx, d=ds, SIMPLIFY=FALSE), yxnm)
 
   # find grid line spacing halves on plot and positions of grid lines
-  yxsp = sapply(yx, \(g) diff(g[1:2]) / 2 )
-  yxgl = lapply(yxnm, \(d) c( min(yx[[d]]) - yxsp[[d]], yx[[d]] + yxsp[[d]] ) )
+  yxsp = sapply(gyx, \(g) diff(g[1:2]) / 2 )
+  yxgl = lapply(yxnm, \(d) c( min(gyx[[d]]) - yxsp[[d]], gyx[[d]] + yxsp[[d]] ) )
   yxlim = lapply(yxgl, range)
 
   # set up a default continuous color palette
@@ -248,7 +248,7 @@ pkern_plot = function(z, gdim=NULL, yx=NULL, ds=1, ppars=list())
   if( !smoothed )
   {
     # draw the image using base graphics
-    graphics::image(x=yx[['x']], y=yx[['y']], zmat, axes=FALSE, ann=FALSE, asp=asp, col=cols)
+    graphics::image(x=gyx[['x']], y=gyx[['y']], zmat, axes=FALSE, ann=FALSE, asp=asp, col=cols)
 
     # add grid lines
     graphics::abline( v = yxgl[['x']], col=glcol)
@@ -263,7 +263,7 @@ pkern_plot = function(z, gdim=NULL, yx=NULL, ds=1, ppars=list())
     graphics::plot.window(yxlim[['x']], yxlim[['y']], xaxs='i', yaxs='i', asp=asp)
 
     # call to draw contour plot
-    graphics::.filled.contour(x=yx[['x']], y=yx[['y']], zmat, lvls, cols)
+    graphics::.filled.contour(x=gyx[['x']], y=gyx[['y']], zmat, lvls, cols)
   }
 
   # draw x axis
@@ -366,7 +366,7 @@ pkern_kplot = function(pars, gdim=NULL, ds=1, ppars=list())
   z = nug + ( v * as.vector( kronecker(kx, ky) ) )
 
   # set up axis labels and titles
-  yx = Map( \(d, s, idx) s * ( seq(d) - idx ), d=gdim, s=ds, idx=ijc)
+  gyx = Map( \(d, s, idx) s * ( seq(d) - idx ), d=gdim, s=ds, idx=ijc)
   ppars.default = list(main=bquote(.( titles[['main']] )~'kernel'~.( titles[['nug']] )),
                        sub=titles[['kp']],
                        leg=ktype,
@@ -376,7 +376,7 @@ pkern_kplot = function(pars, gdim=NULL, ds=1, ppars=list())
 
   # draw the plot and finish
   ppars.out = utils::modifyList(ppars.default, ppars)
-  pkern_plot(z, gdim, yx=yx, ppars=ppars.out)
+  pkern_plot(z, gdim, gyx=gyx, ppars=ppars.out)
   return(invisible())
 }
 
