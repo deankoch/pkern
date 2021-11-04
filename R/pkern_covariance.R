@@ -227,7 +227,8 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
       if( pars[['k']] == 'mat' )
       {
         # these bounds are suggestions based on experimentation
-        bds.shp = c(1, 40)
+        bds.shp = c(1, 20)
+        shp.ini = 2
         nm.shp = 'kap'
       }
 
@@ -236,6 +237,7 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
       {
         # max of 2 to ensure positive definite covariance matrix
         bds.shp = c(0.5, 2)
+        shp.ini = 1
         nm.shp = 'p'
       }
 
@@ -251,7 +253,7 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
       # compute and append initial values as needed
       if( is.null( pars[['kp']] ) )
       {
-        shp.ini = mean( c(pars[['lower']][2], pars[['upper']][2]) )
+        #shp.ini = mean( c(pars[['lower']][2], pars[['upper']][2]) )
         rho.ini = pkern_rho(cini, utils::modifyList(pars, list(kp=c(NA, shp.ini))), ds)
         pars[['kp']] = c(rho.ini, shp.ini)
       }
@@ -340,7 +342,6 @@ pkern_unpack = function(pars, kp=NULL)
 #' @param ds positive numeric, the distance between adjacent grid lines
 #' @param i vector, a subset of `seq(n)` indicating rows to return
 #' @param j vector, a subset of `seq(n)` indicating columns to return
-#' @param sparse logical
 #'
 #'
 #' @return the n x n correlation matrix, or its subset as specified in `i`, `j`
@@ -352,7 +353,7 @@ pkern_unpack = function(pars, kp=NULL)
 #' pkern_corrmat(pars, n=10, i=2:4, j=2:4)
 #' pkern_corrmat(pars, n=3)
 #' pkern_corrmat(pars, n=3, ds=2)
-pkern_corrmat = function(pars, n, ds=1, i=seq(n), j=seq(n), sparse=FALSE)
+pkern_corrmat = function(pars, n, ds=1, i=seq(n), j=seq(n))
 {
   # compute the set of distances over which we need to evaluate kernel
   du = ds * ( seq(n) - 1 )
@@ -364,8 +365,7 @@ pkern_corrmat = function(pars, n, ds=1, i=seq(n), j=seq(n), sparse=FALSE)
   bigvec = c(dcorr[n:2], dcorr)
 
   # build and return the matrix
-  if(sparse) return( Matrix::Matrix(sapply(j, function(x) bigvec[ (n-x) + i ])) )
-  return( sapply(j, function(x) bigvec[ (n-x) + i ]) )
+  return( Matrix::Matrix(sapply(j, function(x) bigvec[ (n-x) + i ])) )
 }
 
 
