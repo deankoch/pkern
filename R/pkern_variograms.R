@@ -229,6 +229,15 @@ pkern_xvario = function(gdim, vec, simple=TRUE, method='median', quiet=FALSE, se
 pkern_vario = function(gdim, vec, sep=NA, method='median', diagonal=TRUE,
                        ds=NA, quiet=FALSE, nmax=1e4, vcalc=TRUE)
 {
+  # handle `gdim` as output from `pkern_snap`
+  if( is.list(gdim) )
+  {
+    # if subgrid info is provided, it is assumed `vec` is a data vector from the subgrid
+    if( !is.null(gdim[['sg']]) ) gdim = gdim[['sg']]
+    if( is.na(ds) & !is.null(gdim[['gres']]) ) ds = gdim[['gres']]
+    gdim = gdim[['gdim']]
+  }
+
   # set default sample lags and compute sample variance
   if( anyNA(sep) ) sep = lapply(gdim, \(d) seq(d-1))
   if( !is.list(sep) ) sep = list(y=sep, x=sep)
