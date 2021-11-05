@@ -271,9 +271,9 @@ pkern_fit = function(zobs, gsnap, ypars='gau', xpars=ypars, v=NULL, nug=NULL, ad
 #' `gxy`, and its elements should be in column-vectorized order. Only the locations of the NAs
 #' (and not the other contents) of `obs` matter.
 #'
-#' @param gdim integer vector c(ni, nj) the size of the outer grid
-#' @param map list of integer vectors "i" and "j", row and column indices of the subgrid
-#' @param pars (optional) list of "x" and "y" kernel parameters
+#' @param gdim integer vector c(ny, nx) the size of the outer grid (in number of grid lines)
+#' @param gli list of integer vectors "y" and "x", indexing the grid lines that form the subgrid
+#' @param pars list of "y" and "x" kernel parameters
 #' @param zobs (optional) vector, containing NAs where data are missing in the subgrid
 #' @param makev logical, indicates to compute variance matrix components for points off subgrid
 #'
@@ -282,23 +282,23 @@ pkern_fit = function(zobs, gsnap, ypars='gau', xpars=ypars, v=NULL, nug=NULL, ad
 #'
 #' @examples
 #' # TODO
-pkern_precompute = function(gdim, map, pars=NULL, zobs=NULL, makev=FALSE)
+pkern_precompute = function(gdim, gli, pars, zobs=NULL, makev=FALSE)
 {
   # ordering is i/y first, j/x second, by default assume all of subgrid is sampled
   yx.nm = c('y', 'x')
   cpars = pars[yx.nm]
   pvar = ifelse( is.null(pars[['v']]), 1, sqrt(pars[['v']]))
-  nmap = sapply(map, length)
+  nmap = sapply(gli, length)
   if( is.null(zobs) ) zobs = seq( prod(nmap) )
-  if( !all( c('i', 'j') %in% names(map) ) ) map = stats::setNames(map, c('i', 'j'))
+  if( !all( c('i', 'j') %in% names(gli) ) ) gli = stats::setNames(gli, c('i', 'j'))
 
   # find subgrid dimensions
-  mapu = lapply(map, \(m) sort(unique(m)))
+  mapu = lapply(gli, \(m) sort(unique(m)))
   dsg = sapply(mapu, \(s) sort(diff(s))[1])
 
   # find indices of grid lines on and off subgrid
   mapsg = Map(\(m, sep) seq(min(m), max(m), by=sep), m=mapu, sep=dsg)
-  mapc = mapply(\(s, g) seq(g)[-s], g=gdim, s=mapsg)
+  mapsg.c = mapply(\(s, g) seq(g)[-s], g=gdim, s=mapsg)
 
   # index of subgrid points in full grid, and all points on one of its grid lines
   idx.s = pkern_idx_sg(gdim, mapsg)
@@ -328,11 +328,11 @@ pkern_precompute = function(gdim, map, pars=NULL, zobs=NULL, makev=FALSE)
   # build component marginal correlation matrices for points off subgrid (slow!)
   vo = NULL
   if(makev) vo = Map(\(p, n, d, i, j) { pvar * pkern_corrmat(p, n, d, i, j) },
-                     p=cpars, n=gdim, d=dfull, i=mapc, j=mapc) |> stats::setNames(nm=yx.nm)
+                     p=cpars, n=gdim, d=dfull, i=mapsg.c, j=mapsg.c) |> stats::setNames(nm=yx.nm)
 
   # build component cross-correlation matrices for points on vs off subgrid lines
   vso = Map( \(p, n, d, i, j) { pvar * pkern_corrmat(p, n, d, i, j) },
-             p=cpars, n=gdim, d=dfull, i=map, j=mapc) |> stats::setNames(nm=yx.nm)
+             p=cpars, n=gdim, d=dfull, i=gli, j=mapsg.c) |> stats::setNames(nm=yx.nm)
 
   # use faster method when all of the subgrid is sampled
   if( !anyNA(zobs) )
@@ -350,14 +350,16 @@ pkern_precompute = function(gdim, map, pars=NULL, zobs=NULL, makev=FALSE)
     ed = eigen(vs.full[idx.sobs, idx.sobs], symmetric=TRUE)
 
     # we also need the (within subgrid) cross-covariance between sampled and unsampled points
-    vsc = vs.full[idx.smiss, idx.sobs]
+    #vsc = vs.full[idx.smiss, idx.sobs]
+    vsc = vs.full[, idx.sobs]
 
   }
 
   # return everything in list
   idx.list = list(s=idx.s, o=idx.o, oj=idx.oj, oi=idx.oi, sobs=idx.sobs)
   v.list = list(vs=vs, vo=vo, vso=vso, vsc=vsc, ed=ed)
-  return(c(idx.list, v.list))
+  in.list = list(gdim=gdim, gli=gli, pars=pars)
+  return(c(in.list, idx.list, v.list))
 }
 
 
@@ -420,7 +422,7 @@ pkern_cmean = function(zobs, gdim, pars, gli=NULL, pc=FALSE)
   if( is.logical(pc) )
   {
     # prepare matrices and indexing vectors
-    pcout = pkern_precompute(gdim, gli, pars, zobs=zobs, makev=FALSE)
+    pcout = pkern_precompute(gdim, gli, pars, zobs, makev=FALSE)
     if( pc ) { return(pcout) } else { return(pkern_cmean(zobs, gdim, pars, gli, pcout)) }
 
   } else {
@@ -435,7 +437,7 @@ pkern_cmean = function(zobs, gdim, pars, gli=NULL, pc=FALSE)
 
   # initialize predictions vector and add the observed points
   zpred = vector(mode='numeric', length=prod(gdim))
-  zpred[ pc[['s']] ] = zobs
+  #zpred[ pc[['s']] ] = zobs
 
   # omit any NA points from zobs
   zd = zobs[sobs]
@@ -455,9 +457,8 @@ pkern_cmean = function(zobs, gdim, pars, gli=NULL, pc=FALSE)
     # ordinary case - reciprocal of eigenvalues produces the inverse
     zd.mod[sobs] = edv %*% ( (t(edv) %*% zd) / pwv )
 
-    # multiply by cross covariance to get conditional mean of unsampled subgrid points
-    zpred[ pc[['s']][-sobs] ] = pc[['vsc']] %*% zd.mod[sobs]
-
+    # multiply by cross covariance to get conditional mean of subgrid points
+    zpred[ pc[['s']] ] = pc[['vsc']] %*% zd.mod[sobs]
 
   } else {
 
@@ -480,8 +481,50 @@ pkern_cmean = function(zobs, gdim, pars, gli=NULL, pc=FALSE)
 }
 
 
+#
+#' Pointwise variance of kriging predictions
+#'
+#' Computes the conditional variance of kriging predictions on a grid
+#'
+#' TODO: write up the proof for this method and write up a short description
+#' here.
+#'
+#' @param pc a list of precomputed objects returned by `pkern_cmean`
+#' @param quiet logical indicating to suppress progress bar on console
+#' @param idx (optional) integer vector indexing a subset of eigenvectors
+#'
+#' @return
+#' @export
+#'
+#' @examples
+pkern_variance = function(pc, quiet=FALSE, idx=NULL)
+{
+  # we will be looping over eigenvectors padded (with NAs) to size of complete subgrid
+  ev = rep(NA, length(pc[['s']]))
+  nev = length(pc[['ed']][['values']])
 
+  # pointwise variance is initialize to the sill
+  sill = pc[['pars']][['v']] + pc[['pars']][['nug']]
+  zv = rep(sill, prod(pc[['gdim']]))
 
+  # loop over all eigenvectors unless a subset is requested
+  if( is.null(idx) ) idx = seq(nev)
+
+  # then we iteratively subtract from it
+  if( !quiet ) pb = utils::txtProgressBar(max=nev, style=3)
+  for(i in idx)
+  {
+    # scaled eigenvector
+    ev.scale = sqrt(pc[['pars']][['nug']] + pc[['ed']][['values']][i])
+    ev[ pc[['sobs']] ] = ev.scale * pc[['ed']][['vectors']][,i]
+
+    # subtract the square
+    zv = zv - pkern_cmean(ev, pc[['gdim']], pc[['pars']], pc[['gli']], pc=pc)^2
+    if( !quiet ) utils::setTxtProgressBar(pb, i)
+  }
+  close(pb)
+  return(zv)
+}
 
 #
 #' Simulate grid point values of a random field with separable covariance kernel
