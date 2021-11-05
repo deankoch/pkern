@@ -8,32 +8,31 @@
 
 #' Plots a set of 1 or 2d points and their snapped versions
 #'
-#' The function plots the points in `pts` over the grid lines in `g`, with the option of
-#' also drawing connecting lines between points and grid intersections, according to a
-#' given mapping.
+#' The function plots the points in `pts` over the grid lines in `gyx`, with the option of
+#' also drawing connecting lines between points and grid intersections to show snapping
+#' distances.
 #'
 #' This is mainly intended for visualizing the output of `pkern_snap` and related functions.
 #'
 #' `pts` can be a vector of 1d positions (in which case the plot shows input order against
 #' position), or a matrix whose columns are the "y" and "x" coordinates (in that order,
 #' unless they are named), or a data frame (which is coerced to matrix), or a list of
-#' coordinate vectors.
+#' coordinate vectors, or an `sf` points object.
 #'
-#' `gyx` can be a numeric vector, or list of two (in "y", "x" order), or a list containing the
-#' grid line locations (as vector or list) in element "gyx", and, optionally, "pmap" which
-#' provides a mapping for drawing connecting lines. If supplied, "pmap" should be an integer
-#' vector (or list of two) with length(s) matching (those of) `pts`, and with elements
-#' indexing grid line vectors, ie from the sequences `1:length(gyx$gyx['y'])` and
-#' `1:length(gyx$gyx['x'])`
+#' `gyx` can be a numeric vector in the 1d case; or list of two (in "y", "x" order); or a
+#' list containing the grid line locations (as vector or list) in element "gyx", and,
+#' optionally, "pmap" which provides a mapping for drawing connecting lines. For example
+#' you can pass the return value of `pkern_snap` as `gxy`
+#'
+#' If supplied, `gyx$pmap` should be an integer vector (or list of two) with length(s)
+#' matching those in `pts` - its elements index grid lines, so they should have values
+#' drawn (possibly with repitition) from the sequences `seq_along(gyx$gyx$y)` and
+#' `seq_along(gyx$gyx$x)`
 #'
 #' When `gyx$gyx` but not `gyx$pmap` is supplied, it is assumed that `gyx$gyx` and `pts` have
 #' the same length and ordering, and lines are drawn connecting their respective elements.
 #' When `gyx` is a list without named element "gyx", it is assumed to be a list of grid line
 #' vectors (and no connecting lines are drawn).
-#'
-#' Different classes of `pts` and `gyx` (and "pmap") can be mixed but they must have the
-#' same dimensionality; ie a 2d points set `pts` must be passed with a 2d grid line object
-#' `gyx`, and if "pmap" is supplied, it must be a list of two mapping vectors.
 #'
 #' `ppars` is a list with any of the following (optional) named elements: "gcol", "mcol",
 #' "dcol", and "pcol". They are the colors of, respectively, the grid lines, the snapped grid
@@ -177,34 +176,54 @@ pkern_snap_plot = function(gyx, pts=NULL, ppars=list())
   return( invisible() )
 }
 
-# TODO: flesh out documentation and simplify output
-#' Snap an irregular set of 2d points to nearest regular subgrid
+
+#' Snap an irregular set of 2d points to the nearest regular subgrid
 #'
 #' Snaps points to a subgrid, either by calling `pkern_snap_1d` twice, or by using the
-#' Hungarian algorithm to solve the grid assignment problem, where the snapping error
-#' (sum of squared snapping distances) is minimized.
+#' Hungarian algorithm to solve the grid assignment problem.
 #'
-#' output list contains:
+#' `gyx` can be a RasterLayer, a list of y and x coordinates, or a list containing the
+#' coordinates (in element `gyx$gyx`) as returned by `pkern_fromRaster`.
+#'
+#' `sep` is a positive integer (or vector of two) specifying the factor(s) by which to
+#' multiply the outer grid resolution to get the subgrid. Equivalently, this is the
+#' separation distance between adjacent subgrid lines, given in terms of the number of
+#' outer grid lines - eg. if `sep = c(1,1)` then all outer grid lines are included in the
+#' subgrid; And if `sep=c(2,1)`, then only every second y grid line is included. `pkern`
+#' includes a helper function for choosing `sep` automatically. This is done by default
+#' when `sep` is not specified.
+#'
+#' By default (`distinct=TRUE`) the function uses the Hungarian algorithm to find
+#' the mapping which minimizes the total sum of squared snapping distances, under the
+#' constraint that no more than one input point is assigned to each subgrid point.
+#' When `distinct=FALSE` the function simply maps each point to the nearest x and y grid
+#' lines separately (minimizing total Manhattan distance)
+#'
+#' The output list contains info about the configuration of the grid and subgrid, along
+#' with several indexing vectors for mapping between the input points and the grid points -
+#'
 #'  `gdim`, the input grid dimensions (ny, nx)
-#'  `gyx`, the input grid line coordinates (list of vectors "y" and "x")
-#'  `sep`, the estimated spacing (number of grid lines between subgrid lines) for the subgrid
-#'  `vec`, integer vector, the mapping from `pts` to `g` in vectorized order
+#'  `gres`, the input grid resolution (copied from `gyx` or set to `c(1,1)`)
+#'  `gyx`, the input grid line coordinates (copied from input `gyx`)
+#'  `sep`, the selected subgrid spacing
 #'  `pmap`, list of integer vectors, dimension-wise mapping from `pts` to `gyx`
-#'  `pdist`, list of numeric vectors, dimension-wise snapping distances
+#'  `gli`, list of integer vectors, dimension-wise grid line numbers forming the subgrid
+#'  `pvec`, integer vector mapping from `pts` to full grid, in column-vectorized order
+#'  `pdist`, numeric vector of Euclidean snapping distances
 #'  `sg`, list with information about the subgrid:
 #'    `gdim`, the subgrid dimensions (ny, nx)
-#'    `g`, the subgrid lines (a subset of `g` in parent list)
-#'    `pmap`, dimension-wise mapping from `pts` to `sg$g`
-#'    `vec`, mapping from `pts` to `sg$g` in vectorized order
+#'    `gyx`, the subgrid line coordinates (subsets of `gyx` in parent list)
+#'    `gres`, the subgrid resolution (equal to `sep * gres` in parent list)
+#'    `pvec`, integer vector mapping from `pts` to subgrid, in column-vectorized order
+#'    `ipvec`, integer vector, the inverse of the above mapping (with NAs for unmapped grid points)
 #'
-#' @param gyx list of two vectors ("x" and "y"), the grid line coordinates (ascending order)
-#' @param pts list of two vectors ("x" and "y"), the 2d point coordinates (any order)
-#' @param sep integer vector, where `sep-1` is the number of grid lines between subgrid lines
-#' @param distinct logical, indicating to attempt a 1-to-1 mapping
+#' @param gyx list of two vectors, the y and x grid line coordinates (ascending order)
+#' @param pts list of two vectors, the y and x point coordinates
+#' @param sep integer vector, where `sep-1` is the number of grid lines between each subgrid line
+#' @param distinct logical, indicating to snap no more than one input point to each grid point
 #' @param quiet logical indicating to suppress console messages
-#' @param bias nonegative numeric passed to `pkern_estimate_sep` (when `sep` not supplied)
 #'
-#' @return a list (see details)
+#' @return a large list containing info about grid and subgrid (see details)
 #' @export
 #'
 #' @examples
@@ -244,7 +263,7 @@ pkern_snap_plot = function(gyx, pts=NULL, ppars=list())
 #' snap.distinct = pkern_snap(g, pts)
 #' pkern_snap_plot(snap.distinct, pts)
 #'
-pkern_snap = function(gyx, pts, sep=NULL, distinct=TRUE, quiet=FALSE, bias=10)
+pkern_snap = function(gyx, pts, sep=NULL, distinct=TRUE, quiet=FALSE)
 {
   # initialize output list
   g = list(gres=c(1,1), sg=list())
@@ -278,7 +297,7 @@ pkern_snap = function(gyx, pts, sep=NULL, distinct=TRUE, quiet=FALSE, bias=10)
   if( !all(yxnm %in% names(pts)) ) names(pts)[1:2] = yxnm
 
   # auto-detect sep or coerce as needed
-  if( is.null(sep) ) sep = Map(\(yx, p) pkern_estimate_sep(yx, p, distinct=F, bias=bias), gyx, pts)
+  if( is.null(sep) ) sep = Map(\(yx, p) pkern_estimate_sep(yx, p, distinct=F), gyx, pts)
   if( length(sep) == 1 ) sep = rep(sep, 2)
   if( !all( yxnm %in% names(sep) ) ) names(sep)[1:2] = yxnm
 
@@ -523,7 +542,7 @@ pkern_snap_1d = function(g, pts, sep=1, distinct=TRUE)
 #' snap = pkern_snap_1d(g, pts, sep=sep, distinct=FALSE)
 #' pkern_snap_plot(snap, pts)
 #'
-pkern_estimate_sep = function(g, pts, distinct=TRUE, bias=0, dlim=NULL)
+pkern_estimate_sep = function(g, pts, distinct=TRUE, bias=10, dlim=NULL)
 {
   # snap the points at finest detail level `(sep=1`) and sort the mapping
   snap.result = pkern_snap_1d(g, pts, sep=1, distinct=FALSE)
