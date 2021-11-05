@@ -93,8 +93,8 @@ pkern_LL = function(pars, zobs, sgdim, pc=FALSE)
   pvar = ifelse( is.null(pars[['v']]), 1, sqrt(pars[['v']]))
 
   # set default subgrid resolution (distances between grid lines) as needed
-  dsub = pars[['ds']]
-  if( is.null(dsub) ) dsub = c(1,1)
+  sgres = pars[['gres']]
+  if( is.null(sgres) ) sgres = c(1,1)
 
   # set default nugget as needed
   pnug = ifelse( is.null(pars[['nug']]), 0, pars[['nug']])
@@ -113,9 +113,9 @@ pkern_LL = function(pars, zobs, sgdim, pc=FALSE)
     # initialize precomputed object list with indices of sampled subgrid points
     pc = list( sobs = sobs )
 
-    # build component marginal correlation matrices for the subgrid (at dsub resolution)
+    # build component marginal correlation matrices for the subgrid (at sgres resolution)
     pc[['vs']] = Map( \(p, n, d) { pvar * pkern_corrmat(p, n, d) },
-                      p=cpars, n=sgdim, d=dsub) |> stats::setNames(nm=yx.nm)
+                      p=cpars, n=sgdim, d=sgres) |> stats::setNames(nm=yx.nm)
 
     # when all of the subgrid is sampled: do eigendecompositions of component matrices
     if( length(sobs) == 0 ) { pc[['ed']] = lapply(vs, \(v) eigen(v, symmetric=TRUE)) } else {
@@ -198,8 +198,8 @@ pkern_fit = function(zobs, gsnap, ypars='gau', xpars=ypars, v=NULL, nug=NULL, ad
   if( length(nug) != 3 ) nug = c(min=1e-3, ini=nug, max=v[3])
 
   # set up defaults and bounds for kernel parameters (2-4 additional parameters)
-  ypars = pkern_bds(ypars, gsnap[['ds']][1])
-  xpars = pkern_bds(xpars, gsnap[['ds']][2])
+  ypars = pkern_bds(ypars, gsnap[['gres']][1])
+  xpars = pkern_bds(xpars, gsnap[['gres']][2])
 
   # vectorized bounds for all covariance parameters
   plower = c(v[1], nug[1], xpars[['lower']], ypars[['lower']])
@@ -231,7 +231,7 @@ pkern_fit = function(zobs, gsnap, ypars='gau', xpars=ypars, v=NULL, nug=NULL, ad
   if(add>0) list.ini = c(list.ini, lapply(seq(add), \(ini) plower+stats::runif(np)*(pupper-plower)) )
 
   # run the optimizer for each one
-  ptemp = list(x=xpars, y=ypars, ds=gsnap[['ds']])
+  ptemp = list(x=xpars, y=ypars, gres=gsnap[['gres']])
   list.optim = lapply(list.ini, \(ini) stats::optim(par=ini,
                                                     f=fn,
                                                     method='L-BFGS-B',
@@ -251,7 +251,7 @@ pkern_fit = function(zobs, gsnap, ypars='gau', xpars=ypars, v=NULL, nug=NULL, ad
   vfit = stats::setNames(result.optim$par[1], 'fitted')
   nugfit = stats::setNames(result.optim$par[2], 'fitted')
   pfit = pkern_unpack(ptemp, result.optim$par[-(1:2)])
-  return( list(y=pfit[['y']], x=pfit[['x']], v=vfit, nug=nugfit, ds=gsnap[['ds']]) )
+  return( list(y=pfit[['y']], x=pfit[['x']], v=vfit, nug=nugfit, gres=gsnap[['gres']]) )
 
 
 
@@ -315,24 +315,24 @@ pkern_precompute = function(gdim, gli, pars, zobs=NULL, makev=FALSE)
   idx.smiss = seq( length(zobs) )[-idx.sobs]
 
   # set default subgrid resolution (distances between grid lines) as needed
-  dsub = pars[['ds']]
-  if( is.null(dsub) ) dsub = c(1,1)
+  sgres = pars[['gres']]
+  if( is.null(sgres) ) sgres = c(1,1)
 
   # calculate full grid resolution (distances between grid lines)
-  dfull = dsub / dsg
+  gres = sgres / dsg
 
-  # build component marginal correlation matrices for the subgrid (at dsub resolution)
+  # build component marginal correlation matrices for the subgrid (at sgres resolution)
   vs = Map( \(p, n, d) { pvar * pkern_corrmat(p, n, d) },
-            p=cpars, n=nmap, d=dsub) |> stats::setNames(nm=yx.nm)
+            p=cpars, n=nmap, d=sgres) |> stats::setNames(nm=yx.nm)
 
   # build component marginal correlation matrices for points off subgrid (slow!)
   vo = NULL
   if(makev) vo = Map(\(p, n, d, i, j) { pvar * pkern_corrmat(p, n, d, i, j) },
-                     p=cpars, n=gdim, d=dfull, i=mapsg.c, j=mapsg.c) |> stats::setNames(nm=yx.nm)
+                     p=cpars, n=gdim, d=gres, i=mapsg.c, j=mapsg.c) |> stats::setNames(nm=yx.nm)
 
   # build component cross-correlation matrices for points on vs off subgrid lines
   vso = Map( \(p, n, d, i, j) { pvar * pkern_corrmat(p, n, d, i, j) },
-             p=cpars, n=gdim, d=dfull, i=gli, j=mapsg.c) |> stats::setNames(nm=yx.nm)
+             p=cpars, n=gdim, d=gres, i=gli, j=mapsg.c) |> stats::setNames(nm=yx.nm)
 
   # use faster method when all of the subgrid is sampled
   if( !anyNA(zobs) )
@@ -522,7 +522,7 @@ pkern_variance = function(pc, quiet=FALSE, idx=NULL)
     zv = zv - pkern_cmean(ev, pc[['gdim']], pc[['pars']], pc[['gli']], pc=pc)^2
     if( !quiet ) utils::setTxtProgressBar(pb, i)
   }
-  close(pb)
+  if( !quiet ) close(pb)
   return(zv)
 }
 
@@ -560,7 +560,7 @@ pkern_variance = function(pc, quiet=FALSE, idx=NULL)
 #'
 #' @param pars a kernel parameters list ("k", "kp"), or list of two of them ("x", "y")
 #' @param gdim integer vector c(ny, nx), the grid size
-#' @param ds positive numeric or vector of two, the distance scaling factor(s)
+#' @param gres positive numeric or vector of two, the distance scaling factor(s)
 #' @param precompute logical or list, for caching computationally expensive operations
 #' @param makeplot logical, whether to plot the results
 #'
@@ -582,17 +582,17 @@ pkern_variance = function(pc, quiet=FALSE, idx=NULL)
 #' utils::str(pre)
 #' pkern_sim(pars, precompute=pre)
 #'
-#' # resolution can be adjusted via `ds`
-#'  pkern_sim(pars, gdim, ds=c(1/4, 1/2))
+#' # resolution can be adjusted via `gres`
+#'  pkern_sim(pars, gdim, gres=c(1/4, 1/2))
 #' # in this example nugget effect is added to the numerically singular matrix
-pkern_sim = function(pars, gdim=c(25,25), ds=1, precompute=FALSE, makeplot=TRUE)
+pkern_sim = function(pars, gdim=c(25,25), gres=1, precompute=FALSE, makeplot=TRUE)
 {
   # if only one component kernel is supplied, use it for both x and y
   if( all( c('k', 'kp') %in% names(pars) ) ) pars = list(y=pars, x=pars)
 
-  # assign distance scaling with `pars` overwriting anything in argument `ds`
-  if( 'ds' %in% names(pars) ) ds = pars[['ds']]
-  if( length(ds) == 1 ) ds = rep(ds, 2)
+  # assign distance scaling with `pars` overwriting anything in argument `gres`
+  if( 'gres' %in% names(pars) ) gres = pars[['gres']]
+  if( length(gres) == 1 ) gres = rep(gres, 2)
 
   # set nugget effect to zero if it isn't supplied
   if( is.null( pars[['nug']] ) ) pars[['nug']] = 0
@@ -607,18 +607,18 @@ pkern_sim = function(pars, gdim=c(25,25), ds=1, precompute=FALSE, makeplot=TRUE)
     gdim = precompute[['gdim']]
     v = precompute[['v']]
     ed = precompute[['ed']]
-    ds = precompute[['ds']]
+    gres = precompute[['gres']]
     precompute = FALSE
 
   } else {
 
     # build x and y component correlation matrices, compute their eigendecompositions
-    v = Map(\(p, d, s) pkern_corrmat(p, d, s), p=pars[c('y', 'x')], d=gdim, s=ds)
+    v = Map(\(p, d, s) pkern_corrmat(p, d, s), p=pars[c('y', 'x')], d=gdim, s=gres)
     ed = lapply(v, \(vmat) eigen(vmat, symmetric=TRUE))
   }
 
   # return the list of precomputed objects if requested
-  if( precompute ) return( list(v=v, ed=ed, gdim=gdim, ds=ds) )
+  if( precompute ) return( list(v=v, ed=ed, gdim=gdim, gres=gres) )
 
   # kronecker product trick to get pointwise variances
   pwv = pars[['nug']] + kronecker(ed[['x']][['values']], ed[['y']][['values']])
@@ -646,8 +646,8 @@ pkern_sim = function(pars, gdim=c(25,25), ds=1, precompute=FALSE, makeplot=TRUE)
     if( pars[['nug']] == 0 ) pars[['nug']] = NULL
     titles = pkern_toString(pars)
     main = bquote('simulated'~.(titles[['main']])~'random field'~.(titles[['nug']]))
-    yx = Map(\(d, s) c(1, s*seq(d)[-d]), d=gdim, s=ds)
-    pkern_plot(z.corr.mat, gdim, ds=ds, ppars=list(main=main, sub=titles[['kp']]))
+    yx = Map(\(d, s) c(1, s*seq(d)[-d]), d=gdim, s=gres)
+    pkern_plot(z.corr.mat, gdim, gres=gres, ppars=list(main=main, sub=titles[['kp']]))
   }
 
   # finish, returning data matrix

@@ -174,7 +174,7 @@ pkern_rho = function(cval, pars, d=1, upper=1e3*d)
 #' `cini` and 1. `cini` is by default set to
 #'
 #' @param pars kernel parameter list (recognized by `pkern_corr`) or list of two of them
-#' @param ds vector c(dy, dx) or positive numeric, the distances between adjacent grid lines
+#' @param gres vector c(dy, dx) or positive numeric, the distances between adjacent grid lines
 #' @param cmin positive numeric, minimum allowable correlation between adjacent grid points
 #' @param cini positive numeric, initial correlation between adjacent grid points
 #' @param cmax positive numeric, maximum allowable correlation between adjacent grid points
@@ -188,7 +188,7 @@ pkern_rho = function(cval, pars, d=1, upper=1e3*d)
 #' # suggested bounds depend on grid resolution
 #' pars = 'mat'
 #' pkern_bds(pars)
-#' pkern_bds(pars, ds=100)
+#' pkern_bds(pars, gres=100)
 #'
 #' # specify separable 2D kernels with a vector of two names
 #' pars = c('exp', 'mat')
@@ -198,16 +198,16 @@ pkern_rho = function(cval, pars, d=1, upper=1e3*d)
 #' pars = list(k='mat', upper=c(10,10))
 #' pkern_bds(pars)
 #'
-pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
+pkern_bds = function(pars, gres=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
 {
   # handle character input (kernel names)
   if( is.character(pars) )
   {
     # convert to expected list format for recursive call and handle unexpected input
-    if( length(pars) == 1 ) return( pkern_bds(list(k=pars), ds=ds, cmin=cmin, cini=cini, cmax=cmax) )
+    if( length(pars) == 1 ) return( pkern_bds(list(k=pars), gres=gres, cmin=cmin, cini=cini, cmax=cmax) )
     if( length(pars) != 2 ) stop('expected vector of two kernel names in pars')
     pars = lapply(stats::setNames(pars, c('y', 'x')), \(p) list(k=p))
-    return( pkern_bds(pars, ds=ds, cmin=cmin, cini=cini, cmax=cmax) )
+    return( pkern_bds(pars, gres=gres, cmin=cmin, cini=cini, cmax=cmax) )
   }
 
   # single dimension case
@@ -216,9 +216,9 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
     # do nothing and return if upper, lower and initial are already assigned
     if( all( c('kp', 'lower', 'upper') %in% names(pars) ) ) return(pars)
 
-    # check for invalid input to ds, set default as needed
-    if( length(ds) > 1 ) stop('ds should have length 1')
-    if( is.na(ds) ) ds = 1
+    # check for invalid input to gres, set default as needed
+    if( length(gres) > 1 ) stop('gres should have length 1')
+    if( is.na(gres) ) gres = 1
 
     # handle shape parameter, if there is one
     if( pars[['k']] %in% c('mat', 'gxp') )
@@ -243,8 +243,8 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
 
       # set up a grid of test values and find rho for each one, then take min/max
       shp.test = seq(bds.shp[1], bds.shp[2], length.out = 100)
-      rhomin = min( sapply(shp.test, \(p) pkern_rho(cmin, utils::modifyList(pars, list(kp=c(NA, p))), ds)) )
-      rhomax = max( sapply(shp.test, \(p) pkern_rho(cmax, utils::modifyList(pars, list(kp=c(NA, p))), ds)) )
+      rhomin = min( sapply(shp.test, \(p) pkern_rho(cmin, utils::modifyList(pars, list(kp=c(NA, p))), gres)) )
+      rhomax = max( sapply(shp.test, \(p) pkern_rho(cmax, utils::modifyList(pars, list(kp=c(NA, p))), gres)) )
 
       # append bounds as needed
       if( is.null( pars[['lower']] ) ) pars[['lower']] = c(rhomin, bds.shp[1])
@@ -254,7 +254,7 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
       if( is.null( pars[['kp']] ) )
       {
         #shp.ini = mean( c(pars[['lower']][2], pars[['upper']][2]) )
-        rho.ini = pkern_rho(cini, utils::modifyList(pars, list(kp=c(NA, shp.ini))), ds)
+        rho.ini = pkern_rho(cini, utils::modifyList(pars, list(kp=c(NA, shp.ini))), gres)
         pars[['kp']] = c(rho.ini, shp.ini)
       }
 
@@ -262,13 +262,13 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
 
       # no shape parameter case is simple 1d optimization
       nm.shp = NULL
-      rhomin = pkern_rho(cmin, pars, ds)
-      rhomax = pkern_rho(cmax, pars, ds)
+      rhomin = pkern_rho(cmin, pars, gres)
+      rhomax = pkern_rho(cmax, pars, gres)
 
       # append bounds and initial values as needed
       if( is.null( pars[['lower']] ) ) pars[['lower']] = rhomin
       if( is.null( pars[['upper']] ) ) pars[['upper']] = rhomax
-      if( is.null( pars[['kp']] ) ) pars[['kp']] = pkern_rho(cini, pars, ds)
+      if( is.null( pars[['kp']] ) ) pars[['kp']] = pkern_rho(cini, pars, gres)
 
     }
 
@@ -290,7 +290,7 @@ pkern_bds = function(pars, ds=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
   if( !all( c('y', 'x') %in% names(pars) ) ) stop('expected parameter lists "y" and "x" in pars')
 
   # recursive calls to build x and y component bounds and return results in list
-  pars.new = Map(\(p, s) pkern_bds(p, s, cmin, cini, cmax), p=pars[c('y', 'x')], s=ds)
+  pars.new = Map(\(p, s) pkern_bds(p, s, cmin, cini, cmax), p=pars[c('y', 'x')], s=gres)
   return( utils::modifyList(pars, stats::setNames(pars.new, c('y', 'x')) ) )
 }
 
@@ -339,7 +339,7 @@ pkern_unpack = function(pars, kp=NULL)
 #'
 #' @param pars list of kernel parameters "k" and "kp" (see `pkern_corr`)
 #' @param n positive integer, the number of points on the 1D line
-#' @param ds positive numeric, the distance between adjacent grid lines
+#' @param gres positive numeric, the distance between adjacent grid lines
 #' @param i vector, a subset of `seq(n)` indicating rows to return
 #' @param j vector, a subset of `seq(n)` indicating columns to return
 #'
@@ -352,11 +352,11 @@ pkern_unpack = function(pars, kp=NULL)
 #' pkern_corrmat(pars, n=10)
 #' pkern_corrmat(pars, n=10, i=2:4, j=2:4)
 #' pkern_corrmat(pars, n=3)
-#' pkern_corrmat(pars, n=3, ds=2)
-pkern_corrmat = function(pars, n, ds=1, i=seq(n), j=seq(n))
+#' pkern_corrmat(pars, n=3, gres=2)
+pkern_corrmat = function(pars, n, gres=1, i=seq(n), j=seq(n))
 {
   # compute the set of distances over which we need to evaluate kernel
-  du = ds * ( seq(n) - 1 )
+  du = gres * ( seq(n) - 1 )
 
   # compute kernel values for these distances
   dcorr = pkern_corr(pars, du)
