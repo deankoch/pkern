@@ -330,8 +330,8 @@ pkern_plot = function(z, gdim=NULL, gyx=NULL, gres=1, ppars=list())
 #' pkern_kplot(pars)
 #' gdim = c(30,50)
 #' pkern_kplot(pars, gdim)
-#' pkern_kplot(c(pars, list(v=2, nug=0.5)), gdim)
-#' pkern_kplot(c(pars, list(v=2, nug=0.5)), gdim, ppars=list(smoothed=TRUE))
+#' pkern_kplot(c(pars, list(psill=2, nug=0.5)), gdim)
+#' pkern_kplot(c(pars, list(psill=2, nug=0.5)), gdim, ppars=list(smoothed=TRUE))
 pkern_kplot = function(pars, gdim=NULL, gres=1, ppars=list())
 {
   # duplicate distance scaling factors as needed
@@ -340,11 +340,11 @@ pkern_kplot = function(pars, gdim=NULL, gres=1, ppars=list())
 
   # determine if this is a correlation or covariance plot
   is.nug = !is.null(pars[['nug']])
-  is.corr = is.null(pars[['v']]) & !is.nug
+  is.corr = is.null(pars[['psill']]) & !is.nug
 
   # unpack v and nug, setting defaults as needed
   nug = ifelse( is.null(pars[['nug']]), 0, pars[['nug']])
-  v = ifelse( is.null(pars[['v']]), 1, pars[['v']])
+  psill = ifelse( is.null(pars[['psill']]), 1, pars[['psill']])
   ktype = ifelse(is.corr, 'correlation', 'covariance')
 
   # set up a plot title and subtitle
@@ -363,7 +363,7 @@ pkern_kplot = function(pars, gdim=NULL, gres=1, ppars=list())
   # compute the required component kernel values and their kronecker product
   ky = pkern_corrmat(pars[['y']], gdim[1], gres=gres[1], i=ijc[1])
   kx = pkern_corrmat(pars[['x']], gdim[2], gres=gres[2], j=ijc[2])
-  z = nug + ( v * as.vector( kronecker(kx, ky) ) )
+  z = nug + ( psill * as.vector( kronecker(kx, ky) ) )
 
   # set up axis labels and titles
   gyx = Map( \(d, s, idx) s * ( seq(d) - idx ), d=gdim, s=gres, idx=ijc)

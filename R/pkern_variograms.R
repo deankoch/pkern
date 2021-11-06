@@ -5,21 +5,21 @@
 #
 
 
-#' Theoretical semivariances along x or y direction
+#' Theoretical variogram function
 #'
 #' Convenience function for getting theoretical semivariance values for a set of
-#' spatial lags along one dimension, assuming (intrinsic) stationarity.
+#' spatial lags along one dimension, assuming an intrinsically stationary process.
 #'
 #' Kernel parameters `pars` are passed to the correlation function (`pkern_corr`)
 #' to get correlation values at distances `d`. The result is converted to semivariance
-#' assuming a pointwise variance of `v + nug` (an optional nugget effect) and returned
-#' as a vector the same length as `d`.
+#' assuming a pointwise variance of `psill + nug` (set `nug=0` to omit the nugget effect),
+#' and is returned as a vector the same length as `d`.
 #'
 #' When `d` is NULL, the function instead returns the semivariance function as an
 #' anonymous function of distance.
 #'
 #' @param pars list of kernel parameters ("k" and "kp"), in form recognized by `pkern_corr`
-#' @param v positive numeric, the pointwise variance absent a nugget effect
+#' @param psill positive numeric, the partial sill (pointwise variance absent a nugget effect)
 #' @param nug nonegative numeric, the variance of the nugget effect
 #' @param d vector of nonegative numeric spatial lags to evaluate
 #'
@@ -29,33 +29,135 @@
 #' @examples
 #' d = seq(1e2)/10
 #' pars = pkern_corr('mat')
-#' pkern_tvario(pars, v=1, d=d)
-#' pkern_tvario(pars, v=2, nug=0.5, d=d)
+#' pkern_tvario(pars, psill=1, d=d)
+#' pkern_tvario(pars, psill=2, nug=0.5, d=d)
 #'
-#' sv = pkern_tvario(pars, v=2, nug=0.5)
-#' plot(d, sv(d))
-pkern_tvario = function(pars, v, nug=0, d=NULL)
+#' vg = pkern_tvario(pars, psill=2, nug=0.5)
+#' plot(d, vg(d))
+pkern_tvario = function(pars, psill, nug=0, d=NULL)
 {
-  fn = function(d) { nug + ( unname(v) * ( 1 - pkern_corr(pars, d) ) ) }
+  fn = function(d) { nug + ( unname(psill) * ( 1 - pkern_corr(pars, d) ) ) }
   if( is.null(d) ) return(fn)
   return(fn(d))
 }
 
-
-#' Sample semivariogram for regular 2D gridded data along x direction
+#' Theoretical variogram function
 #'
-#' The function computes the semivariance of point pairs located on the regular grid with
-#' dimensions `gdim`, and data vector(s) `vec`, at the supplied x grid line lags, `lags`.
-#' Elements of `lags` are must be a subset of `seq(gdim[2]-1)`.
+#' Returns either the variogram function for the (intrinsically stationary) process
+#' specified in kernel parameter list `pars`; or, if distances `d` are supplied, the
+#' vector of variogram values evaluated at `d`.
+#'
+#' `pars` and `d` are passed to the correlation function (`pkern_corr`) to get the
+#' correlogram values `C(d)/C(0)` (where `C` is the covariance function), and the result
+#' is converted to the variogram by the relation,
+#'
+#'  `2*gamma(d) = nug + 2 * C(0) * (1  - C(d)/C(0))`,
+#'
+#' where the nugget variance `nug` (by default 0) is specified in `pars$nug` and the
+#' partial sill (`C(0)`, by default 1) in `pars$psill`.
+#'
+#' When `pars` is a 2d separable kernel (ie when it has elements "y" and "x" recognized
+#' by `pkern_corr`), `d` should be a list or matrix containing the "y" and "x" distances
+#' (vectors `x` and `y`). The correlogram `C(d)/C(0)` is then formulated as
+#' `Cx(x) * Cy(y) ) / C(0)`, where `Cx` and `Cy` are the 1-dimensional correlograms for
+#' the kernels `pars$x` and `pars$y`.
+#'
+#' When `d` is `NULL`, the function returns an anonymous function of distance (the
+#' variogram). Otherwise `d` should be a numeric vector of distances, in which case the
+#' function returns the variogram evaluated at those distances.
+#'
+#' @param pars list of kernel parameters (see details)
+#' @param d vector of nonegative numeric spatial lags to evaluate
+#'
+#' @return either a vector the same length as `d`, or an anonymous function of distance
+#' @export
+#'
+#' @examples
+#' d = seq(1e2)/10
+#' pars = pkern_corr('mat')
+#' pkern_tvg(pars)
+#' pkern_tvg(pars, d=d)
+#'
+#' vg = pkern_tvg(pars)
+#' plot(d, vg(d))
+pkern_tvg = function(pars, d=NULL)
+{
+  # check whether this is a 1 or 2d kernel definition
+  yxnm = c('y', 'x')
+  knm = c('k', 'kp')
+  is.1d = all( knm %in% names(pars) )
+
+  # extract partial sill and nugget, setting defaults when they are missing
+  psill = ifelse(is.null(pars[['psill']]), 1, pars[['psill']]) |> unname()
+  nug = ifelse(is.null(pars[['nug']]), 0, pars[['nug']]) |> unname()
+
+  # check whether d (if supplied) is of the correct dimensionality
+  if( !is.null(d) )
+  {
+    # in 1d case we expect a vector of distances
+    if( is.1d )
+    {
+      if( !is.numeric(d) ) stop('d must be a numeric vector in 1d case')
+
+      # coerce matrices to vector
+      d = as.vector(d)
+
+    } else {
+
+      # in 2d case we coerce matrices and dataframes to lists of two vectors
+      if( is.matrix(d) ) d = data.frame(d)
+      if( is.data.frame(d) ) d = as.list(d)
+
+      # assume (with a warning) order "y", "x" when d isn't named
+      if( !all( yxnm %in% names(d) ) )
+      {
+        warning('assuming the first vector in d is "y" and second is "x"')
+        d[1:2] = setNames(d[1:2], yxnm)
+      }
+    }
+  }
+
+  # handle 1d case
+  if( is.1d )
+  {
+    # variogram function
+    fn = function(d) { 2 * ( nug + ( psill * ( 1 - pkern_corr(pars, d) ) ) ) }
+
+    # return either the function or its evaluation
+    if( is.null(d) ) return(fn)
+    return( fn(d) )
+  }
+
+  # handle 2d case
+  fn = function(d) {
+
+    # taking product of correlation functions
+    corrvals = do.call('*', Map(\(p, dyx) pkern_corr(p, dyx), p=pars[c('y', 'x')], dyx=d))
+    return( 2 * ( nug + ( psill * ( 1 - corrvals ) ) ) )
+  }
+
+  # return either the function or its evaluation
+  if( is.null(d) ) return(fn)
+  return( fn(d) )
+
+}
+
+
+#' Sample variogram for regular 2D gridded data along x direction
+#'
+#' The function estimates the variogram ("2-gamma") of point pairs located on the
+#' regular grid with dimensions `gdim`, having (detrended) data vector(s) `vec`. Estimation
+#' is done separately at each of the supplied x grid line lags, `lags`. Elements of `lags`
+#' must be a subset of `seq(gdim[2]-1)`.
 #'
 #' Results are returned in a named list containing the sampled lags (`lags`), the number of
-#' point pairs sampled at each lag (`n`) and the sample semivariances (`sv`) at each lag;
+#' point pairs sampled at each lag (`n`) and the variogram estimate (`vg`) at each lag;
 #' If `simple=FALSE`, the function also returns `pairs`, a list of matrices containing the
 #' indices of point pairs sampled and their absolute differences.
 #'
 #' `vec` can be a vector (in column vectorized order), or a list of such vectors for
-#' repeated measurements at the same spatial locations. NAs are permitted but point
-#' pairs containing NAs are excluded from computations.
+#' repeated measurements at the same spatial locations. NAs are permitted in `vec` (but
+#' point pairs containing NAs are excluded from computations).
 #'
 #' `nmax` specifies a maximum number of point pairs to process at each lag. When applicable,
 #' a random sample of (`nmax`) eligible point pairs are taken at each lag. When `vec` is
@@ -63,8 +165,10 @@ pkern_tvario = function(pars, v, nug=0, d=NULL)
 #' Note that this means `nmax` is not respected when `vec` is a list and `nmax < length(vec)`.
 #' If the function is too slow in this case, try taking a subset of `vec`.
 #'
-#' method "mean" is the classical method of Matheron (1962), "median" and "ch" are the
-#' median and robust methods described in Cressie and Hawkins (1980).
+#' fit.method "matheron" uses the method-of-moments formula of Matheron (1962), which takes the
+#' average of the squared differences at each lag; "rmean" and "rmedian" are the robust methods
+#' of Cressie and Hawkins (1980), which use mean and median in a 4th-root transformation with
+#' a bias adjustmnet. See Cressie (1993, Ch. 2.4.3) for a review of all three methods.
 #'
 #' references:
 #'
@@ -75,17 +179,17 @@ pkern_tvario = function(pars, v, nug=0, d=NULL)
 #' @param vec numeric vector of data, in column vectorized order (length `prod(gdim)`)
 #' @param lags positive integer vector, the grid line lags to sample
 #' @param simple logical, if FALSE the function returns a list of point pair indices
-#' @param method character, one of "mean", "median", "ch"
+#' @param fit.method character, one of "matheron", "rmean", "rmedian"
 #' @param quiet logical, suppresses console output
 #' @param nmax positive integer, the maximum number of point pairs to sample at each lag
 #'
-#' @return a list with named elements "lags", "n", "sv", and optionally "pairs"
+#' @return a list with named elements "lags", "n", "vg", and optionally "pairs"
 #' @export
 #'
 #' @examples
 #'
 #' gdim = c(1e2, 50)
-#' pars = pkern_corr('gau') |> utils::modifyList(list(v=1))
+#' pars = pkern_corr('gau') |> utils::modifyList(list(psill=1))
 #' sim = pkern_sim(pars, gdim)
 #'
 #' # sample first 10 lags and plot
@@ -96,7 +200,7 @@ pkern_tvario = function(pars, v, nug=0, d=NULL)
 #' vario = pkern_xvario(gdim, sim)
 #' pkern_vario_plot(vario, pars)
 #'
-pkern_xvario = function(gdim, vec, simple=TRUE, method='median', quiet=FALSE, lags=NULL, nmax=1e4)
+pkern_xvario = function(gdim, vec, simple=TRUE, fit.method='rmedian', quiet=FALSE, lags=NULL, nmax=1e4)
 {
   # set default sample lags and express vector `vec` as length-1 list
   if( is.null(lags) ) lags = seq( gdim[2] - 1 )
@@ -106,7 +210,7 @@ pkern_xvario = function(gdim, vec, simple=TRUE, method='median', quiet=FALSE, la
   lags = sort(lags)
   n.lags = length(lags)
   plist = vector(mode='list', length=n.lags)
-  svx = rep(NA, n.lags)
+  vgx = rep(NA, n.lags)
   n = rep(0, n.lags)
   miss = lapply(vec, is.na)
 
@@ -156,27 +260,27 @@ pkern_xvario = function(gdim, vec, simple=TRUE, method='median', quiet=FALSE, la
       dabs = Map(\(p, v) apply(p, 1, \(idx) abs(diff(v[idx])) ), p=plist[[idx.dj]], v=vec)
       if(!simple) plist[[idx.dj]] = Map(\(p, d) cbind(p, d=d), p=plist[[idx.dj]], d=dabs)
 
-      # handle various methods
+      # formulate the variogram statistic by various methods
       dabs.vec = unlist(dabs, use.names=FALSE)
-      if(method=='mean') svx[idx.dj] = ( mean(dabs.vec)^2 ) / 2
-      if(method=='median') svx[idx.dj] = stats::median( sqrt(dabs.vec) )^4 / (2 * 0.457)
-      if(method=='ch')
+      if(fit.method=='matheron') vgx[idx.dj] = ( mean(dabs.vec)^2 )
+      if(fit.method=='rmedian') vgx[idx.dj] = stats::median( sqrt(dabs.vec) )^4 / 0.457
+      if(fit.method=='rmean')
       {
         ch.factor = 0.457 + ( 0.494 / n[idx.dj] ) + ( 0.494 / ( n[idx.dj]^2 ) )
-        svx[idx.dj] = mean( sqrt(dabs.vec) )^4 / (2 * ch.factor)
+        vgx[idx.dj] = mean( sqrt(dabs.vec) )^4 / ch.factor
       }
     }
   }
   if( !quiet ) close(pb)
 
-  if( simple ) return( list(lags=lags, n=n, sv=svx) )
-  return( list(lags=lags, n=n, sv=svx, pairs=plist) )
+  if( simple ) return( list(lags=lags, n=n, vg=vgx) )
+  return( list(lags=lags, n=n, vg=vgx, pairs=plist) )
 }
 
 
-#' Directional sample semivariograms for regular 2D gridded data
+#' Directional sample variograms for regular 2D gridded data
 #'
-#' A wrapper for calls to `pkern_xvario` to get the directional sample semivariograms
+#' A wrapper for calls to `pkern_xvario` to get the directional sample variograms
 #' from regular lattice data along the y and x dimensions, and optionally along the
 #' diagonals.
 #'
@@ -199,7 +303,7 @@ pkern_xvario = function(gdim, vec, simple=TRUE, method='median', quiet=FALSE, la
 #' @param gdim vector c(ny, nx) of positive integers, the number of grid lines
 #' @param vec numeric vector of data, in column vectorized order (length `prod(dims)`)
 #' @param lags list c(dy, dx) of positive integer vectors, grid line lags to sample
-#' @param method character, one of "mean", "median", "ch", passed to `pkern_xvario`
+#' @param fit.method character, one of "matheron", "rmean", "rmedian", passed to `pkern_xvario`
 #' @param diagonal logical, if TRUE, semivariogram results are returned also for diagonals
 #' @param dmax numeric, maximum grid line separation distance (used to filter results)
 #' @param gres length-2 vector of positive numeric, the spacing distance of y and x grid lines
@@ -226,9 +330,12 @@ pkern_xvario = function(gdim, vec, simple=TRUE, method='median', quiet=FALSE, la
 #' vario = pkern_vario(gdim, vec, lags=seq(10), gres=gres)
 #' pkern_vario_plot(vario, pars)
 #'
-pkern_vario = function(gdim, vec, lags=NA, method='median', diagonal=TRUE,
+pkern_vario = function(gdim, vec, lags=NA, fit.method='rmedian', diagonal=TRUE,
                        gres=NA, quiet=FALSE, nmax=1e4, vcalc=TRUE)
 {
+  # handle invalid fit.method
+  if( !( fit.method %in% c('matheron', 'rmean', 'rmedian') ) ) stop('invalid fit method')
+
   # handle `gdim` as output from `pkern_snap`
   if( is.list(gdim) )
   {
@@ -252,12 +359,12 @@ pkern_vario = function(gdim, vec, lags=NA, method='median', diagonal=TRUE,
 
   # compute x semivariances
   if( !quiet ) cat('\nidentifying horizontal lags...')
-  xout = pkern_xvario(gdim, vec, method=method, quiet=quiet, lags=lags[[2]], nmax=nmax)
+  xout = pkern_xvario(gdim, vec, fit.method=fit.method, quiet=quiet, lags=lags[[2]], nmax=nmax)
 
   # repeat in row-vectorized order to get y semivariances
   if( !quiet ) cat('\nidentifying vertical lags...')
   vec.rv = lapply(vec, \(v) v[pkern_r2c(gdim, in.byrow=FALSE, out.byrow=TRUE)])
-  yout = pkern_xvario(rev(gdim), vec.rv, method=method, quiet=quiet, lags=lags[[1]], nmax=nmax)
+  yout = pkern_xvario(rev(gdim), vec.rv, fit.method=fit.method, quiet=quiet, lags=lags[[1]], nmax=nmax)
 
   # scale lags by resolution to get distances, then bundle everything into an output list
   yout[['lags']] = gres['y'] * yout[['lags']]
@@ -274,21 +381,23 @@ pkern_vario = function(gdim, vec, lags=NA, method='median', diagonal=TRUE,
     if( !quiet ) cat('\nrotating coordinate system by 45 degrees:\n')
     vec45 = lapply(vec, \(v) c(pkern_r45(v, gdim)))
 
-    # find the dimensions rotated grid (based on first list entry of vec)
+    # find the dimensions of rotated grid (based on first list entry of vec)
     gdim45 = dim( pkern_r45(vec[[1]], gdim) )
 
     # recursive call to get component variograms in new coordinate system
-    vario45 = pkern_vario(gdim45, vec45, lags, method=method, quiet=quiet, diagonal=F, nmax=nmax, vcalc=FALSE)
+    vario45 = pkern_vario(gdim45, vec45, fit.method=fit.method, quiet=quiet, diagonal=F, nmax=nmax, vcalc=FALSE)
+
+    # distance of each increment in lags: note that vario45 inflates distances by factor 2
+    gresdiag = sqrt( sum( gres^2 ) ) / 2
 
     # scale lags values to get distances, then bundle everything into output list
-    gresdiag = sqrt( sum( gres^2 ) ) / 2
     vario45[['y']][['lags']] = gresdiag * vario45[['y']][['lags']]
     vario45[['x']][['lags']] = gresdiag * vario45[['x']][['lags']]
     list.out = c(list.out, list(d1=vario45[['y']], d2=vario45[['x']]))
   }
 
   # omit entries with NA semivariances
-  list.out = lapply(list.out, \(d) lapply(d, \(z) z[ !is.na(d[['sv']]) ] ) )
+  list.out = lapply(list.out, \(d) lapply(d, \(z) z[ !is.na(d[['vg']]) ] ) )
 
   # truncate to requested distance maximum
   #if( is.numeric(dmax) ) list.out = lapply(list.out, \(d) lapply(d, \(z) z[ !(d[['lags']] > dmax) ] ))
@@ -310,8 +419,8 @@ pkern_vario = function(gdim, vec, lags=NA, method='median', diagonal=TRUE,
 #' function uses its "kp" entry for initial values, and if the list contains entries
 #' "lower" and/or "upper", they are used as bounds.
 #'
-#' The pointwise variance is estimated simultaneously with the correlation kernel
-#' parameters using the bounds and initial values in `v` and `nug`. If these are not
+#' Sill and nugget are estimated simultaneously with the correlation kernel parameters
+#' using the bounds and initial values in `psill` and `nug`. If these are not
 #' supplied, the function sets (for both) default default bounds of 0 to 4 times the
 #' sample variance.
 #'
@@ -328,14 +437,15 @@ pkern_vario = function(gdim, vec, lags=NA, method='median', diagonal=TRUE,
 #' `fit.method` controls the type of weights assigned to the sum of squares from each
 #' spatial lag: '1' assigns unit weight to all lags (OLS); 'n' weights be sample size;
 #' 'n/d' uses sample size divided by squared distance (the default in `gstat`); and
-#' the default, 'n/v', uses sample size divided by squared theoretical semivariance,
-#' (the robust estimator in Chapter 2.6.2 of Cressie, 1993).
+#' 'n/v' (the default) uses the robust estimator of Cressie (1993, Ch. 2.6.2), which
+#' divides sample size by squared theoretical semivariance.
+#'
 #'
 #' @param vario list, the return value from a call to `pkern_vario`
 #' @param ypars character or list, recognizable (as `pars`) by `pkern_corr`
 #' @param xpars character or list, recognizable (as `pars`) by `pkern_corr`
-#' @param v length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for variance
-#' @param nug length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for nugget
+#' @param psill length-3 numeric vector of bounds (lower, initial, upper) for the partial sill
+#' @param nug length-3 numeric vector of bounds (lower, initial, upper) for the nugget effect
 #' @param add positive integer, the number of initial parameter sets tested (see details)
 #' @param dmax positive numeric, point pairs with separation distances exceeding `dmax` are ignored
 #' @param fit.method character string, either '1', 'n', 'n/d', or 'n/v' (the default, see details)
@@ -362,25 +472,25 @@ pkern_vario = function(gdim, vec, lags=NA, method='median', diagonal=TRUE,
 #' pkern_vario_plot(vario, pars.fitted2)
 #' pkern_plot(pars.fitted2)
 #'
-pkern_vario_fit = function(vario, ypars='gau', xpars=ypars, v=NULL, nug=NULL, add=0, dmax=Inf,
+pkern_vario_fit = function(vario, ypars='gau', xpars=ypars, psill=NULL, nug=NULL, add=0, dmax=Inf,
                            fit.method='n/v')
 {
-  # set defaults for variance (first parameter) and nugget (second parameter)
-  if( is.null(v) ) v = c(min=1e-9, ini=vario[['v']], max=4*vario[['v']])
-  if( is.null(nug) ) nug = c(min=1e-3, ini=v[2]/2, max=4*vario[['v']])
+  # set defaults for partial sill (first parameter) and nugget (second parameter)
+  if( is.null(psill) ) psill = c(min=1e-9, ini=vario[['v']], max=4*vario[['v']])
+  if( is.null(nug) ) nug = c(min=1e-3, ini=vario[['v']]/2, max=4*vario[['v']])
 
   # set up defaults and bounds for kernel parameters (2-4 additional parameters)
   ypars = pkern_bds(ypars, vario[['gres']]['y'])
   xpars = pkern_bds(xpars, vario[['gres']]['x'])
 
   # vectorized bounds for all covariance parameters
-  plower = c(v[1], nug[1], xpars[['lower']], ypars[['lower']])
-  pinitial = c( v[2], nug[2], xpars[['kp']], ypars[['kp']] )
-  pupper = c(v[3], nug[3], xpars[['upper']], ypars[['upper']])
+  plower = c(psill[1], nug[1], xpars[['lower']], ypars[['lower']])
+  pinitial = c( psill[2], nug[2], xpars[['kp']], ypars[['kp']] )
+  pupper = c(psill[3], nug[3], xpars[['upper']], ypars[['upper']])
 
   # build matrices to hold pertinent info from `vario` (omit zero point in first index)
   midx = names(vario) %in% c('x', 'y', 'd1', 'd2')
-  mvario = lapply(vario[midx], \(vg) cbind(n=vg[['n']][-1], lags=vg[['lags']][-1], sv=vg[['sv']][-1]))
+  mvario = lapply(vario[midx], \(vg) cbind(n=vg[['n']][-1], lags=vg[['lags']][-1], vg=vg[['vg']][-1]))
 
   # truncate at dmax
   mvario = Map(\(m, i) m[i,], mvario, sapply(mvario, \(m) m[, 'lags'] < dmax))
@@ -388,79 +498,98 @@ pkern_vario_fit = function(vario, ypars='gau', xpars=ypars, v=NULL, nug=NULL, ad
   if( any( sapply(mvario, length) == 0 ) ) stop(msg.err)
 
   # define anonymous objective function for optimizer
-  fn = function(pvec, p, mv, gres, fit.method)
+  fn = function(pv, p, mv, gres, fit.method)
   {
-    # pvec, numeric vector of parameters
-    # p, list of "x", "y" kernel parameter lists associated with pvec
-    # mv, list of matrices ("x", "y" and optionally "d1", "d2") with columns "n", "lags", "sv"
+    # pv, numeric vector of parameters
+    # p, list of "x", "y" kernel parameter lists associated with pv
+    # mv, list of matrices ("x", "y" and optionally "d1", "d2") with columns "n", "lags", "vg"
     # gres, numeric vector of grid line spacings in x and y directions
 
     # extract kernel parameters as lists (omit first elements, the variance components)
-    p = pkern_unpack(p, pvec[-(1:2)])
+    p = pkern_unpack(p, pv[-(1:2)])
 
     # generate theoretical semivariance values along x and y for each lag
-    ysv = pkern_tvario(pars=p[['y']], v=pvec[1], nug=pvec[2], d=mv[['y']][,'lags'])
-    xsv = pkern_tvario(pars=p[['x']], v=pvec[1], nug=pvec[2], d=mv[['x']][,'lags'])
+    #yvg = pkern_tvario(pars=p[['y']], psill=pv[1], nug=pv[2], d=mv[['y']][,'lags'])
+    #xvg = pkern_tvario(pars=p[['x']], psill=pv[1], nug=pv[2], d=mv[['x']][,'lags'])
+    yvg = pkern_tvg(pars=c(p[['y']], list(psill=pv[1], nug=pv[2])), d=mv[['y']][,'lags'])
+    xvg = pkern_tvg(pars=c(p[['x']], list(psill=pv[1], nug=pv[2])), d=mv[['x']][,'lags'])
 
     # set up weights for y direction
     wy = switch(fit.method,
                 '1' = 1,
                 'n' = mv[['y']][,'n'],
-                'n/v'= mv[['y']][,'n'] / (ysv)^2,
+                'n/v'= mv[['y']][,'n'] / (yvg)^2,
                 'n/d'=( mv[['y']][,'n'] / (mv[['y']][,'lags'])^2 ))
 
     # set up weights for x direction
     wx = switch(fit.method,
                 '1' = 1,
                 'n' = mv[['x']][,'n'],
-                'n/v'= mv[['x']][,'n'] / (xsv)^2 ,
+                'n/v'= mv[['x']][,'n'] / (xvg)^2 ,
                 'n/d'=( mv[['x']][,'n'] / (mv[['x']][,'lags'])^2 ))
 
     # compute weighted sums of squares along both dimensions and return their sum
-    wss.y = sum( wy * ( ( mv[['y']][,'sv'] - ysv )^2 ) )
-    wss.x = sum( wx * ( ( mv[['x']][,'sv'] - xsv )^2 ) )
+    wss.y = sum( wy * ( ( mv[['y']][,'vg'] - yvg )^2 ) )
+    wss.x = sum( wx * ( ( mv[['x']][,'vg'] - xvg )^2 ) )
 
     # do the same for the 45 degree rotated version if it is supplied
     wss.d1 = wss.d2 = 0
     if( length(mv) == 4 )
     {
-      # find unit distance along diagonals
-      udist = sqrt(sum(gres^2))
+      # find unit distance along diagonals and componentwise distances for each lag
+      #udist = sqrt( sum( gres^2 ) ) #* ( sqrt(2) )
+      # d1.ylags = gres[1] * mv[['d1']][,'lags'] / udist
+      # d1.xlags = gres[2] * mv[['d1']][,'lags'] / udist
 
+      # find  on first diagonal
       # generate theoretical semivariance values for each lag on first diagonal
-      d1.ylags = gres[1] * mv[['d1']][,'lags'] / udist
-      d1.xlags = gres[2] * mv[['d1']][,'lags'] / udist
-      ysv.d1 = pkern_tvario(pars=p[['y']], v=sqrt(pvec[1]), d=d1.ylags)
-      xsv.d1 = pkern_tvario(pars=p[['x']], v=sqrt(pvec[1]), d=d1.xlags)
+
+      # yvg.d1 = pkern_tvario(pars=p[['y']], psill=sqrt(pv[1]), d=d1.ylags)
+      # xvg.d1 = pkern_tvario(pars=p[['x']], psill=sqrt(pv[1]), d=d1.xlags)
+      #yvg.d1 = pkern_tvg(pars=c(p[['y']], list(psill=sqrt(pv[1]))), d=d1.ylags)
+      #xvg.d1 = pkern_tvg(pars=c(p[['x']], list(psill=sqrt(pv[1]))), d=d1.xlags)
+
+      #yvg = pkern_tvg(pars=c(p[['y']], list(psill=pv[1], nug=pv[2])), d=mv[['y']][,'lags'])
+      #xvg = pkern_tvg(pars=c(p[['x']], list(psill=pv[1], nug=pv[2])), d=mv[['x']][,'lags'])
 
       # nugget gets added after the product
-      d1sv = pvec[2] + ( xsv.d1 * ysv.d1 )
+      #d1vg = pv[2] + ( xvg.d1 * yvg.d1 )
+
+      # find unit distance along diagonals and componentwise distances for each lag
+      udist = sqrt( sum( gres^2 ) ) #* ( sqrt(2) )
+      d1lags = lapply(gres, \(gr) gr * mv[['d1']][,'lags'] / udist)
+
+      # compute variogram
+      d1vg = pkern_tvg(pars=c(p, list(psill=pv[1], nug=pv[2])), d=d1lags)
+
 
       # repeat for the other diagonal
-      d2.ylags = gres[1] * mv[['d2']][,'lags'] / udist
-      d2.xlags = gres[2] * mv[['d2']][,'lags'] / udist
-      ysv.d2 = pkern_tvario(pars=p[['y']], v=sqrt(pvec[1]), d=d2.ylags)
-      xsv.d2 = pkern_tvario(pars=p[['x']], v=sqrt(pvec[1]), d=d2.xlags)
-      d2sv = pvec[2] + ( xsv.d2 * ysv.d2 )
+      # d2.ylags = gres[1] * mv[['d2']][,'lags'] / udist
+      # d2.xlags = gres[2] * mv[['d2']][,'lags'] / udist
+      # yvg.d2 = pkern_tvario(pars=p[['y']], psill=sqrt(pv[1]), d=d2.ylags)
+      # xvg.d2 = pkern_tvario(pars=p[['x']], psill=sqrt(pv[1]), d=d2.xlags)
+      # d2vg = pv[2] + ( xvg.d2 * yvg.d2 )
+      d2lags = lapply(gres, \(gr) gr * mv[['d2']][,'lags'] / udist)
+      d2vg = pkern_tvg(pars=c(p, list(psill=pv[1], nug=pv[2])), d=d2lags)
 
       # set up weights for d1 direction
       wd1 = switch(fit.method,
                    '1' = 1,
                    'n' = mv[['d1']][,'n'],
-                   'n/v'= mv[['d1']][,'n'] / (d1sv)^2,
-                   'n/d'=( mv[['d1']][,'n'] / (mv[['d1']][,'lags'])^2 ))
+                   'n/v'= mv[['d1']][,'n'] / (d1vg)^2,
+                   'n/d'= mv[['d1']][,'n'] / (mv[['d1']][,'lags'])^2 )
 
 
       # set up weights for d2 direction
       wd2 = switch(fit.method,
                    '1' = 1,
                    'n' = mv[['d2']][,'n'],
-                   'n/v'= mv[['d2']][,'n'] / (d2sv)^2 ,
-                   'n/d'=( mv[['d2']][,'n'] / (mv[['d2']][,'lags'])^2 ))
+                   'n/v'= mv[['d2']][,'n'] / (d2vg)^2 ,
+                   'n/d'= mv[['d2']][,'n'] / (mv[['d2']][,'lags'])^2 )
 
       # compute weighted sums of squares along both dimensions and return their sum
-      wss.d1 = sum( wd1 * ( ( mv[['d1']][,'sv'] - d1sv )^2 ) )
-      wss.d2 = sum( wd2 * ( ( mv[['d2']][,'sv'] - d2sv )^2 ) )
+      wss.d1 = sum( wd1 * ( ( mv[['d1']][,'vg'] - d1vg )^2 ) )
+      wss.d2 = sum( wd2 * ( ( mv[['d2']][,'vg'] - d2vg )^2 ) )
     }
 
     # compute total of weighted sums of squares
@@ -476,24 +605,24 @@ pkern_vario_fit = function(vario, ypars='gau', xpars=ypars, v=NULL, nug=NULL, ad
 
   # run the optimizer for each one
   list.optim = lapply(list.ini, \(ini) stats::optim(par=ini,
-                                                        f=fn,
-                                                        method='L-BFGS-B',
-                                                        lower=plower,
-                                                        upper=pupper,
-                                                        p=list(x=xpars, y=ypars),
-                                                        mv=mvario,
-                                                        gres=vario[['gres']],
-                                                        fit.method=fit.method))
+                                                    f=fn,
+                                                    method='L-BFGS-B',
+                                                    lower=plower,
+                                                    upper=pupper,
+                                                    p=list(y=ypars, x=xpars),
+                                                    mv=mvario,
+                                                    gres=vario[['gres']],
+                                                    fit.method=fit.method))
 
   # select the best fit
   idx.best = which.min( sapply(list.optim, \(result) result$value) )
   result.optim = list.optim[[idx.best]]
 
   # unpack fitted parameters and return in a list
-  vfit = stats::setNames(result.optim$par[1], 'fitted')
+  psillfit = stats::setNames(result.optim$par[1], 'fitted')
   nugfit = stats::setNames(result.optim$par[2], 'fitted')
   pfit = pkern_unpack(list(y=ypars, x=xpars), result.optim$par[-(1:2)])
-  return( list(y=pfit[['y']], x=pfit[['x']], v=vfit, nug=nugfit, gres=vario[['gres']]) )
+  return( list(y=pfit[['y']], x=pfit[['x']], psill=psillfit, nug=nugfit, gres=vario[['gres']]) )
 }
 
 #' Plot 1-dimensional empirical semivariograms for a separable model
@@ -510,7 +639,7 @@ pkern_vario_fit = function(vario, ypars='gau', xpars=ypars, v=NULL, nug=NULL, ad
 #'    "title" character or vector of two, title(s) for the plot(s)
 #'    "shade" logical, indicating to shade points according to the number of samples
 #'    "dmax" positive numeric, upper limit for x in scatterplot
-#'    "svlim" length-2 numeric vector, the y limits for the scatterplot
+#'    "vglim" length-2 numeric vector, the y limits for the scatterplot
 #'
 #' @param vario list of semivariance data, the return value of `pkern_vario` or `pkern_xvario`
 #' @param pars list of kernel parameters "x" and/or "y", variance "v", and optionally nugget "nug"
@@ -538,7 +667,7 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
 
   # identify the semivariance directions provided in vario
   nm.yx = c(y='y', x='x')
-  nm.dyx = c('d1', 'd2')
+  nm.dyx = c(d1='d1', d1='d2')
   nm.vario = c(nm.yx, nm.dyx)
   is.vario = stats::setNames(nm.vario %in% names(vario), nm.vario)
 
@@ -548,18 +677,18 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
     # clean up pars if supplied
     if( !is.null(pars) )
     {
-      # if a single kernel supplied, take its product
-      if( all( c('k', 'kp') %in% names(pars) ) ) pars = list(y=pars, x=pars)
+      # if a 1d kernel supplied, assume we are assigning it to both y and x component
+      if( all( c('k', 'kp') %in% names(pars) ) ) pars = modifyList(pars, list(y=pars, x=pars))
 
       # assume order "y" "x" unless otherwise indicated by names
       if( !all( nm.yx %in% names(pars) ) ) names(pars) = nm.yx
-      if( is.null(pars[['v']]) ) pars[['v']] = pars[['y']][['v']]
-      if( is.null(pars[['nug']]) ) pars[['nug']] = pars[['y']][['nug']]
     }
 
-    # split parameters into component lists
-    xpars = c( pars[['x']], list( v=pars[['v']], nug=pars[['nug']] ) )
-    ypars = c( pars[['y']], list( v=pars[['v']], nug=pars[['nug']] ) )
+    # assign default partial sill and nugget if missing and split parameters into component lists
+    if( !is.null(pars) & is.null(pars[['psill']]) ) pars[['psill']] = 1
+    if( !is.null(pars) & is.null(pars[['nug']]) ) pars[['nug']] = 0
+    xpars = c( pars[['x']], list( psill=pars[['psill']], nug=pars[['nug']] ) )
+    ypars = c( pars[['y']], list( psill=pars[['psill']], nug=pars[['nug']] ) )
 
     # set default plot titles
     title.def = FALSE
@@ -579,20 +708,20 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
     }
 
     # same for y-axis
-    svlim.def = FALSE
-    if( is.null(plotpars[['svlim']]) )
+    vglim.def = FALSE
+    if( is.null(plotpars[['vglim']]) )
     {
-      svlim.def = TRUE
+      vglim.def = TRUE
       idx.valid = lapply( vario[nm.yx], \(xy) xy[['lags']] < plotpars[['dmax']] )
-      svmax = mapply(\(yx, i) max( yx[['sv']][i] ), yx=vario[nm.yx], i=idx.valid)
-      plotpars[['svlim']] = c(0, max(svmax))
+      vgmax = mapply(\(yx, i) max( yx[['vg']][i] ), yx=vario[nm.yx], i=idx.valid)
+      plotpars[['vglim']] = c(0, max(vgmax))
     }
 
     # update default plot settings for diagonals
     if( all( is.vario ) )
     {
       # update axis limits as needed
-      if( svlim.def )
+      if( vglim.def )
       {
         # x axis
         lagsmax = sapply( vario[nm.dyx], \(xy) max( xy[['lags']] ) )
@@ -600,14 +729,15 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
 
         # y axis
         idx.valid = lapply( vario[nm.vario], \(xy) xy[['lags']] < plotpars[['dmax']] )
-        svmax = mapply(\(xy, i) max( xy[['sv']][i] ), xy=vario[nm.vario], i=idx.valid)
-        plotpars[['svlim']] = range(plotpars[['svlim']], svmax)
+        vgmax = mapply(\(xy, i) max( xy[['vg']][i] ), xy=vario[nm.vario], i=idx.valid)
+        plotpars[['vglim']] = range(plotpars[['vglim']], vgmax)
       }
 
       # assign plot titles as needed
       if( title.def )
       {
-        dstr = paste0('(', round( atan( vario[['gres']][1] / vario[['gres']][2] )*180/pi, 1), ' degrees)')
+        degval = round( atan( vario[['gres']][1] / vario[['gres']][2] )*180/pi, 1)
+        dstr = paste0('(', degval, ' degrees)')
         plotpars[['title']] = c(plotpars[['title']], d1=paste('y', dstr), d2=paste('x', dstr))
       }
     }
@@ -642,12 +772,13 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
 
   # unpack plotting limits
   if( is.null(plotpars[['dmax']]) ) plotpars[['dmax']] = max(vario[['lags']])
+  if( is.null(plotpars[['vglim']]) ) plotpars[['vglim']] = c(0, max(vario[['vg']]))
   xlim = c(0, plotpars[['dmax']])
-  ylim = plotpars[['svlim']]
+  ylim = plotpars[['vglim']]
   main = plotpars[['title']]
 
   # catch empty variogram
-  if( length(vario[['n']]) == 1 )
+  if( length( vario[['n']] ) == 1 )
   {
     # initialize an empty plot
     plot(xlim, ylim, pch=NA, xlab='lag', ylab='semivariance', main=main)
@@ -657,20 +788,20 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
     # unpack arguments (exclude the zero point)
     n = vario[['n']][-1]
     lags = vario[['lags']][-1]
-    sv = vario[['sv']][-1]
+    vg = vario[['vg']][-1]
 
     # map point shading to the number of point pairs sampled if requested
     #colmap = 'black'
     #if( plotpars[['shade']] ) colmap = rev( grDevices::gray.colors( max(n) ) )[n]
 
     # make the scatterplot of sampled semivariances
-    plot(lags, sv, xlab='lag', ylab='semivariance', xlim=xlim, ylim=ylim, main=main, pch=16)
+    plot(lags, vg, xlab='lag', ylab='semivariance', xlim=xlim, ylim=ylim, main=main, pch=16)
 
     # add bubbles indicating sample sizes
-    points(lags, sv, pch=1, cex=n/max(n))
+    #points(lags, vg, pch=1, cex=n/max(n))
 
     # # make the scatterplot of sampled semivariances
-    # plot(lags, sv, xlab='lag', ylab='semivariance',
+    # plot(lags, vg, xlab='lag', ylab='semivariance',
     #      xlim=xlim, ylim=ylim, main=main, pch=20, col=colmap)
 
   }
@@ -678,31 +809,27 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
   # if kernel parameters are supplied, plot the theoretical values
   if( !is.null(unlist(pars)) )
   {
-    # check for variance components in parameters list and set default nugget (0)
-    nug = pars[['nug']]
-    v = pars[['v']]
-    if( is.null(v) ) stop('variance v not found in pars')
-    if( is.null(nug) ) nug = 0
+    # check for variance components in parameters list and set defaults
+    if( is.null(pars[['psill']]) ) pars[['psill']] = 1
+    if( is.null(pars[['nug']]) ) pars[['nug']] = 0
 
     #  handle x or y kernel component requests
     lags = seq(xlim[1], xlim[2], length.out=1e2)
-    if( all( c('k', 'kp') %in% names(pars) ) ) fit = pkern_tvario(pars, v=v, nug=nug, d=lags)
+    if( all( c('k', 'kp') %in% names(pars) ) ) fit = pkern_tvg(pars, d=lags)
 
     # handle requests along a diagonal (both y and x components included in pars)
     if( all( nm.yx %in% names(pars) ) )
     {
       # find unit distance along diagonals
       gres = vario[['gres']]
-      udist = sqrt(sum(gres^2))
+      udist = sqrt( sum( gres^2 ) )
 
-      # find the equivalent displacement along y and x directions
-      lagsy = gres[1] * lags / udist
-      lagsx = gres[2] * lags / udist
+      # find the true distance of lags
+      dlags = lapply(gres, \(gr) gr * lags / udist)
 
       # compute appropriately scaled kernel values
-      fity = pkern_tvario(pars[['y']], v=sqrt(v), d=lagsy)
-      fitx = pkern_tvario(pars[['x']], v=sqrt(v), d=lagsx)
-      fit = nug + ( fitx * fity )
+      fit = pkern_tvg(pars, d=dlags)
+      #fit = pkern_tvg(pars, d=lags)
     }
 
     # add line plot showing semivariance at requested lags

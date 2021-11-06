@@ -206,8 +206,8 @@ pkern_r2c = function(gdim, in.byrow=TRUE, out.byrow=FALSE, flipx=FALSE, flipy=FA
 #' Rotate a rectangular array by 45 degrees clockwise
 #'
 #' performs the rotation f(x,y) = (x + y, -x + y) about the center of a rectangular
-#' array (45 degrees counterclockwise), with distances scaled by sqrt(2)/2 to snap
-#' grid cells to those of a larger array.
+#' array (45 degrees clockwise), with distances scaled by 2 so that coordinates
+#' snap to those of a larger array.
 #'
 #' NAs are assigned to all output grid points not mapped to `z`.
 #'
@@ -248,7 +248,7 @@ pkern_r45 = function(z, gdim=NULL)
   {
     if( !is.null(gdim) ) warning('argument to gdim was ignored')
     gdim = pkern_fromRaster(z, 'gdim')
-    z = pkern_fromRaster(z, 'values')
+    z = pkern_fromRaster(z, 'gval')
   }
 
   # handle list input
@@ -256,7 +256,7 @@ pkern_r45 = function(z, gdim=NULL)
   {
     if( !is.null(gdim) ) warning('argument to gdim was ignored')
     gdim = z[['gdim']]
-    z = z[['values']]
+    z = z[['gval']]
   }
 
   # handle NULL gdim

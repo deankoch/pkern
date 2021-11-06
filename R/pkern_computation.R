@@ -90,7 +90,7 @@ pkern_LL = function(pars, zobs, sgdim, pc=FALSE)
   # extract covariance function parameters
   yx.nm = c('y', 'x')
   cpars = pars[yx.nm]
-  pvar = ifelse( is.null(pars[['v']]), 1, sqrt(pars[['v']]))
+  psill = ifelse( is.null(pars[['psill']]), 1, pars[['psill']])
 
   # set default subgrid resolution (distances between grid lines) as needed
   sgres = pars[['gres']]
@@ -114,7 +114,7 @@ pkern_LL = function(pars, zobs, sgdim, pc=FALSE)
     pc = list( sobs = sobs )
 
     # build component marginal correlation matrices for the subgrid (at sgres resolution)
-    pc[['vs']] = Map( \(p, n, d) { pvar * pkern_corrmat(p, n, d) },
+    pc[['vs']] = Map( \(p, n, d) { sqrt(psill) * pkern_corrmat(p, n, d) },
                       p=cpars, n=sgdim, d=sgres) |> stats::setNames(nm=yx.nm)
 
     # when all of the subgrid is sampled: do eigendecompositions of component matrices
@@ -287,7 +287,7 @@ pkern_precompute = function(gdim, gli, pars, zobs=NULL, makev=FALSE)
   # ordering is i/y first, j/x second, by default assume all of subgrid is sampled
   yx.nm = c('y', 'x')
   cpars = pars[yx.nm]
-  pvar = ifelse( is.null(pars[['v']]), 1, sqrt(pars[['v']]))
+  psill = ifelse( is.null(pars[['psill']]), 1, pars[['psill']])
   nmap = sapply(gli, length)
   if( is.null(zobs) ) zobs = seq( prod(nmap) )
   if( !all( c('i', 'j') %in% names(gli) ) ) gli = stats::setNames(gli, c('i', 'j'))
@@ -322,16 +322,16 @@ pkern_precompute = function(gdim, gli, pars, zobs=NULL, makev=FALSE)
   gres = sgres / dsg
 
   # build component marginal correlation matrices for the subgrid (at sgres resolution)
-  vs = Map( \(p, n, d) { pvar * pkern_corrmat(p, n, d) },
+  vs = Map( \(p, n, d) { sqrt(psill) * pkern_corrmat(p, n, d) },
             p=cpars, n=nmap, d=sgres) |> stats::setNames(nm=yx.nm)
 
   # build component marginal correlation matrices for points off subgrid (slow!)
   vo = NULL
-  if(makev) vo = Map(\(p, n, d, i, j) { pvar * pkern_corrmat(p, n, d, i, j) },
+  if(makev) vo = Map(\(p, n, d, i, j) { sqrt(psill) * pkern_corrmat(p, n, d, i, j) },
                      p=cpars, n=gdim, d=gres, i=mapsg.c, j=mapsg.c) |> stats::setNames(nm=yx.nm)
 
   # build component cross-correlation matrices for points on vs off subgrid lines
-  vso = Map( \(p, n, d, i, j) { pvar * pkern_corrmat(p, n, d, i, j) },
+  vso = Map( \(p, n, d, i, j) { sqrt(psill) * pkern_corrmat(p, n, d, i, j) },
              p=cpars, n=gdim, d=gres, i=gli, j=mapsg.c) |> stats::setNames(nm=yx.nm)
 
   # use faster method when all of the subgrid is sampled
@@ -504,7 +504,7 @@ pkern_variance = function(pc, quiet=FALSE, idx=NULL)
   nev = length(pc[['ed']][['values']])
 
   # pointwise variance is initialize to the sill
-  sill = pc[['pars']][['v']] + pc[['pars']][['nug']]
+  sill = pc[['pars']][['psill']] + pc[['pars']][['nug']]
   zv = rep(sill, prod(pc[['gdim']]))
 
   # loop over all eigenvectors unless a subset is requested
