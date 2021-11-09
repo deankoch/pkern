@@ -130,7 +130,7 @@ recenter the data to get something closer to a Gaussian random variable.
 hist(meuse$zinc, main='histogram of [zinc] in the meuse dataset')
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
 This chunk does the transformation and appends it to `meuse` in the new
 column “logzinc”. We save the centering constant in variable
@@ -146,7 +146,7 @@ meuse$logzinc = as.numeric(logzinc)
 hist(meuse$logzinc, main='histogram of zero-centred log[zinc] in the meuse dataset')
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
 
 The `meuse` dataframe has columns “x” and “y” for the projected Easting
 and Northing coordinates, so it can be converted to a spatial points
@@ -161,7 +161,7 @@ meuse.sf = st_as_sf(meuse, coords=c('x', 'y'), crs=meuse.epsg)
 plot(meuse.sf['logzinc'], pch=16, main='zero-centred log[zinc]')
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
 
 The river Meuse runs diagonally across this map (from bottom-left to
 top-right), and points are sampled along its east bank. This vignette
@@ -323,7 +323,7 @@ gsnap.nearest$sg$pdist |> range()
 pkern_snap_plot(gsnap.nearest, meuse.sf)
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-13-1.png)<!-- -->
 
 This minimizes total positional error (the largest snapping distance is
 about 2m) but results in the most complicated subgrid possible (the full
@@ -359,7 +359,7 @@ gsnap.nearest.10$sg$pdist |> range()
 pkern_snap_plot(gsnap.nearest.10, meuse.sf)
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
 
 With wider spacing the positional error has increased - the largest
 snapping distance is now around 30m - but the subgrid is now
@@ -373,7 +373,7 @@ gsnap.nearest.auto = pkern_snap(gfull, pts=meuse.sf, distinct=FALSE)
 pkern_snap_plot(gsnap.nearest.auto, meuse.sf)
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-15-1.png)<!-- -->
 
 ``` r
 gsnap.nearest.auto$sg$pdist |> range()
@@ -410,7 +410,7 @@ gsnap = pkern_snap(gfull, pts=meuse.sf)
 pkern_snap_plot(gsnap, meuse.sf)
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
 
 ``` r
 gsnap$sg$pdist |> range()
@@ -452,7 +452,7 @@ zinc.sg[idx.to] = meuse$logzinc
 pkern_plot(zinc.sg, gdim=gsnap[['sg']][['gdim']], ppars=list(leg='log[zinc]'))
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->
 
 ``` r
 # you can also create the data vector in one line using inverse mapping
@@ -474,7 +474,7 @@ correct coordinates and aspect ratio
 modifyList(gsnap[['sg']], list(gval=zinc.sg)) |> pkern_plot(gtest, ppars=list(leg='log[zinc]'))
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
 
 ## Covariance model
 
@@ -503,7 +503,7 @@ plot(d, corr, pch=NA, main='1d Gaussian correlation function')
 lines(d, corr)
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
 
 ``` r
 # correlation matrix for the lag sequence above
@@ -539,7 +539,7 @@ pars.2d = list(y=pars.1d.y, x=pars.1d.x)
 pkern_plot(pars.2d)
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
 
 This plot shows the correlation between a central point and all of the
 grid points surrounding it, illustrating the spatial pattern of
@@ -564,7 +564,7 @@ pars.2d = modifyList(pars.2d, list(psill=2, nug=0.5))
 pkern_plot(pars.2d)
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
 
 The plot looks identical except that the color legend has a new range.
 The spatial pattern of the covariance function is determined by the
@@ -577,23 +577,26 @@ which can be passed to the plotter to get a sense of what type of
 spatial patterns are expected under the model:
 
 ``` r
+# set random seed so we don't change the image every time I edit this script
+set.seed(1)
+
 # simulate data from the model defined above
 pkern_sim(pars.2d)
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
 
 ``` r
 # repeat with smaller nugget effect
 pkern_sim(modifyList(pars.2d, list(nug=1e-2)))
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-23-2.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-23-2.png)<!-- -->
 
-We show next how to fit the parameters of a covariance model to a sample
-variogram by weighted least squares. This is not the most robust way of
-fitting covariance, however it is easy to understand, and fast. For
-users preferring likelihood based-methods, we also include the (log)
+We will show next how to fit the parameters of a covariance model to a
+sample variogram by weighted least squares. This is not the most robust
+way of fitting covariance, however it is easy to understand, and fast.
+For users preferring likelihood based-methods, we also include the (log)
 likelihood function computer `pkern_LL`, which can be used in numerical
 optimization.
 
@@ -621,7 +624,7 @@ vario = pkern_vario(gdim=gsnap, vec=zinc.sg, quiet=TRUE)
 pkern_vario_plot(vario)
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-25-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-25-1.png)<!-- -->
 
 As an aside, these sample variograms reveal some anisotropy in the
 random field. The diagonal x direction (corresponding to the top-right
@@ -642,7 +645,7 @@ pars.vario = pkern_vario_fit(vario)
 pkern_vario_plot(vario, pars.vario)
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-26-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-26-1.png)<!-- -->
 
 Here is what the fitted kernel looks like as a heatmap
 
@@ -651,7 +654,7 @@ Here is what the fitted kernel looks like as a heatmap
 pkern_plot(pars.vario)
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-27-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-27-1.png)<!-- -->
 
 The fitted kernel is slightly anisotropic, with an effective range
 around 500m.
@@ -684,7 +687,7 @@ zpred = pkern_cmean(zinc.sg, gsnap, pars.vario)
 modifyList(gsnap, list(gval=zpred)) |> pkern_plot(ppars=list(main='kriging prediction'))
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-28-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-28-1.png)<!-- -->
 
 Note that this computation happens quite fast compared to most kriging
 methods: The `pkern_cmean` function call takes only around 1/6 of a
@@ -850,7 +853,7 @@ zv = pkern_variance(pc, quiet=TRUE)
 modifyList(gsnap, list(gval=zv)) |> pkern_plot(ppars=list(main='kriging variance'))
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
 
 This works by superimposing the n grid data vectors resulting from
 `pkern_cmean(vi)^2`, where `vi` is the ith eigenvector of the sampled
@@ -871,7 +874,7 @@ plot.title = paste('variance contribution from eigenvector', eigen.i)
 modifyList(gsnap, list(gval=zv.i)) |> pkern_plot(ppars=list(main=plot.title))
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
 
 The smallest eigenvalues (here, the 50th, 49th, etc) tend to have the
 most complex and interesting appearance. I don’t know of any analytical
@@ -897,7 +900,7 @@ modifyList(gsnap, list(gval=zpred.adj)) |>
   pkern_plot(ppars=list(main='kriging predictions', leg='[zinc]'))
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
 
 ``` r
 # repeat for pointwise variance
@@ -905,13 +908,27 @@ modifyList(gsnap, list(gval=zv.adj)) |>
   pkern_plot(ppars=list(main='kriging variance'))
 ```
 
-![](D:/pkern/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-36-2.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-36-2.png)<!-- -->
+
+## Markdown
+
+This chunk below is used to create the markdown document you’re reading
+from an R script file
 
 ``` r
-# Restart session and uncomment this code to build the markdown file
-# library(here)
-# library(rmarkdown)
-# path.input = here('inst/pkern_vignette.R')
-# path.output = here('inst/pkern_vignette.md')
-# rmarkdown::render(path.input, clean=TRUE, output_file=path.output)
+if(FALSE)
+{
+  # Restart session and run code chunk below to build the markdown file
+  library(here)
+  library(rmarkdown)
+
+  # make the markdown document
+  path.input = here('vignettes/pkern_vignette.R')
+  path.output = here('vignettes/pkern_vignette.md')
+  rmarkdown::render(path.input, clean=TRUE, output_file=path.output)
+
+  # substitute local file paths for image files with URLs on github
+  md.github = gsub('https://github.com/deankoch/pkern/blob/main', 'https://github.com/deankoch/pkern/blob/main', readLines(path.output))
+  writeLines(md.github, path.output)
+}
 ```

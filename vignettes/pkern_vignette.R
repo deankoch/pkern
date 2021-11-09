@@ -364,13 +364,17 @@ pkern_plot(pars.2d)
 #' It generates random vectors from the Gaussian process which can be passed to the plotter
 #' to get a sense of what type of spatial patterns are expected under the model:
 
+# set random seed so we don't change the image every time I edit this script
+set.seed(1)
+
 # simulate data from the model defined above
 pkern_sim(pars.2d)
 
 # repeat with smaller nugget effect
 pkern_sim(modifyList(pars.2d, list(nug=1e-2)))
 
-#' We show next how to fit the parameters of a covariance model to a sample variogram by
+
+#' We will show next how to fit the parameters of a covariance model to a sample variogram by
 #' weighted least squares. This is not the most robust way of fitting covariance, however
 #' it is easy to understand, and fast. For users preferring likelihood based-methods, we
 #' also include the (log) likelihood function computer `pkern_LL`, which can be used in
@@ -571,11 +575,28 @@ modifyList(gsnap, list(gval=zpred.adj)) |>
 
 # repeat for pointwise variance
 modifyList(gsnap, list(gval=zv.adj)) |>
+  pkern_plot(ppars=list(main='kriging variance'))
 
+#'
+#' ## Markdown
+#'
+#' This chunk below is used to create the markdown document you're reading from the
+#' R script file (with same name, in this directory). It uses `rmarkdown` to create
+#' the md file, then substitutes local image paths for github URLs so the document
+#' will display the images properly on my repo page.
 
-# Restart session and uncomment this code to build the markdown file
-# library(here)
-# library(rmarkdown)
-# path.input = here('vignettes/pkern_vignette.R')
-# path.output = here('vignettes/pkern_vignette.md')
-# rmarkdown::render(path.input, clean=TRUE, output_file=path.output)
+if(FALSE)
+{
+  # Restart session and run code chunk below to build the markdown file
+  library(here)
+  library(rmarkdown)
+
+  # make the markdown document
+  path.input = here('vignettes/pkern_vignette.R')
+  path.output = here('vignettes/pkern_vignette.md')
+  rmarkdown::render(path.input, clean=TRUE, output_file=path.output)
+
+  # substitute local file paths for image files with URLs on github
+  md.github = gsub('D:/pkern', 'https://github.com/deankoch/pkern/blob/main', readLines(path.output))
+  writeLines(md.github, path.output)
+}
