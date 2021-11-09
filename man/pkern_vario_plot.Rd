@@ -34,13 +34,16 @@ of a nugget effect and, optionally, "nug", the variance of the nugget effect.
 }
 \examples{
 gdim = c(100, 50)
-pars = pkern_corr('gau') |> utils::modifyList(list(v=1))
-vec = pkern_sim(pars, gdim)
+pars.1d = pkern_corr('gau')
+pars.2d = list(y=pars.1d, x=pars.1d, psill=1)
+vec = pkern_sim(pars.2d, gdim)
 
-# sample first 10 lags and plot
-vario = pkern_vario(gdim, vec, lags=seq(10))
+# sample first 10 lags and plot results
+vario = pkern_vario(gdim, vec, lags=seq(10), quiet=TRUE)
+pkern_vario_plot(vario, pars.2d)
 
-pkern_vario_plot(vario[['x']], pars)
-pkern_vario_plot(vario[['y']], pars)
-pkern_vario_plot(vario, pars)
+# plot componentwise
+pkern_vario_plot(vario[['x']], c(pars.1d, list(psill=1)))
+pkern_vario_plot(vario[['y']], c(pars.1d, list(psill=1)))
+
 }

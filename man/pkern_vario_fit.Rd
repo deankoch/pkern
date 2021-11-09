@@ -70,12 +70,13 @@ divides sample size by squared theoretical semivariance.
 }
 \examples{
 gdim = c(1e2, 2e2)
-pars = pkern_corr('gau') |> utils::modifyList(list(v=1))
-vec = pkern_sim(pars, gdim)
+pars.1d = pkern_corr('gau')
+pars.2d = list(y=pars.1d, x=pars.1d, psill=1)
+vec = pkern_sim(pars.2d, gdim)
 
 # sample first 10 lags and plot
-vario = pkern_vario(gdim, vec, lags=seq(10))
-pkern_vario_plot(vario, pars)
+vario = pkern_vario(gdim, vec, lags=seq(10), nmax=1e3, quiet=TRUE)
+pkern_vario_plot(vario, pars.2d)
 
 # fit the separable gaussian kernel
 pars.fitted = pkern_vario_fit(vario)
