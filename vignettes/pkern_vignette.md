@@ -616,7 +616,7 @@ pkern_sim(modifyList(pars.2d, list(nug=1e-2)), gdim)
 We will see later on that conditional mean (kriging) can be done even
 faster
 
-Likelihood
+## Likelihood
 
 In the next section we will show how to fit the parameters of a
 covariance model to a sample variogram by weighted least squares. This
@@ -763,7 +763,7 @@ grid, partitioned according to their relationship with the subgrid
 “o”, “oj”, “oi”, “sobs”) mapping the input point data to rows and
 columns of these matrices
 
-## Example: sample data variance
+## Variance components example: sample data variance
 
 In the kriging problem one takes the covariance matrix for the input
 points - say `V` - and multiplies its inverse by the input data vector.
@@ -834,7 +834,7 @@ abs(V - V.compare) |> max() |> print()
 
     ## [1] 1.065814e-14
 
-Where is the nugget effect?
+## Where is the nugget effect?
 
 The variance components in `pc` are for a model without a nugget. The
 nugget effect is handled separately by specifying nugget variance in
