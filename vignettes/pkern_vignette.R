@@ -34,23 +34,13 @@
 library(Matrix)
 library(RcppHungarian)
 
+#' Until the package is published on CRAN, you will also want the `devtools` package which
+#' makes it easy to install from the github repository
+library(devtools)
+
 #' Install `pkern` by running:
-
-#install.packages('pkern')
-#library(pkern)
-
-#' TEMPORARY: I'm still developing the package so for now the above lines above are commented
-#' and I instead load all package functions by sourcing the following R files:
-
-# source code for development version of the pkern package
-library(here)
-source(here('R/pkern_computation.R'))
-source(here('R/pkern_covariance.R'))
-source(here('R/pkern_indexing.R'))
-source(here('R/pkern_plot.R'))
-source(here('R/pkern_raster.R'))
-source(here('R/pkern_snap.R'))
-source(here('R/pkern_variograms.R'))
+install_github('deankoch/pkern')
+library(pkern)
 
 #' The `sf` and `raster` packages are also recommended for loading your spatial data
 #' (they are used in the examples below), but they are not strictly required by `pkern`.

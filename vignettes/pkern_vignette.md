@@ -43,27 +43,27 @@ library(RcppHungarian)
 
     ## Warning: package 'RcppHungarian' was built under R version 4.1.1
 
+Until the package is published on CRAN, you will also want the
+`devtools` package which makes it easy to install from the github
+repository
+
+``` r
+library(devtools)
+```
+
+    ## Loading required package: usethis
+
 Install `pkern` by running:
 
 ``` r
-#install.packages('pkern')
-#library(pkern)
+install_github('deankoch/pkern')
 ```
 
-TEMPORARY: I’m still developing the package so for now the above lines
-above are commented and I instead load all package functions by sourcing
-the following R files:
+    ## Skipping install of 'pkern' from a github remote, the SHA1 (d40eed46) has not changed since last install.
+    ##   Use `force = TRUE` to force installation
 
 ``` r
-# source code for development version of the pkern package
-library(here)
-source(here('R/pkern_computation.R'))
-source(here('R/pkern_covariance.R'))
-source(here('R/pkern_indexing.R'))
-source(here('R/pkern_plot.R'))
-source(here('R/pkern_raster.R'))
-source(here('R/pkern_snap.R'))
-source(here('R/pkern_variograms.R'))
+library(pkern)
 ```
 
 The `sf` and `raster` packages are also recommended for loading your
