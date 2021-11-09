@@ -391,9 +391,8 @@ print(gsnap.nearest.auto$sg$gdim)
 
 The function has selected a 35 X 29 subgrid with maximum positional
 error around 70m. Users should of course verify that the suggested `sep`
-(ie `sgdim`) values are reasonable by examining the snapping distances
-returned by `pkern_snap` and/or by visual inspection with
-`pkern_snap_plot`.
+values are reasonable by examining the snapping distances returned by
+`pkern_snap` and/or by visual inspection with `pkern_snap_plot`.
 
 Looking closely at this plot, we can spot multiple input data points
 getting mapped to the same grid point. One could do some kind of
@@ -431,6 +430,8 @@ print(gsnap$sg$gdim)
 
     ##  y  x 
     ## 35 30
+
+## Mapping subgrid points to input data
 
 The list (`gsnap`) returned by `pkern_snap` contains some useful
 indexing vectors that map input points to the full grid as well as
@@ -472,12 +473,15 @@ correct coordinates and aspect ratio
 
 ``` r
 # make a copy of the `gsnap$sg`, adding values field, pipe to plotter
-modifyList(gsnap[['sg']], list(gval=zinc.sg)) |> pkern_plot(gtest, ppars=list(leg='log[zinc]'))
+modifyList(gsnap[['sg']], list(gval=zinc.sg)) |> pkern_plot(ppars=list(leg='log[zinc]'))
 ```
 
 ![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-19-1.png)<!-- -->
 
-## Covariance model
+The plotter function `pkern_plot` uses `graphics` to draw grid data, and
+is similar to `raster::plot.raster` (but does not depend on it).
+
+## Covariance models
 
 Before we can do kriging, we need a spatial covariance model. `pkern`
 requires that we use a separable model (see Koch et al, 2020). In short,
@@ -520,7 +524,7 @@ pkern_corrmat(pars.1d, n) |> str()
     ##   ..@ uplo    : chr "U"
     ##   ..@ factors : list()
 
-The correlation matrices returned by `pkern_corrmat` are always always
+The correlation matrices returned by `pkern_corrmat` are always given as
 (sparse) `Matrix` class, which can be helpful on bigger problems (even
 though here the matrix is not sparse).
 
@@ -572,14 +576,16 @@ The spatial pattern of the covariance function is determined by the
 component correlograms, whereas the nugget effect and partial sill
 essentially just introduce a scaling and non-zero intercept.
 
+## Simulations
+
 The simulation function `pkern_sim` is another way to visualize a
-covariance model. It generates random vectors from the Gaussian process
-which can be passed to the plotter to get a sense of what type of
-spatial patterns are expected under the model:
+covariance model. It generates random vectors from the specified
+Gaussian process which can be passed to the plotter to get a sense of
+what type of spatial patterns are expected under the model:
 
 ``` r
 # set random seed so we don't change the image every time I edit this script
-set.seed(1)
+set.seed(7)
 
 # simulate data from the model defined above
 pkern_sim(pars.2d)
@@ -589,17 +595,35 @@ pkern_sim(pars.2d)
 
 ``` r
 # repeat with smaller nugget effect
+set.seed(7)
 pkern_sim(modifyList(pars.2d, list(nug=1e-2)))
 ```
 
 ![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-23-2.png)<!-- -->
 
-We will show next how to fit the parameters of a covariance model to a
-sample variogram by weighted least squares. This is not the most robust
-way of fitting covariance, however it is easy to understand, and fast.
-For users preferring likelihood based-methods, we also include the (log)
-likelihood function computer `pkern_LL`, which can be used in numerical
-optimization.
+The separable covariance model makes these computations pretty fast. The
+following generates a simulation on the full (1 million pixel) grid in
+about 3 seconds on my desktop.
+
+``` r
+# repeat, this time setting desired grid dimensions
+set.seed(7)
+pkern_sim(modifyList(pars.2d, list(nug=1e-2)), gdim)
+```
+
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
+
+We will see later on that conditional mean (kriging) can be done even
+faster
+
+Likelihood
+
+In the next section we will show how to fit the parameters of a
+covariance model to a sample variogram by weighted least squares. This
+is not the most robust way of fitting covariance, however it is easy to
+understand, and fast. For users preferring likelihood based-methods, we
+also include the (log) likelihood function computer `pkern_LL`, which
+can be used in numerical optimization.
 
 ``` r
 # likelihood for the example model, given the meuse zinc data
@@ -608,7 +632,7 @@ pkern_LL(pars.2d, zinc.sg, gsnap[['sg']][['gdim']])
 
     ## [1] -3.194457
 
-## Variograms
+## Sample variograms
 
 The function `pkern_vario` estimates sample variogram values for the the
 input point dataset, after snapping to the grid. It produces four sample
@@ -625,14 +649,16 @@ vario = pkern_vario(gdim=gsnap, vec=zinc.sg, quiet=TRUE)
 pkern_vario_plot(vario)
 ```
 
-![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-25-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-26-1.png)<!-- -->
 
-As an aside, these sample variograms reveal some anisotropy in the
-random field. The diagonal x direction (corresponding to the top-right
-to bottom-left direction) has a much lower sill than the other
+As an aside, these directional sample variograms reveal anisotropy in
+the random field. The diagonal x direction (corresponding to the
+top-right to bottom-left direction) has a much lower sill than the other
 directions, because we have not de-trended the data by accounting for
 distance to the river Meuse - this will be illustrated in another
 vignette
+
+## Fitting to sample variograms
 
 The function `pkern_vario_fit` can now be used to fit the variogram data
 to a model by weighted least squares. The code below does so, and plots
@@ -646,7 +672,7 @@ pars.vario = pkern_vario_fit(vario)
 pkern_vario_plot(vario, pars.vario)
 ```
 
-![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-26-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-27-1.png)<!-- -->
 
 Here is what the fitted kernel looks like as a heatmap
 
@@ -655,7 +681,7 @@ Here is what the fitted kernel looks like as a heatmap
 pkern_plot(pars.vario)
 ```
 
-![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-27-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-28-1.png)<!-- -->
 
 The fitted kernel is slightly anisotropic, with an effective range
 around 500m.
@@ -688,7 +714,7 @@ zpred = pkern_cmean(zinc.sg, gsnap, pars.vario)
 modifyList(gsnap, list(gval=zpred)) |> pkern_plot(ppars=list(main='kriging prediction'))
 ```
 
-![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-28-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-29-1.png)<!-- -->
 
 Note that this computation happens quite fast compared to most kriging
 methods: The `pkern_cmean` function call takes only around 1/6 of a
@@ -737,10 +763,12 @@ grid, partitioned according to their relationship with the subgrid
 “o”, “oj”, “oi”, “sobs”) mapping the input point data to rows and
 columns of these matrices
 
-For example, in the kriging problem one takes the covariance matrix for
-the input points - say `V` - and multiplies its inverse by the input
-data vector. Rather than storing V or its inverse, we store the
-diagonalization of `V` (from `base::eigen`) absent the nugget effect:
+## Example: sample data variance
+
+In the kriging problem one takes the covariance matrix for the input
+points - say `V` - and multiplies its inverse by the input data vector.
+Rather than storing V or its inverse, `pkern` stores the diagonalization
+of `V` (from `base::eigen`), absent the nugget effect:
 
 ``` r
 # structure of the eigendecomposition for sampled data covariance V
@@ -759,9 +787,10 @@ meuse.sf |> nrow()
 
     ## [1] 155
 
-V can be recovered as a submatrix of the covariance matrix for the full
-subgrid, which is the Kronecker product of the component y and x
-covariance matrices:
+`V` can be recovered as a submatrix of the covariance matrix for the
+full subgrid (which includes unsampled subgrid locations where we have
+NAs). This which is the Kronecker product of the component y and x
+covariance matrices, which are also stored in `pc`:
 
 ``` r
 # structure of subgrid covariance components
@@ -805,13 +834,16 @@ abs(V - V.compare) |> max() |> print()
 
     ## [1] 1.065814e-14
 
+Where is the nugget effect?
+
 The variance components in `pc` are for a model without a nugget. The
-nugget effect is handled separately, by specifying nugget variance in
-element “nug” of the kernel parameters list `pars`. For example, the
-following code prints the nugget variance in the model fitted earlier by
-`pkern_vario_fit` and computes the covariance matrix for the sampled
-points including this nugget effect, by adding it to the diagonal matrix
-in the eigendecomposition.
+nugget effect is handled separately by specifying nugget variance in
+element “nug” of the kernel parameters list `pars`.
+
+For example, the following code prints the nugget variance in the model
+fitted earlier by `pkern_vario_fit` and computes the covariance matrix
+for the sampled points including this nugget effect, by adding it to the
+diagonal matrix in the eigendecomposition.
 
 ``` r
 # compute V for the full model with nugget
@@ -834,10 +866,9 @@ The reason for handling the nugget separately like this is that our
 covariance components are spatially separable only when the nugget
 effect is zero. Separability allows the use of Kronecker products and
 various other computational shortcuts, so we omit the nugget effect
-until it is needed (eg. in `pkern_cmean`, `pkern_LL`)
+until it is needed (eg. by functions like `pkern_cmean` and `pkern_LL`)
 
-For more details on the objects in `pc`, see the documentation for
-`pkern_precompute`
+For more details on the objects in `pc`, see `?pkern_precompute`
 
 ## Conditional variance
 
@@ -854,7 +885,7 @@ zv = pkern_variance(pc, quiet=TRUE)
 modifyList(gsnap, list(gval=zv)) |> pkern_plot(ppars=list(main='kriging variance'))
 ```
 
-![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
 
 This works by superimposing the n grid data vectors resulting from
 `pkern_cmean(vi)^2`, where `vi` is the ith eigenvector of the sampled
@@ -875,7 +906,7 @@ plot.title = paste('variance contribution from eigenvector', eigen.i)
 modifyList(gsnap, list(gval=zv.i)) |> pkern_plot(ppars=list(main=plot.title))
 ```
 
-![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-35-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
 
 The smallest eigenvalues (here, the 50th, 49th, etc) tend to have the
 most complex and interesting appearance. I don’t know of any analytical
@@ -901,7 +932,7 @@ modifyList(gsnap, list(gval=zpred.adj)) |>
   pkern_plot(ppars=list(main='kriging predictions', leg='[zinc]'))
 ```
 
-![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-36-1.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
 
 ``` r
 # repeat for pointwise variance
@@ -909,9 +940,15 @@ modifyList(gsnap, list(gval=zv.adj)) |>
   pkern_plot(ppars=list(main='kriging variance'))
 ```
 
-![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-36-2.png)<!-- -->
+![](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-37-2.png)<!-- -->
 
-## Markdown
+## Summary
+
+This vignette is intended to get users up and running with `pkern` by
+demonstrating a very simple example on a familiar dataset. In other
+vignettes we will look in more detail at how `pkern_cmean` actually
+works, and how users can modify the workflow to incorporate a trend
+model. \#\# Markdown
 
 This chunk below is used to create the markdown document you’re reading
 from the R script file (with same name, in this directory). It uses
@@ -926,10 +963,12 @@ if(FALSE)
   library(here)
   library(rmarkdown)
 
-  # make the markdown document
+  # make the markdown document and delete the unwanted html
   path.input = here('vignettes/pkern_vignette.R')
   path.output = here('vignettes/pkern_vignette.md')
+  path.garbage = here('vignettes/pkern_vignette.html')
   rmarkdown::render(path.input, clean=TRUE, output_file=path.output)
+  unlink(path.garbage)
 
   # substitute local file paths for image files with URLs on github
   md.github = gsub('https://github.com/deankoch/pkern/blob/main', 'https://github.com/deankoch/pkern/blob/main', readLines(path.output))
