@@ -10,12 +10,12 @@
 #' **pkern**: Fast kriging on gridded datasets
 #'
 #' Standard kriging methods don't scale well on problems with high resolution and large geographical
-#' extent, such as when downscaling weather data. `pkern` gets around this issue using product kernels,
-#' which simplify kriging computations to substantially reduce their memory and CPU demands.
+#' extent, such as when downscaling weather data. `pkern` gets around this issue using product kernels
+#' to simplify kriging computations and substantially reduce their memory and CPU demands.
 #' We use a combination of new methods and ones described in Gilboa et. al (2015), Koch et. al (2021).
 #'
 #' This vignette uses `pkern` to interpolate soil data from the "meuse" dataset (included
-#' with `gstat`), showing how to use the main functions in the package by way of example in a
+#' with `gstat`), showing how to use the main functions in the package in a
 #' kriging workflow optimized for computational simplicity:
 #'
 #' * `pkern_fromRaster` defines a grid based on an existing raster (optional)
@@ -177,10 +177,11 @@ pkern_toRaster(gfull)
 #' which deprecates the old PROJ4 strings in favour of modern well-known-text (WKT) and EPSG codes, creating
 #' some dependency issues that are not completely resolved yet.
 #'
-#' In this case, coordinate reference metadata is handled in `pkern_fromRaster(r)` by copying the
-#' WKT string from `raster::wkt(r)` to the list element "crs". `pkern_toRaster` then passes this string
-#' to `raster:raster`, which appears to convert it to PROJ4 at some point. As PROJ4 is being phased out,
-#' I imagine this will be changed soon in updates to `raster` and `sp`, and the warning should disappear.
+#' Coordinate reference metadata is handled in `pkern_fromRaster(r)` by copying the WKT string from
+#' `raster::wkt(r)` to the list element "crs". `pkern_toRaster` then passes this string to argument
+#' "crs" of `raster:raster`, which appears to convert it to PROJ4 at some point, prompting a warning about
+#' a dropped field. As PROJ4 is being phased out I imagine that updates to `raster` and `sp`
+#' will soon make this warning disappear. For now (in this vignette) it can be ignored.
 #'
 #'
 #' ## Snapping inputs to subgrid
@@ -591,10 +592,12 @@ if(FALSE)
   library(here)
   library(rmarkdown)
 
-  # make the markdown document
+  # make the markdown document and delete the unwanted html
   path.input = here('vignettes/pkern_vignette.R')
   path.output = here('vignettes/pkern_vignette.md')
+  path.garbage = here('vignettes/pkern_vignette.html')
   rmarkdown::render(path.input, clean=TRUE, output_file=path.output)
+  unlink(path.garbage)
 
   # substitute local file paths for image files with URLs on github
   md.github = gsub('D:/pkern', 'https://github.com/deankoch/pkern/blob/main', readLines(path.output))

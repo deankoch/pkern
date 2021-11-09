@@ -9,15 +9,15 @@ Dean Koch
 
 Standard kriging methods don’t scale well on problems with high
 resolution and large geographical extent, such as when downscaling
-weather data. `pkern` gets around this issue using product kernels,
-which simplify kriging computations to substantially reduce their memory
-and CPU demands. We use a combination of new methods and ones described
-in Gilboa et. al (2015), Koch et. al (2021).
+weather data. `pkern` gets around this issue using product kernels to
+simplify kriging computations and substantially reduce their memory and
+CPU demands. We use a combination of new methods and ones described in
+Gilboa et. al (2015), Koch et. al (2021).
 
 This vignette uses `pkern` to interpolate soil data from the “meuse”
 dataset (included with `gstat`), showing how to use the main functions
-in the package by way of example in a kriging workflow optimized for
-computational simplicity:
+in the package in a kriging workflow optimized for computational
+simplicity:
 
 -   `pkern_fromRaster` defines a grid based on an existing raster
     (optional)
@@ -284,12 +284,13 @@ which deprecates the old PROJ4 strings in favour of modern
 well-known-text (WKT) and EPSG codes, creating some dependency issues
 that are not completely resolved yet.
 
-In this case, coordinate reference metadata is handled in
-`pkern_fromRaster(r)` by copying the WKT string from `raster::wkt(r)` to
-the list element “crs”. `pkern_toRaster` then passes this string to
-`raster:raster`, which appears to convert it to PROJ4 at some point. As
-PROJ4 is being phased out, I imagine this will be changed soon in
-updates to `raster` and `sp`, and the warning should disappear.
+Coordinate reference metadata is handled in `pkern_fromRaster(r)` by
+copying the WKT string from `raster::wkt(r)` to the list element “crs”.
+`pkern_toRaster` then passes this string to argument “crs” of
+`raster:raster`, which appears to convert it to PROJ4 at some point,
+prompting a warning about a dropped field. As PROJ4 is being phased out
+I imagine that updates to `raster` and `sp` will soon make this warning
+disappear. For now (in this vignette) it can be ignored.
 
 ## Snapping inputs to subgrid
 
@@ -913,7 +914,10 @@ modifyList(gsnap, list(gval=zv.adj)) |>
 ## Markdown
 
 This chunk below is used to create the markdown document you’re reading
-from an R script file
+from the R script file (with same name, in this directory). It uses
+`rmarkdown` to create the md file, then substitutes local image paths
+for github URLs so the document will display the images properly on my
+repo page.
 
 ``` r
 if(FALSE)
