@@ -289,7 +289,7 @@ identical(zinc.sg, zinc.sg.compare)
 
 #' Note that the axis labels in the plot above refer to grid line numbers (not coordinates). To get
 #' a plot in the original coordinate system, we can use the resolution and grid line position info
-#' in `gsnap$sg`. The code below makes a copy of `gsnap` with grid data `zpred`. This list is then
+#' in `gsnap$sg`. The code below makes a copy of `gsnap` with grid data `zinc.sg`. This list is then
 #' passed to the plotter function, which displays the grid with the correct coordinates
 #' and aspect ratio
 
