@@ -365,26 +365,25 @@ pkern_precompute = function(gdim, gli, pars, zobs=NULL, makev=FALSE)
 
 #' Compute conditional mean of points on a grid given a sample taken over a subgrid
 #'
-#' Given a separable spatial covariance model (`pars`), and a sample (`zobs`) on a
-#' a regular subgrid (`gli`) of the grid of dimensions `gdim`, the function computes the
+#' Given a separable spatial covariance model, `pars`, and sample data `zobs` on a
+#' a regular subgrid `gli` of the grid of dimensions `gdim`, the function computes the
 #' expected value of all n (`prod(gdim)`) points in the full grid.
 #'
-#' For this type of problem the full n-dimensional covariance matrix (V) can be represented
-#' using kronecker products of dimension `gdim[1]^2` and `gdim[2]^2` (eg. as described in
-#' Gilboa et al., 2015; and Koch et al., 2020), dramatically speeding up calculations and
-#' reducing memory demands.
+#' Tthe full n-dimensional covariance matrix (V) is represented using Kronecker products
+#' (eg. as described in Gilboa et al., 2015; and Koch et al., 2020), dramatically speeding
+#' up calculations and reducing memory demands.
 #'
 #' `zobs` should be supplied in column-vectorized order, and its length must equal the
 #' product of the lengths of the vectors in `gli` (ie the number of points in the subgrid).
 #' Unsampled points in the subgrid should be indicated by NAs in `zobs`.
 #'
-#' The subgrid on which `zobs` is located must be specified in the indexing vectors `gli$y`
-#' and `gli$x`, which gli to subsets of `seq(gdim[1])` and `seq(gdim[2])`.
+#' The vectors in `gli` indicate the grid line numbers that make up the subgrid - ie they
+#' should be subsets of `seq(gdim[1])` and `seq(gdim[2])`, in ascending order, and must be
+#' regularly spaced.
 #'
-#' Nugget effects are supported by adding adding `pars$nug` to the diagonal of the eigenvalue
-#' matrix in the eigendecomposition of V. Note that a small nugget effect will often solve
-#' computational issues arising from numerically singular covariance matrices (a common problem
-#' with large spatial covariance models).
+#' Nugget variance (in `pars$nug`) is added to the diagonal of the eigenvalue matrix in
+#' the eigendecomposition of V. Note that a small nugget effect will often solve computational
+#' issues arising from numerically singular covariance matrices.
 #'
 #' @param zobs numeric vector of observed data, possibly with NAs
 #' @param gdim integer vector (ny, nx), the size of the full grid
