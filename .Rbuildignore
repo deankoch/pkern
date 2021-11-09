@@ -2,3 +2,6 @@
 ^\.Rproj\.user$
 ^LICENSE\.md$
 ^dev$
+^inst$
+^vignettes$
+^graphics$

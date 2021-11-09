@@ -29,9 +29,11 @@ pkern_fit(
 \item{nug}{length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for nugget}
 
 \item{add}{positive integer, add additional initial parameter sets are tested (see details)}
+
+\item{control}{TODO}
 }
 \value{
-
+TODO
 }
 \description{
 Fit a spatial covariance model by numerical maximum likelihood

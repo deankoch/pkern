@@ -57,7 +57,7 @@ ng = length(g)
 pts = g + stats::rnorm(ng)
 pkern_snap_plot(g, pts)
 
-# plot again with with default snapping (assumes g and pts have same order)
+# plot again with with points mapped to grid line that generated them
 pkern_snap_plot(gyx=list(gyx=g), pts)
 
 # plot again with a random mapping
@@ -68,7 +68,7 @@ gdim = c(30, 25)
 sep = c(2, 3)
 gyx = Map(\(d, s) seq(1, d, by=s), d=gdim, s=sep)
 yx = expand.grid(gyx)
-pts = xy + stats::rnorm(prod(dim(xy)))
+pts = yx + stats::rnorm(prod(dim(yx)))
 pkern_snap_plot(gyx, pts)
 
 # plot again with a mapping from pts to gyx

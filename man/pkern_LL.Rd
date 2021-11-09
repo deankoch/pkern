@@ -16,7 +16,7 @@ pkern_LL(pars, zobs, sgdim, pc = FALSE)
 \item{pc}{logical or list of matrices, precomputed objects (see details)}
 }
 \value{
-
+a numeric
 }
 \description{
 \code{zobs} can either be a matrix (in which case \code{sgdim}, if supplied, must match \code{dim(zobs)})

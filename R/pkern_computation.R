@@ -29,7 +29,7 @@ pkern_qf = function(M, x, y)
   if( is.vector(x) ) x = matrix(x, ninner)
   if( is.vector(y) ) y = matrix(y, nouter)
 
-  # verify that dimensions conform (Rfast::Crossprod will crash R otherwise!)
+  # verify that dimensions conform
   conforms.inner = ninner == dim(x)[1]
   conforms.right = nouter == dim(y)[1]
   if( !conforms.inner | !conforms.right ) stop('dimensions do not conform')
@@ -80,7 +80,7 @@ pkern_kprod = function(X, Y, z, trans=FALSE)
 #' @param pars kernel parameter list, see `pkern_corr`
 #' @param pc logical or list of matrices, precomputed objects (see details)
 #'
-#' @return
+#' @return a numeric
 #' @export
 #'
 #' @examples
@@ -118,7 +118,7 @@ pkern_LL = function(pars, zobs, sgdim, pc=FALSE)
                       p=cpars, n=sgdim, d=sgres) |> stats::setNames(nm=yx.nm)
 
     # when all of the subgrid is sampled: do eigendecompositions of component matrices
-    if( length(sobs) == 0 ) { pc[['ed']] = lapply(vs, \(v) eigen(v, symmetric=TRUE)) } else {
+    if( length(sobs) == 0 ) { pc[['ed']] = lapply(pc[['vs']], \(v) eigen(v, symmetric=TRUE)) } else {
 
       # missing data case: eigendecomposition on submatrix of full variance kronecker product
       pc[['ed']] = kronecker(pc[['vs']][['x']], pc[['vs']][['y']])[sobs, sobs] |>
@@ -139,13 +139,13 @@ pkern_LL = function(pars, zobs, sgdim, pc=FALSE)
   }
 
   # case of subgrid with no unsampled points
+  # TODO: finish this
   if( is.complete )
   {
     # compute log-determinant as sum of log-eigenvalues (after adding nugget variance)
-    ldet.yx = Map(\(ed) n * sum( log( ed[['values']] + pnug ) ), ed=pc[['ed']], n=sgdim)
+    ldet.yx = Map(\(n, ed) n * sum( log( ed[['values']] + pnug ) ), ed=pc[['ed']], n=sgdim)
     ldet = do.call(sum, ldet.yx)
 
-    # TODO: finish this
     # compute quadratic form of observations with inverse covariance matrix
     #pkern_kprod(pc[['y']][['vectors']], pc[['ed']][['x']][['vectors']], zobs)
     lqf = NA
@@ -183,8 +183,9 @@ pkern_LL = function(pars, zobs, sgdim, pc=FALSE)
 #' @param v length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for variance
 #' @param nug length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for nugget
 #' @param add positive integer, add additional initial parameter sets are tested (see details)
+#' @param control TODO
 #'
-#' @return
+#' @return TODO
 #' @export
 #'
 #' @examples
@@ -192,7 +193,7 @@ pkern_LL = function(pars, zobs, sgdim, pc=FALSE)
 pkern_fit = function(zobs, gsnap, ypars='gau', xpars=ypars, v=NULL, nug=NULL, add=0, control=list())
 {
   # set defaults for variance (first parameter) and nugget (second parameter)
-  vini = var(zobs, na.rm=TRUE)
+  vini = stats::var(zobs, na.rm=TRUE)
   if( length(v) == 0 ) v = vini
   if( length(v) != 3 ) v = c(min=1e-9, ini=v, max=4*vini)
   if( length(nug) == 0 ) nug = v[2]/2
@@ -493,11 +494,11 @@ pkern_cmean = function(zobs, gdim, pars, gli=NULL, pc=FALSE)
 #' @param quiet logical indicating to suppress progress bar on console
 #' @param idx (optional) integer vector indexing a subset of eigenvectors
 #'
-#' @return
+#' @return TODO
 #' @export
 #'
 #' @examples
-#' # TDOD
+#' # TODO
 pkern_variance = function(pc, quiet=FALSE, idx=NULL)
 {
   # we will be looping over eigenvectors padded (with NAs) to size of complete subgrid

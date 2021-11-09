@@ -34,8 +34,6 @@ pkern_vario(
 \item{nmax}{positive integer, the maximum number of point pairs to process in each sample}
 
 \item{vcalc}{logical, indicates to compute the sample variance (which can be relatively slow)}
-
-\item{dmax}{numeric, maximum grid line separation distance (used to filter results)}
 }
 \value{
 list of \code{pkern_xvario} output "x", "y" (and "d1", "d2"); sample variance "v"; and "gres"

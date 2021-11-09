@@ -54,7 +54,7 @@
 #' pts = g + stats::rnorm(ng)
 #' pkern_snap_plot(g, pts)
 #'
-#' # plot again with with default snapping (assumes g and pts have same order)
+#' # plot again with with points mapped to grid line that generated them
 #' pkern_snap_plot(gyx=list(gyx=g), pts)
 #'
 #' # plot again with a random mapping
@@ -65,7 +65,7 @@
 #' sep = c(2, 3)
 #' gyx = Map(\(d, s) seq(1, d, by=s), d=gdim, s=sep)
 #' yx = expand.grid(gyx)
-#' pts = xy + stats::rnorm(prod(dim(xy)))
+#' pts = yx + stats::rnorm(prod(dim(yx)))
 #' pkern_snap_plot(gyx, pts)
 #'
 #' # plot again with a mapping from pts to gyx
@@ -291,7 +291,7 @@ pkern_snap = function(gyx, pts, sep=NULL, distinct=TRUE, quiet=FALSE)
 
   # coerce various point input types and set expected column order
   if( any(sfnm %in% class(pts)) ) pts = sf::st_coordinates(pts)[,2:1]
-  if( any(spnm %in% class(pts)) ) pts = sp::coordinates(pts)[,2:1]
+  if( any(spnm %in% class(pts)) & requireNamespace('sp', quietly=TRUE)) pts = sp::coordinates(pts)[,2:1]
   if( is.data.frame(pts) ) pts = as.matrix(pts)
   if( is.matrix(pts) ) pts = apply(pts, 2, identity, simplify=FALSE)
   if( !all(yxnm %in% names(pts)) ) names(pts)[1:2] = yxnm
@@ -457,7 +457,7 @@ pkern_snap_1d = function(g, pts, sep=1, distinct=TRUE)
   sg.n = sapply(sg.list, length)
 
   # find cross-distance matrices for pts vs subgrid lines
-  dmat.list = lapply(sg.list, \(i) abs(Rfast::Outer(g[i], pts, '-'))^2 )
+  dmat.list = lapply(sg.list, \(i) abs(outer(pts, g[i], '-'))^2 )
 
   # allow duplication in mapping or not?
   if( distinct )

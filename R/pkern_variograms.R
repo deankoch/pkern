@@ -7,42 +7,6 @@
 
 #' Theoretical variogram function
 #'
-#' Convenience function for getting theoretical semivariance values for a set of
-#' spatial lags along one dimension, assuming an intrinsically stationary process.
-#'
-#' Kernel parameters `pars` are passed to the correlation function (`pkern_corr`)
-#' to get correlation values at distances `d`. The result is converted to semivariance
-#' assuming a pointwise variance of `psill + nug` (set `nug=0` to omit the nugget effect),
-#' and is returned as a vector the same length as `d`.
-#'
-#' When `d` is NULL, the function instead returns the semivariance function as an
-#' anonymous function of distance.
-#'
-#' @param pars list of kernel parameters ("k" and "kp"), in form recognized by `pkern_corr`
-#' @param psill positive numeric, the partial sill (pointwise variance absent a nugget effect)
-#' @param nug nonegative numeric, the variance of the nugget effect
-#' @param d vector of nonegative numeric spatial lags to evaluate
-#'
-#' @return either a vector the same length as `d`, or an anonymous function of distance
-#' @export
-#'
-#' @examples
-#' d = seq(1e2)/10
-#' pars = pkern_corr('mat')
-#' pkern_tvario(pars, psill=1, d=d)
-#' pkern_tvario(pars, psill=2, nug=0.5, d=d)
-#'
-#' vg = pkern_tvario(pars, psill=2, nug=0.5)
-#' plot(d, vg(d))
-pkern_tvario = function(pars, psill, nug=0, d=NULL)
-{
-  fn = function(d) { nug + ( unname(psill) * ( 1 - pkern_corr(pars, d) ) ) }
-  if( is.null(d) ) return(fn)
-  return(fn(d))
-}
-
-#' Theoretical variogram function
-#'
 #' Returns either the variogram function for the (intrinsically stationary) process
 #' specified in kernel parameter list `pars`; or, if distances `d` are supplied, the
 #' vector of variogram values evaluated at `d`.
@@ -112,7 +76,7 @@ pkern_tvg = function(pars, d=NULL)
       if( !all( yxnm %in% names(d) ) )
       {
         warning('assuming the first vector in d is "y" and second is "x"')
-        d[1:2] = setNames(d[1:2], yxnm)
+        d[1:2] = stats::setNames(d[1:2], yxnm)
       }
     }
   }
@@ -305,7 +269,6 @@ pkern_xvario = function(gdim, vec, simple=TRUE, fit.method='rmedian', quiet=FALS
 #' @param lags list c(dy, dx) of positive integer vectors, grid line lags to sample
 #' @param fit.method character, one of "matheron", "rmean", "rmedian", passed to `pkern_xvario`
 #' @param diagonal logical, if TRUE, semivariogram results are returned also for diagonals
-#' @param dmax numeric, maximum grid line separation distance (used to filter results)
 #' @param gres length-2 vector of positive numeric, the spacing distance of y and x grid lines
 #' @param quiet logical, indicating to suppress console output
 #' @param nmax positive integer, the maximum number of point pairs to process in each sample
@@ -355,7 +318,7 @@ pkern_vario = function(gdim, vec, lags=NA, fit.method='rmedian', diagonal=TRUE,
   yxnm = c('y', 'x')
   if( anyNA(gres) ) gres = c(1,1)
   if( length(gres) == 1 ) stop('gres must have length 2')
-  if( !all( yxnm %in% names(gres) ) ) gres = setNames(gres, yxnm)
+  if( !all( yxnm %in% names(gres) ) ) gres = stats::setNames(gres, yxnm)
 
   # compute x semivariances
   if( !quiet ) cat('\nidentifying horizontal lags...')
@@ -678,7 +641,7 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
     if( !is.null(pars) )
     {
       # if a 1d kernel supplied, assume we are assigning it to both y and x component
-      if( all( c('k', 'kp') %in% names(pars) ) ) pars = modifyList(pars, list(y=pars, x=pars))
+      if( all( c('k', 'kp') %in% names(pars) ) ) pars = utils::modifyList(pars, list(y=pars, x=pars))
 
       # assume order "y" "x" unless otherwise indicated by names
       if( !all( nm.yx %in% names(pars) ) ) names(pars) = nm.yx

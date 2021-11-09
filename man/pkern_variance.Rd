@@ -14,7 +14,7 @@ pkern_variance(pc, quiet = FALSE, idx = NULL)
 \item{idx}{(optional) integer vector indexing a subset of eigenvectors}
 }
 \value{
-
+TODO
 }
 \description{
 Computes the conditional variance of kriging predictions on a grid
@@ -24,5 +24,5 @@ TODO: write up the proof for this method and write up a short description
 here.
 }
 \examples{
-# TDOD
+# TODO
 }
