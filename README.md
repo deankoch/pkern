@@ -18,7 +18,7 @@ R users should install the package with `devtools::install_github('deankoch/pker
 [the vignette](https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette.md)
 demonstrating basic usage on the meuse dataset.
 
-<img src="https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-9-1.png" width="33%"></img> <img src="https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-19-1.png" width="33%"></img> <img 
-src="https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-29-1.png" width="33%"></img> 
+<img src="https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-9-1.png" width="30%"></img> <img src="https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-19-1.png" width="30%"></img> <img 
+src="https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/unnamed-chunk-29-1.png" width="30%"></img> 
 
 
