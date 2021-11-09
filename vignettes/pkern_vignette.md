@@ -618,7 +618,7 @@ faster
 
 ## Likelihood
 
-In the next section we will show how to fit the parameters of a
+In the next sections we will show how to fit the parameters of a
 covariance model to a sample variogram by weighted least squares. This
 is not the most robust way of fitting covariance, however it is easy to
 understand, and fast. For users preferring likelihood based-methods, we
@@ -763,10 +763,10 @@ grid, partitioned according to their relationship with the subgrid
 “o”, “oj”, “oi”, “sobs”) mapping the input point data to rows and
 columns of these matrices
 
-## Variance components example: sample data variance
+## Variance components example
 
 In the kriging problem one takes the covariance matrix for the input
-points - say `V` - and multiplies its inverse by the input data vector.
+points, say `V`, and multiplies its inverse by the input data vector.
 Rather than storing V or its inverse, `pkern` stores the diagonalization
 of `V` (from `base::eigen`), absent the nugget effect:
 
@@ -789,8 +789,8 @@ meuse.sf |> nrow()
 
 `V` can be recovered as a submatrix of the covariance matrix for the
 full subgrid (which includes unsampled subgrid locations where we have
-NAs). This which is the Kronecker product of the component y and x
-covariance matrices, which are also stored in `pc`:
+NAs). This is the Kronecker product of the component y and x covariance
+matrices, which are also stored in `pc`:
 
 ``` r
 # structure of subgrid covariance components
@@ -836,7 +836,7 @@ abs(V - V.compare) |> max() |> print()
 
 ## Where is the nugget effect?
 
-The variance components in `pc` are for a model without a nugget. The
+The variance components in `pc` define a model without a nugget. The
 nugget effect is handled separately by specifying nugget variance in
 element “nug” of the kernel parameters list `pars`.
 
@@ -846,7 +846,7 @@ for the sampled points including this nugget effect, by adding it to the
 diagonal matrix in the eigendecomposition.
 
 ``` r
-# compute V for the full model with nugget
+# compute `V` for the full model with nugget
 print(pars.vario$nug)
 ```
 
@@ -862,11 +862,12 @@ abs(V - V.nugget ) |> max() |> print()
 
     ## [1] 0.0458974
 
-The reason for handling the nugget separately like this is that our
-covariance components are spatially separable only when the nugget
-effect is zero. Separability allows the use of Kronecker products and
-various other computational shortcuts, so we omit the nugget effect
-until it is needed (eg. by functions like `pkern_cmean` and `pkern_LL`)
+The reason for handling the nugget separately like this is that our full
+covariance matrix is spatially separable only when the nugget effect is
+zero. Separability allows the use of Kronecker products and various
+other computational shortcuts, so we omit the nugget effect until it is
+needed - eg. by adding it diagonalization of `V` in functions like
+`pkern_cmean` and `pkern_LL` (see Gilboa et al., 2015, for more on this)
 
 For more details on the objects in `pc`, see `?pkern_precompute`
 
@@ -948,7 +949,9 @@ This vignette is intended to get users up and running with `pkern` by
 demonstrating a very simple example on a familiar dataset. In other
 vignettes we will look in more detail at how `pkern_cmean` actually
 works, and how users can modify the workflow to incorporate a trend
-model. \#\# Markdown
+model.
+
+## Markdown
 
 This chunk below is used to create the markdown document you’re reading
 from the R script file (with same name, in this directory). It uses
