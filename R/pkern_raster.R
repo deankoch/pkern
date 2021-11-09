@@ -59,7 +59,7 @@ pkern_fromRaster = function(r, what='all')
   if( what == 'gres' ) return(gres)
 
   # extract CRS string if available
-  gcrs = raster::crs(r)
+  gcrs = raster::wkt(r)
   if( what == 'crs' ) return(gcrs)
 
   # extract grid line positions
