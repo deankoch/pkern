@@ -9,10 +9,10 @@ pkern_fromRaster(r, what = "all")
 \arguments{
 \item{r}{a RasterLayer to vectorize}
 
-\item{what}{character, one of: 'gdim', 'ds', 'u', 'crs', 'yx', 'values' or 'all'}
+\item{what}{character, one of: 'gdim', 'gres', 'crs', 'gyx', 'gval' or 'all'}
 }
 \value{
-For default \code{what=='all'}, a named list containing 6 objects (see details)
+For default \code{what=='all'}, a named list containing 4 objects (see details)
 }
 \description{
 Calls to raster::values or raster::getValues produce the data in row-vectorized
@@ -22,18 +22,17 @@ passed to other pkern_* functions
 \details{
 The return value depends on argument \code{what}:
 
-"gdim": returns integer vector \code{c(i, j)}, the number of y and x grid lines
-"ds": returns \code{c(dy, dx)}, the x and y distances between grid lines (ie the resolution)
-"crs": returns the CRS code for the raster (if any)
-"yx": returns \code{list(y, x)}, a list of vectors containing the y and x grid line positions
-"values": returns a vector containing the raster data in column-vectorized order
-"all": returns a named list containing the above three objects
+"gdim": returns integer vector \code{c(ny, nx)}, the number of y and x grid lines
+"gres": returns \code{c(dy, dx)}, the x and y distances between grid lines (ie the resolution)
+"gyx": returns \code{list(y, x)}, a list of vectors containing the y and x grid line positions
+"gval": returns a vector containing the raster data in column-vectorized order
+"all": returns a named list containing the above four objects
 }
 \examples{
 if( requireNamespace('raster') ) {
 r.in = system.file('external/rlogo.grd', package='raster') |> raster::raster(band=1)
 pkern.in = pkern_fromRaster(r.in)
 pkern_plot(pkern.in)
-pkern.in$values |> matrix(pkern.in$gdim) |> pkern_plot()
+pkern.in$gval |> matrix(pkern.in$gdim) |> pkern_plot()
 }
 }

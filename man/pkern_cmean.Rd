@@ -4,7 +4,7 @@
 \alias{pkern_cmean}
 \title{Compute conditional mean of points on a grid given a sample taken over a subgrid}
 \usage{
-pkern_cmean(zobs, gdim, pars, map, pc = FALSE, sparse = TRUE, mvec = FALSE)
+pkern_cmean(zobs, gdim, pars, gli = NULL, pc = FALSE)
 }
 \arguments{
 \item{zobs}{numeric vector of observed data, possibly with NAs}
@@ -13,39 +13,34 @@ pkern_cmean(zobs, gdim, pars, map, pc = FALSE, sparse = TRUE, mvec = FALSE)
 
 \item{pars}{list of kernel parameter lists "y" and "x", nugget "nug", and distance scaling "ds"}
 
-\item{map}{list of two integer vectors, indexing the y and x grid lines of the regular subgrid}
+\item{gli}{list of two integer vectors, indexing the y and x grid lines of the regular subgrid}
 
 \item{pc}{either logical (default FALSE), or a list of precomputed objects (see details)}
-
-\item{sparse}{logical, indicates to use Matrix::Matrix representations of large matrices}
-
-\item{mvec}{logical, see details (TODO)}
 }
 \value{
 TODO
 }
 \description{
-Given a separable spatial covariance model (\code{pars}), and a sample (\code{zobs}) on a
-a regular subgrid (\code{map}) of the grid of dimensions \code{gdim}, the function computes the
+Given a separable spatial covariance model, \code{pars}, and sample data \code{zobs} on a
+a regular subgrid \code{gli} of the grid of dimensions \code{gdim}, the function computes the
 expected value of all n (\code{prod(gdim)}) points in the full grid.
 }
 \details{
-For this type of problem the full n-dimensional covariance matrix (V) can be represented
-using kronecker products of dimension \code{gdim[1]^2} and \code{gdim[2]^2} (eg. as described in
-Gilboa et al., 2015; and Koch et al., 2020), dramatically speeding up calculations and
-reducing memory demands.
+Tthe full n-dimensional covariance matrix (V) is represented using Kronecker products
+(eg. as described in Gilboa et al., 2015; and Koch et al., 2020), dramatically speeding
+up calculations and reducing memory demands.
 
 \code{zobs} should be supplied in column-vectorized order, and its length must equal the
-product of the lengths of the vectors in \code{map} (ie the number of points in the subgrid).
+product of the lengths of the vectors in \code{gli} (ie the number of points in the subgrid).
 Unsampled points in the subgrid should be indicated by NAs in \code{zobs}.
 
-The subgrid on which \code{zobs} is located must be specified in the indexing vectors \code{map$y}
-and \code{map$x}, which map to subsets of \code{seq(gdim[1])} and \code{seq(gdim[2])}.
+The vectors in \code{gli} indicate the grid line numbers that make up the subgrid - ie they
+should be subsets of \code{seq(gdim[1])} and \code{seq(gdim[2])}, in ascending order, and must be
+regularly spaced.
 
-Nugget effects are supported by adding adding \code{pars$nug} to the diagonal of the eigenvalue
-matrix in the eigendecomposition of V. Note that a small nugget effect will often solve
-computational issues arising from numerically singular covariance matrices (a common problem
-with large spatial covariance models).
+Nugget variance (in \code{pars$nug}) is added to the diagonal of the eigenvalue matrix in
+the eigendecomposition of V. Note that a small nugget effect will often solve computational
+issues arising from numerically singular covariance matrices.
 }
 \examples{
 # TODO

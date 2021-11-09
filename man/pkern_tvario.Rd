@@ -2,14 +2,14 @@
 % Please edit documentation in R/pkern_variograms.R
 \name{pkern_tvario}
 \alias{pkern_tvario}
-\title{Theoretical semivariances along x or y direction}
+\title{Theoretical variogram function}
 \usage{
-pkern_tvario(pars, v, nug = 0, d = NULL)
+pkern_tvario(pars, psill, nug = 0, d = NULL)
 }
 \arguments{
 \item{pars}{list of kernel parameters ("k" and "kp"), in form recognized by \code{pkern_corr}}
 
-\item{v}{positive numeric, the pointwise variance absent a nugget effect}
+\item{psill}{positive numeric, the partial sill (pointwise variance absent a nugget effect)}
 
 \item{nug}{nonegative numeric, the variance of the nugget effect}
 
@@ -20,13 +20,13 @@ either a vector the same length as \code{d}, or an anonymous function of distanc
 }
 \description{
 Convenience function for getting theoretical semivariance values for a set of
-spatial lags along one dimension, assuming (intrinsic) stationarity.
+spatial lags along one dimension, assuming an intrinsically stationary process.
 }
 \details{
 Kernel parameters \code{pars} are passed to the correlation function (\code{pkern_corr})
 to get correlation values at distances \code{d}. The result is converted to semivariance
-assuming a pointwise variance of \code{v + nug} (an optional nugget effect) and returned
-as a vector the same length as \code{d}.
+assuming a pointwise variance of \code{psill + nug} (set \code{nug=0} to omit the nugget effect),
+and is returned as a vector the same length as \code{d}.
 
 When \code{d} is NULL, the function instead returns the semivariance function as an
 anonymous function of distance.
@@ -34,9 +34,9 @@ anonymous function of distance.
 \examples{
 d = seq(1e2)/10
 pars = pkern_corr('mat')
-pkern_tvario(pars, v=1, d=d)
-pkern_tvario(pars, v=2, nug=0.5, d=d)
+pkern_tvario(pars, psill=1, d=d)
+pkern_tvario(pars, psill=2, nug=0.5, d=d)
 
-sv = pkern_tvario(pars, v=2, nug=0.5)
-plot(d, sv(d))
+vg = pkern_tvario(pars, psill=2, nug=0.5)
+plot(d, vg(d))
 }

@@ -2,44 +2,63 @@
 % Please edit documentation in R/pkern_snap.R
 \name{pkern_snap}
 \alias{pkern_snap}
-\title{Snap an irregular set of 2d points to nearest regular subgrid}
+\title{Snap an irregular set of 2d points to the nearest regular subgrid}
 \usage{
-pkern_snap(g, pts, sep = NULL, distinct = TRUE, quiet = FALSE, bias = 0)
+pkern_snap(gyx, pts, sep = NULL, distinct = TRUE, quiet = FALSE)
 }
 \arguments{
-\item{g}{list of two vectors ("x" and "y"), the grid line coordinates (ascending order)}
+\item{gyx}{list of two vectors, the y and x grid line coordinates (ascending order)}
 
-\item{pts}{list of two vectors ("x" and "y"), the 2d point coordinates (any order)}
+\item{pts}{list of two vectors, the y and x point coordinates}
 
-\item{sep}{integer vector, where \code{sep-1} is the number of grid lines between subgrid lines}
+\item{sep}{integer vector, where \code{sep-1} is the number of grid lines between each subgrid line}
 
-\item{distinct}{logical, indicating to attempt a 1-to-1 mapping}
+\item{distinct}{logical, indicating to snap no more than one input point to each grid point}
 
 \item{quiet}{logical indicating to suppress console messages}
-
-\item{bias}{nonegative numeric passed to \code{pkern_estimate_sep} (when \code{sep} not supplied)}
 }
 \value{
-a list (see details)
+a large list containing info about grid and subgrid (see details)
 }
 \description{
 Snaps points to a subgrid, either by calling \code{pkern_snap_1d} twice, or by using the
-hungarian algorithm on the 2d problem
+Hungarian algorithm to solve the grid assignment problem.
 }
 \details{
-output list contains:
+\code{gyx} can be a RasterLayer, a list of y and x coordinates, or a list containing the
+coordinates (in element \code{gyx$gyx}) as returned by \code{pkern_fromRaster}.
+
+\code{sep} is a positive integer (or vector of two) specifying the factor(s) by which to
+multiply the outer grid resolution to get the subgrid. Equivalently, this is the
+separation distance between adjacent subgrid lines, given in terms of the number of
+outer grid lines - eg. if \code{sep = c(1,1)} then all outer grid lines are included in the
+subgrid; And if \code{sep=c(2,1)}, then only every second y grid line is included. \code{pkern}
+includes a helper function for choosing \code{sep} automatically. This is done by default
+when \code{sep} is not specified.
+
+By default (\code{distinct=TRUE}) the function uses the Hungarian algorithm to find
+the mapping which minimizes the total sum of squared snapping distances, under the
+constraint that no more than one input point is assigned to each subgrid point.
+When \code{distinct=FALSE} the function simply maps each point to the nearest x and y grid
+lines separately (minimizing total Manhattan distance)
+
+The output list contains info about the configuration of the grid and subgrid, along
+with several indexing vectors for mapping between the input points and the grid points -
+
 \code{gdim}, the input grid dimensions (ny, nx)
-\code{sep}, the estimated spacing (number of grid lines between subgrid lines) for the subgrid
-\code{drange}, the range of snapping distances overall (in same units as \code{g})
-\code{vec}, integer vector, the mapping from \code{pts} to \code{g} in vectorized order
-\code{g}, list of integer vectors, dimension-wise coordinates of the grid lines
-\code{map}, list of integer vectors, dimension-wise mapping from \code{pts} to \code{g}
-\code{dist}, list of numeric vectors, dimension-wise snapping distances
+\code{gres}, the input grid resolution (copied from \code{gyx} or set to \code{c(1,1)})
+\code{gyx}, the input grid line coordinates (copied from input \code{gyx})
+\code{sep}, the selected subgrid spacing
+\code{pmap}, list of integer vectors, dimension-wise mapping from \code{pts} to \code{gyx}
+\code{gli}, list of integer vectors, dimension-wise grid line numbers forming the subgrid
+\code{pvec}, integer vector mapping from \code{pts} to full grid, in column-vectorized order
+\code{pdist}, numeric vector of Euclidean snapping distances
 \code{sg}, list with information about the subgrid:
 \code{gdim}, the subgrid dimensions (ny, nx)
-\code{g}, the subgrid lines (a subset of \code{g} in parent list)
-\code{map}, dimension-wise mapping from \code{pts} to \code{sg$g}
-\code{vec}, mapping from \code{pts} to \code{sg$g} in vectorized order
+\code{gyx}, the subgrid line coordinates (subsets of \code{gyx} in parent list)
+\code{gres}, the subgrid resolution (equal to \code{sep * gres} in parent list)
+\code{pvec}, integer vector mapping from \code{pts} to subgrid, in column-vectorized order
+\code{ipvec}, integer vector, the inverse of the above mapping (with NAs for unmapped grid points)
 }
 \examples{
 # define a grid of coordinates and add jitter to a subgrid
@@ -50,7 +69,7 @@ ng = prod(sapply(g, length))
 pts = expand.grid(g) + stats::rnorm(2*ng)
 
 # plot grid and the point set generated from it
-pkern_snap_plot(list(g=g), pts)
+pkern_snap_plot(g, pts)
 
 # snap to grid lines, allowing duplicates
 snap = pkern_snap(g, pts, distinct=FALSE)
@@ -71,15 +90,11 @@ pkern_snap_plot(snap, pts)
 #snap.distinct = pkern_snap(g, pts, sep=3)
 
 # call again with smaller sep
-snap.distinct = pkern_snap(g, pts, sep=c(2,1))
+snap.distinct = pkern_snap(g, pts, sep=2)
 pkern_snap_plot(snap.distinct, pts)
 
 # call again with sep determined automatically
 snap.distinct = pkern_snap(g, pts)
-pkern_snap_plot(snap.distinct, pts)
-
-# `bias` tunes how many grid lines are assigned
-snap.distinct = pkern_snap(g, pts, bias=1)
 pkern_snap_plot(snap.distinct, pts)
 
 }

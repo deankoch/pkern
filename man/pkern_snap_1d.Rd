@@ -16,7 +16,7 @@ pkern_snap_1d(g, pts, sep = 1, distinct = TRUE)
 \item{distinct}{logical, indicating to attempt a 1-to-1 mapping}
 }
 \value{
-list with elements "g", "map", and "dist" (see below)
+list with elements "g", "pmap", and "dist" (see below)
 }
 \description{
 This function finds a regular subgrid of the regular 1d grid \code{g} that is nearest
@@ -25,8 +25,8 @@ that every \code{sep}th grid point in \code{g} belongs to the subgrid.
 }
 \details{
 The function returns a list containing:
-\code{g} vector of grid line coordinates
-\code{map} output mapping vector, of same length as \code{pts} but with values in \code{seq(g)}
+\code{gyx} vector of grid line coordinates
+\code{pmap} output mapping vector, of same length as \code{pts} but with values in \code{seq(g)}
 \code{dist} vector of squared snapping distances (corresponding to \code{pts})
 
 The output mapping (\code{map}) is selected by least total cost (sum over all input points),

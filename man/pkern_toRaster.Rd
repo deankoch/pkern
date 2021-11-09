@@ -4,19 +4,19 @@
 \alias{pkern_toRaster}
 \title{Convert column-vectorized grid to RasterLayer}
 \usage{
-pkern_toRaster(rvec = NULL, gdim = NULL, template = NULL)
+pkern_toRaster(g = NULL, gdim = NULL, template = NULL)
 }
 \arguments{
-\item{rvec}{either the column-vectorized data or a list containing it (in element "values")}
+\item{g}{either the column-vectorized data or a list containing it (in element "gval")}
 
-\item{gdim}{c(ni, nj), the number rows and columns in the full grid}
+\item{gdim}{c(ny, nx), the number rows and columns in the full grid}
 
 \item{template}{optional RasterLayer to use as template (for setting crs, resolution etc)
 
 Produces a RasterLayer from a vector or matrix. This essentially a wrapper for various
 \code{raster::raster} calls where the input data is in column-vectorized form.
 
-\code{rvec} can either be a matrix (in which case \code{gdim} can be omitted) or its vectorized
+\code{g} can either be a matrix (in which case \code{gdim} can be omitted) or its vectorized
 equivalent, or a list containing elements returned by \code{pkern_fromRaster}. If the list
 has an element named "gdim", it replaces any argument supplied to \code{gdim}. Other elements
 of the list (eg 'crs') are passed on to the RasterLayer construction call as needed.

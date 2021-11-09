@@ -4,10 +4,10 @@
 \alias{pkern_snap_plot}
 \title{Plots a set of 1 or 2d points and their snapped versions}
 \usage{
-pkern_snap_plot(g, pts = NULL, ppars = list())
+pkern_snap_plot(gyx, pts = NULL, ppars = list())
 }
 \arguments{
-\item{g}{numeric vector, matrix, dataframe or list, the grid line coordinates (see details)}
+\item{gyx}{numeric vector, matrix, dataframe or list, the grid line coordinates (see details)}
 
 \item{pts}{numeric vector, matrix, dataframe or list, the point coordinates (see details)}
 
@@ -17,9 +17,9 @@ pkern_snap_plot(g, pts = NULL, ppars = list())
 draws a plot and returns nothing
 }
 \description{
-The function plots the points in \code{pts} over the grid lines in \code{g}, with the option of
-also drawing connecting lines between points and grid intersections, according to a
-given mapping.
+The function plots the points in \code{pts} over the grid lines in \code{gyx}, with the option of
+also drawing connecting lines between points and grid intersections to show snapping
+distances.
 }
 \details{
 This is mainly intended for visualizing the output of \code{pkern_snap} and related functions.
@@ -27,22 +27,22 @@ This is mainly intended for visualizing the output of \code{pkern_snap} and rela
 \code{pts} can be a vector of 1d positions (in which case the plot shows input order against
 position), or a matrix whose columns are the "y" and "x" coordinates (in that order,
 unless they are named), or a data frame (which is coerced to matrix), or a list of
-coordinate vectors.
+coordinate vectors, or an \code{sf} points object.
 
-\code{g} can be a numeric vector, or list of two (in "y", "x" order), or a list containing the
-grid line locations (as vector or list) in element "g", and, optionally,  "map" which
-provides a mapping for drawing connecting lines. If supplied, "map" should be an integer
-vector (or list of two) with length(s) matching (those of) \code{pts}, and with elements
-indexing grid line vectors, ie from the sequence \code{1:length(g$g)}
+\code{gyx} can be a numeric vector in the 1d case; or list of two (in "y", "x" order); or a
+list containing the grid line locations (as vector or list) in element "gyx", and,
+optionally, "pmap" which provides a mapping for drawing connecting lines. For example
+you can pass the return value of \code{pkern_snap} as \code{gxy}
 
-When \code{g$g} but not \code{g$map} is supplied, it is assumed that \code{g$g} and \code{pts} have
+If supplied, \code{gyx$pmap} should be an integer vector (or list of two) with length(s)
+matching those in \code{pts} - its elements index grid lines, so they should have values
+drawn (possibly with repitition) from the sequences \code{seq_along(gyx$gyx$y)} and
+\code{seq_along(gyx$gyx$x)}
+
+When \code{gyx$gyx} but not \code{gyx$pmap} is supplied, it is assumed that \code{gyx$gyx} and \code{pts} have
 the same length and ordering, and lines are drawn connecting their respective elements.
-When \code{g} is a list without named element "g", it is assumed to be a list of grid line
+When \code{gyx} is a list without named element "gyx", it is assumed to be a list of grid line
 vectors (and no connecting lines are drawn).
-
-Different classes of \code{pts} and \code{g} (and "map") can be mixed but they must have the
-same dimensionality; ie a 2d points set \code{pts} must be passed with a 2d grid line object
-\code{g}, and if "map" is supplied, it must be a list of two mapping vectors.
 
 \code{ppars} is a list with any of the following (optional) named elements: "gcol", "mcol",
 "dcol", and "pcol". They are the colors of, respectively, the grid lines, the snapped grid
@@ -51,28 +51,28 @@ call); and "yaxis" is a logical that applies only in the 1d case, indicating to 
 locations along the y (instead of x) axis.
 }
 \examples{
-# vector g (1d case)
+# 1d case
 g = seq(1, 100, by=2)
 ng = length(g)
 pts = g + stats::rnorm(ng)
 pkern_snap_plot(g, pts)
 
 # plot again with with default snapping (assumes g and pts have same order)
-pkern_snap_plot(g=list(g=g), pts)
+pkern_snap_plot(gyx=list(gyx=g), pts)
 
 # plot again with a random mapping
-pkern_snap_plot(list(g=g, map=sample(seq(ng), ng)), pts)
+pkern_snap_plot(list(gyx=g, pmap=sample(seq(ng), ng)), pts)
 
-# matrix g (2d case)
+# 2d case
 gdim = c(30, 25)
 sep = c(2, 3)
-g = Map(\(d, s) seq(1, d, by=s), d=gdim, s=sep)
-xy = expand.grid(g)
+gyx = Map(\(d, s) seq(1, d, by=s), d=gdim, s=sep)
+yx = expand.grid(gyx)
 pts = xy + stats::rnorm(prod(dim(xy)))
-pkern_snap_plot(g, pts)
+pkern_snap_plot(gyx, pts)
 
-# plot again with a mapping from pts to g
-pkern_snap_plot(g=list(g=g), pts)
+# plot again with a mapping from pts to gyx
+pkern_snap_plot(gyx=list(gyx=gyx), pts)
 
 # TODO: examples with pkern_snap
 }

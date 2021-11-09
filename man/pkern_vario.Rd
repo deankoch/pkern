@@ -2,17 +2,15 @@
 % Please edit documentation in R/pkern_variograms.R
 \name{pkern_vario}
 \alias{pkern_vario}
-\title{Directional sample semivariograms for regular 2D gridded data}
+\title{Directional sample variograms for regular 2D gridded data}
 \usage{
 pkern_vario(
   gdim,
   vec,
-  sep = NA,
-  simple = TRUE,
-  method = "median",
+  lags = NA,
+  fit.method = "rmedian",
   diagonal = TRUE,
-  dmax = Inf,
-  ds = NA,
+  gres = NA,
   quiet = FALSE,
   nmax = 10000,
   vcalc = TRUE
@@ -23,29 +21,27 @@ pkern_vario(
 
 \item{vec}{numeric vector of data, in column vectorized order (length \code{prod(dims)})}
 
-\item{sep}{list c(dy, dx) of positive integer vectors, grid line lags to sample}
+\item{lags}{list c(dy, dx) of positive integer vectors, grid line lags to sample}
 
-\item{simple}{logical, if FALSE the function includes point pair indices in return list}
-
-\item{method}{character, one of "mean", "median", "ch", passed to \code{pkern_xvario}}
+\item{fit.method}{character, one of "matheron", "rmean", "rmedian", passed to \code{pkern_xvario}}
 
 \item{diagonal}{logical, if TRUE, semivariogram results are returned also for diagonals}
 
-\item{dmax}{numeric, maximum grid line separation distance (used to filter results)}
-
-\item{ds}{length-2 vector of positive numeric, the spacing distance of y and x grid lines}
+\item{gres}{length-2 vector of positive numeric, the spacing distance of y and x grid lines}
 
 \item{quiet}{logical, indicating to suppress console output}
 
 \item{nmax}{positive integer, the maximum number of point pairs to process in each sample}
 
 \item{vcalc}{logical, indicates to compute the sample variance (which can be relatively slow)}
+
+\item{dmax}{numeric, maximum grid line separation distance (used to filter results)}
 }
 \value{
-list of \code{pkern_xvario} output "x", "y" (and "d1", "d2"); sample variance "v"; and "ds"
+list of \code{pkern_xvario} output "x", "y" (and "d1", "d2"); sample variance "v"; and "gres"
 }
 \description{
-A wrapper for calls to \code{pkern_xvario} to get the directional sample semivariograms
+A wrapper for calls to \code{pkern_xvario} to get the directional sample variograms
 from regular lattice data along the y and x dimensions, and optionally along the
 diagonals.
 }
@@ -54,15 +50,15 @@ The function makes the appropriate calls to \code{pkern_xvario} and returns the 
 in list elements "y", "x". If \code{diagonal=TRUE}, the function also returns "d1" and
 "d2", the y and x semivariograms after a 45 degree counterclockwise rotation of the
 input grid (see \code{pkern_r45}) assuming equal y and x resolution. For unequal resolution
-the rotation angle is \code{atan(ds[2]/ds[1])}.
+the rotation angle is \code{atan(gres[2]/gres[1])}.
 
-Note that input \code{sep} is specified in terms of grid line indices (integers), not
+Note that input \code{lags} is specified in terms of grid line indices (integers), not
 distances (their product with the x or y resolution). However, non-integer separation
 distances can be specified by setting the resolution of the input grid (dy, dx) in
-argument \code{ds}. When \code{ds} is supplied, the output "sep" values are scaled accordingly
+argument \code{gres}. When \code{gres} is supplied, the output "lags" values are scaled accordingly
 and \code{dmax} is interpreted as a distance, rather than a number of grid lines.
 
-When \code{ds} is not supplied, the function assumes that the x grid lines have the same
+When \code{gres} is not supplied, the function assumes that the x grid lines have the same
 spacing distance (1) as the y grid lines. In this case, diagonally adjacent
 grid points have separation distance \code{sqrt(2)}.
 }
@@ -72,14 +68,14 @@ pars = pkern_corr('gau') |> utils::modifyList(list(v=1))
 vec = pkern_sim(pars, gdim)
 
 # sample first 10 lags and plot
-vario = pkern_vario(gdim, vec, sep=seq(10))
+vario = pkern_vario(gdim, vec, lags=seq(10))
 pkern_vario_plot(vario, pars)
 
 # example with unequal resolution and multiple replicates
-ds = c(2,1)
+gres = c(2,1)
 nrep = 10
-vec = lapply(seq(nrep), \(i) pkern_sim(pars, gdim, ds=ds, makeplot=FALSE))
-vario = pkern_vario(gdim, vec, sep=seq(10), ds=ds)
+vec = lapply(seq(nrep), \(i) pkern_sim(pars, gdim, gres=gres, makeplot=FALSE))
+vario = pkern_vario(gdim, vec, lags=seq(10), gres=gres)
 pkern_vario_plot(vario, pars)
 
 }

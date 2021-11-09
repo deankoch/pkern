@@ -4,27 +4,18 @@
 \alias{pkern_precompute}
 \title{Compute important indexing vectors relating to a subgrid within a larger grid}
 \usage{
-pkern_precompute(
-  gdim,
-  map,
-  pars = NULL,
-  zobs = NULL,
-  makev = FALSE,
-  sparse = TRUE
-)
+pkern_precompute(gdim, gli, pars, zobs = NULL, makev = FALSE)
 }
 \arguments{
-\item{gdim}{integer vector c(ni, nj) the size of the outer grid}
+\item{gdim}{integer vector c(ny, nx) the size of the outer grid (in number of grid lines)}
 
-\item{map}{list of integer vectors "i" and "j", row and column indices of the subgrid}
+\item{gli}{list of integer vectors "y" and "x", indexing the grid lines that form the subgrid}
 
-\item{pars}{(optional) list of "x" and "y" kernel parameters}
+\item{pars}{list of "y" and "x" kernel parameters}
 
 \item{zobs}{(optional) vector, containing NAs where data are missing in the subgrid}
 
 \item{makev}{logical, indicates to compute variance matrix components for points off subgrid}
-
-\item{sparse}{logical, indicates to use Matrix::Matrix representations of large matrices}
 }
 \value{
 a large list of vectors and matrices

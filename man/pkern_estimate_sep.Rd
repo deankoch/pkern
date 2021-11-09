@@ -4,7 +4,7 @@
 \alias{pkern_estimate_sep}
 \title{Estimate separation distance between grid lines}
 \usage{
-pkern_estimate_sep(g, pts, distinct = TRUE, bias = 0, dlim = NULL)
+pkern_estimate_sep(g, pts, distinct = TRUE, bias = 10, dlim = NULL)
 }
 \arguments{
 \item{g}{vector of grid line locations in ascending order}

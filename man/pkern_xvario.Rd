@@ -2,15 +2,15 @@
 % Please edit documentation in R/pkern_variograms.R
 \name{pkern_xvario}
 \alias{pkern_xvario}
-\title{Sample semivariogram for regular 2D gridded data along x direction}
+\title{Sample variogram for regular 2D gridded data along x direction}
 \usage{
 pkern_xvario(
   gdim,
   vec,
   simple = TRUE,
-  method = "median",
+  fit.method = "rmedian",
   quiet = FALSE,
-  sep = NULL,
+  lags = NULL,
   nmax = 10000
 )
 }
@@ -21,31 +21,32 @@ pkern_xvario(
 
 \item{simple}{logical, if FALSE the function returns a list of point pair indices}
 
-\item{method}{character, one of "mean", "median", "ch"}
+\item{fit.method}{character, one of "matheron", "rmean", "rmedian"}
 
 \item{quiet}{logical, suppresses console output}
 
-\item{sep}{positive integer vector, the grid line lags to sample}
+\item{lags}{positive integer vector, the grid line lags to sample}
 
 \item{nmax}{positive integer, the maximum number of point pairs to sample at each lag}
 }
 \value{
-a list with named elements "sep", "n", "sv", and optionally "pairs"
+a list with named elements "lags", "n", "vg", and optionally "pairs"
 }
 \description{
-The function computes the semivariance of point pairs located on the regular grid with
-dimensions \code{gdim}, and data vector(s) \code{vec}, at the supplied x grid line lags, \code{sep}.
-Elements of \code{sep} are must be a subset of \code{seq(gdim[2]-1)}.
+The function estimates the variogram ("2-gamma") of point pairs located on the
+regular grid with dimensions \code{gdim}, having (detrended) data vector(s) \code{vec}. Estimation
+is done separately at each of the supplied x grid line lags, \code{lags}. Elements of \code{lags}
+must be a subset of \code{seq(gdim[2]-1)}.
 }
 \details{
-Results are returned in a named list containing the sampled lags (\code{sep}), the number of
-point pairs sampled at each lag (\code{n}) and the sample semivariances (\code{sv}) at each lag;
+Results are returned in a named list containing the sampled lags (\code{lags}), the number of
+point pairs sampled at each lag (\code{n}) and the variogram estimate (\code{vg}) at each lag;
 If \code{simple=FALSE}, the function also returns \code{pairs}, a list of matrices containing the
 indices of point pairs sampled and their absolute differences.
 
 \code{vec} can be a vector (in column vectorized order), or a list of such vectors for
-repeated measurements at the same spatial locations. NAs are permitted but point
-pairs containing NAs are excluded from computations.
+repeated measurements at the same spatial locations. NAs are permitted in \code{vec} (but
+point pairs containing NAs are excluded from computations).
 
 \code{nmax} specifies a maximum number of point pairs to process at each lag. When applicable,
 a random sample of (\code{nmax}) eligible point pairs are taken at each lag. When \code{vec} is
@@ -53,8 +54,10 @@ a list of vectors, the function always samples at least one point pair from each
 Note that this means \code{nmax} is not respected when \code{vec} is a list and \code{nmax < length(vec)}.
 If the function is too slow in this case, try taking a subset of \code{vec}.
 
-method "mean" is the classical method of Matheron (1962), "median" and "ch" are the
-median and robust methods described in Cressie and Hawkins (1980).
+fit.method "matheron" uses the method-of-moments formula of Matheron (1962), which takes the
+average of the squared differences at each lag; "rmean" and "rmedian" are the robust methods
+of Cressie and Hawkins (1980), which use mean and median in a 4th-root transformation with
+a bias adjustmnet. See Cressie (1993, Ch. 2.4.3) for a review of all three methods.
 
 references:
 
@@ -62,12 +65,12 @@ Cressie and Hawkins (1980): https://doi.org/10.1007/BF01035243
 }
 \examples{
 
-gdim = c(1e2, 2e2)
-pars = pkern_corr('gau') |> utils::modifyList(list(v=1))
+gdim = c(1e2, 50)
+pars = pkern_corr('gau') |> utils::modifyList(list(psill=1))
 sim = pkern_sim(pars, gdim)
 
 # sample first 10 lags and plot
-vario = pkern_xvario(gdim, sim, sep=seq(10))
+vario = pkern_xvario(gdim, sim, lags=seq(10))
 pkern_vario_plot(vario)
 
 # sample all lags (the default)

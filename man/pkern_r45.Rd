@@ -16,8 +16,8 @@ a numeric matrix containing the rotated array
 }
 \description{
 performs the rotation f(x,y) = (x + y, -x + y) about the center of a rectangular
-array (45 degrees counterclockwise), with distances scaled by sqrt(2)/2 to snap
-grid cells to those of a larger array.
+array, rotating the grid 45 degrees clockwise with distances scaled by 2 so that
+coordinates snap to those of a larger array.
 }
 \details{
 NAs are assigned to all output grid points not mapped to \code{z}.
@@ -25,8 +25,6 @@ NAs are assigned to all output grid points not mapped to \code{z}.
 When \code{z} is an object containing the grid size (matrix, RasterLayer or list),
 \code{gdim} is ignored (with a warning) and can be omitted. When \code{z} is a vector, it
 should be in column-vectorized order and have length \code{prod(gdim)}.
-
-The function sets
 }
 \examples{
 

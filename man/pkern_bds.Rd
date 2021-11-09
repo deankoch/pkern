@@ -4,12 +4,12 @@
 \alias{pkern_bds}
 \title{Suggest bounds for parameters of y and x component kernels for a separable grid model}
 \usage{
-pkern_bds(pars, ds = NA, cmin = 0.05, cini = 0.9, cmax = cini + (1 - cini)/2)
+pkern_bds(pars, gres = NA, cmin = 0.05, cini = 0.9, cmax = cini + (1 - cini)/2)
 }
 \arguments{
 \item{pars}{kernel parameter list (recognized by \code{pkern_corr}) or list of two of them}
 
-\item{ds}{vector c(dy, dx) or positive numeric, the distances between adjacent grid lines}
+\item{gres}{vector c(dy, dx) or positive numeric, the distances between adjacent grid lines}
 
 \item{cmin}{positive numeric, minimum allowable correlation between adjacent grid points}
 
@@ -48,7 +48,7 @@ below by the shortest interpoint distance. The default for \code{cmax} is the mi
 # suggested bounds depend on grid resolution
 pars = 'mat'
 pkern_bds(pars)
-pkern_bds(pars, ds=100)
+pkern_bds(pars, gres=100)
 
 # specify separable 2D kernels with a vector of two names
 pars = c('exp', 'mat')

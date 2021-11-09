@@ -4,14 +4,20 @@
 \alias{pkern_sim}
 \title{Simulate grid point values of a random field with separable covariance kernel}
 \usage{
-pkern_sim(pars, gdim = c(25, 25), ds = 1, precompute = FALSE, makeplot = TRUE)
+pkern_sim(
+  pars,
+  gdim = c(25, 25),
+  gres = 1,
+  precompute = FALSE,
+  makeplot = TRUE
+)
 }
 \arguments{
 \item{pars}{a kernel parameters list ("k", "kp"), or list of two of them ("x", "y")}
 
 \item{gdim}{integer vector c(ny, nx), the grid size}
 
-\item{ds}{positive numeric or vector of two, the distance scaling factor(s)}
+\item{gres}{positive numeric or vector of two, the distance scaling factor(s)}
 
 \item{precompute}{logical or list, for caching computationally expensive operations}
 
@@ -66,7 +72,7 @@ pre = pkern_sim(pars, gdim, precompute=TRUE, makeplot=FALSE)
 utils::str(pre)
 pkern_sim(pars, precompute=pre)
 
-# resolution can be adjusted via `ds`
- pkern_sim(pars, gdim, ds=c(1/4, 1/2))
+# resolution can be adjusted via `gres`
+ pkern_sim(pars, gdim, gres=c(1/4, 1/2))
 # in this example nugget effect is added to the numerically singular matrix
 }

@@ -4,16 +4,16 @@
 \alias{pkern_plot}
 \title{Plot gridded datasets}
 \usage{
-pkern_plot(z, gdim = NULL, yx = NULL, ds = 1, ppars = list())
+pkern_plot(z, gdim = NULL, gyx = NULL, gres = 1, ppars = list())
 }
 \arguments{
 \item{z}{numeric vector, matrix, RasterLayer, or list}
 
 \item{gdim}{c(ni, nj), the number of rows and columns in the grid}
 
-\item{yx}{list of numeric vectors, the y and x grid line coordinates}
+\item{gyx}{list of numeric vectors, the y and x grid line coordinates}
 
-\item{ds}{positive numeric vector, distance scaling factors along y and x directions}
+\item{gres}{positive numeric vector, distance scaling factors along y and x directions}
 
 \item{ppars}{list of optional plotting parameters (see details)}
 }
@@ -25,8 +25,8 @@ A wrapper for graphics::filled.contour and graphics::image (work in progress). T
 essentially does the same thing as \code{raster::plot}, but specialized for the pkern package
 }
 \details{
-\code{gdim} and \code{yx} can be omitted when their values can be derived from \code{z} (eg. when \code{z}
-is a RasterLayer, but not when it is a vector).
+\code{gdim} and \code{gyx} can be omitted when their values can be derived from \code{z} (eg. when \code{z}
+is the output from \code{pkern_fromRaster} or when is a RasterLayer, but not when it is a vector).
 }
 \examples{
 # TODO

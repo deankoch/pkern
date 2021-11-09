@@ -4,7 +4,7 @@
 \alias{pkern_qf}
 \title{efficient quadratic form computer: \code{t(x) \%*\% M \%*\% y}}
 \usage{
-pkern_qf(M, x, y, sparse = TRUE)
+pkern_qf(M, x, y)
 }
 \arguments{
 \item{M}{numeric matrix}
@@ -12,8 +12,6 @@ pkern_qf(M, x, y, sparse = TRUE)
 \item{x}{numeric vector}
 
 \item{y}{numeric vector}
-
-\item{sparse}{logical, indicates to use Matrix::Matrix representations of large matrices}
 }
 \value{
 TODO

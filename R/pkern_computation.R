@@ -188,6 +188,7 @@ pkern_LL = function(pars, zobs, sgdim, pc=FALSE)
 #' @export
 #'
 #' @examples
+#' #
 pkern_fit = function(zobs, gsnap, ypars='gau', xpars=ypars, v=NULL, nug=NULL, add=0, control=list())
 {
   # set defaults for variance (first parameter) and nugget (second parameter)
@@ -496,6 +497,7 @@ pkern_cmean = function(zobs, gdim, pars, gli=NULL, pc=FALSE)
 #' @export
 #'
 #' @examples
+#' # TDOD
 pkern_variance = function(pc, quiet=FALSE, idx=NULL)
 {
   # we will be looping over eigenvectors padded (with NAs) to size of complete subgrid

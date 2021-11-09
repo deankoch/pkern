@@ -8,10 +8,11 @@ pkern_vario_fit(
   vario,
   ypars = "gau",
   xpars = ypars,
-  v = NULL,
+  psill = NULL,
   nug = NULL,
-  ninitial = 10,
-  dmax = Inf
+  add = 0,
+  dmax = Inf,
+  fit.method = "n/v"
 )
 }
 \arguments{
@@ -21,13 +22,15 @@ pkern_vario_fit(
 
 \item{xpars}{character or list, recognizable (as \code{pars}) by \code{pkern_corr}}
 
-\item{v}{length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for variance}
+\item{psill}{length-3 numeric vector of bounds (lower, initial, upper) for the partial sill}
 
-\item{nug}{length-3 numeric vector, c('min', 'ini', 'max'), bounds and initial value for nugget}
+\item{nug}{length-3 numeric vector of bounds (lower, initial, upper) for the nugget effect}
 
-\item{ninitial}{positive integer, the number of initial parameter sets tested (see details)}
+\item{add}{positive integer, the number of initial parameter sets tested (see details)}
 
 \item{dmax}{positive numeric, point pairs with separation distances exceeding \code{dmax} are ignored}
+
+\item{fit.method}{character string, either '1', 'n', 'n/d', or 'n/v' (the default, see details)}
 }
 \value{
 TODO
@@ -35,8 +38,7 @@ TODO
 \description{
 Pipe the results of a \code{pkern_vario} call to this function to estimate model
 parameters for \code{xpars} and \code{ypars}, the x and y component kernels, by weighted
-least squares (Cressie, 2015), where \code{stats::optim} ("L-BFGS-B") with default
-settings is used to solve the minimization problem.
+least squares using \code{stats::optim} ("L-BFGS-B") for numerical minimization.
 }
 \details{
 \code{xpars} and \code{ypars} may be specified as character strings (the exponential
@@ -45,8 +47,8 @@ and bounds. If parameter lists (recognized by \code{pkern_corr}), are supplied, 
 function uses its "kp" entry for initial values, and if the list contains entries
 "lower" and/or "upper", they are used as bounds.
 
-The pointwise variance is estimated simultaneously with the correlation kernel
-parameters using the bounds and initial values in \code{v} and \code{nug}. If these are not
+Sill and nugget are estimated simultaneously with the correlation kernel parameters
+using the bounds and initial values in \code{psill} and \code{nug}. If these are not
 supplied, the function sets (for both) default default bounds of 0 to 4 times the
 sample variance.
 
@@ -55,9 +57,16 @@ certain sampling configurations and kernels (particularly the Gaussian), this wi
 produce ill-conditioned covariance matrices, leading to inaccuracies or errors
 in prediction functions like \code{pkern_cmean}.
 
-When \code{ninitial > 1}, the least squares optimization call is repeated for additional
+When \code{add > 0}, the least squares optimization call is repeated for additional
 sets of initial values, chosen uniformly at random within their upper and lower
-bounds. Try increasing this to resolve issues of convergence to incorrect local optima.
+bounds. The best result of these is selected an returned. Try increasing \code{add}
+to resolve issues of convergence to incorrect local optima.
+
+\code{fit.method} controls the type of weights assigned to the sum of squares from each
+spatial lag: '1' assigns unit weight to all lags (OLS); 'n' weights be sample size;
+'n/d' uses sample size divided by squared distance (the default in \code{gstat}); and
+'n/v' (the default) uses the robust estimator of Cressie (1993, Ch. 2.6.2), which
+divides sample size by squared theoretical semivariance.
 }
 \examples{
 gdim = c(1e2, 2e2)
@@ -65,7 +74,7 @@ pars = pkern_corr('gau') |> utils::modifyList(list(v=1))
 vec = pkern_sim(pars, gdim)
 
 # sample first 10 lags and plot
-vario = pkern_vario(gdim, vec, sep=seq(10))
+vario = pkern_vario(gdim, vec, lags=seq(10))
 pkern_vario_plot(vario, pars)
 
 # fit the separable gaussian kernel

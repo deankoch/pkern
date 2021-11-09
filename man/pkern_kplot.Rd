@@ -4,14 +4,14 @@
 \alias{pkern_kplot}
 \title{Make a heatmap of covariances/correlations around a grid's central point}
 \usage{
-pkern_kplot(pars, gdim = NULL, ds = 1, ppars = list())
+pkern_kplot(pars, gdim = NULL, gres = 1, ppars = list())
 }
 \arguments{
 \item{pars}{list of two parameter lists "y" and "x", and (optionally) "v", "nug"}
 
 \item{gdim}{c(ni, nj), the number of y and x lags to include}
 
-\item{ds}{c(dy, dx), the y and x distances between adjacent grid lines}
+\item{gres}{c(dy, dx), the y and x distances between adjacent grid lines}
 
 \item{ppars}{list of plotting arguments (passed to \code{pkern_plot})}
 }
@@ -29,7 +29,7 @@ to 3 decimal places.
 \code{pars} should be a list containing elements "y" and "x", which are lists of parameters
 for the y and x component kernels (recognized by \code{pkern_corr}). Optionally, \code{pars} can
 also include a (positive numeric) pointwise variance and nugget effect (numerics "v"
-and "nug"). If \code{pars} contains an element named "ds", it supercedes any argument to \code{ds}.
+and "nug"). If \code{pars} contains an element named "gres", it supercedes any argument to \code{gres}.
 If \code{v} and \code{nug} are supplied, the legend title is set to "covariance", otherwise it is
 set to "correlation".
 
@@ -43,6 +43,6 @@ pars = pkern_bds(c('gxp', 'mat'))
 pkern_kplot(pars)
 gdim = c(30,50)
 pkern_kplot(pars, gdim)
-pkern_kplot(c(pars, list(v=2, nug=0.5)), gdim)
-pkern_kplot(c(pars, list(v=2, nug=0.5)), gdim, ppars=list(smoothed=TRUE))
+pkern_kplot(c(pars, list(psill=2, nug=0.5)), gdim)
+pkern_kplot(c(pars, list(psill=2, nug=0.5)), gdim, ppars=list(smoothed=TRUE))
 }

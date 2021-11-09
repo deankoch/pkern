@@ -4,7 +4,7 @@
 \alias{pkern_kprod}
 \title{Left-multiplication with a Kronecker product: evaluates (X (x) Y) * vector}
 \usage{
-pkern_kprod(X, Y, z, trans = FALSE, sparse = TRUE)
+pkern_kprod(X, Y, z, trans = FALSE)
 }
 \arguments{
 \item{X}{matrix or Matrix object, the x-component matrix}
@@ -14,8 +14,6 @@ pkern_kprod(X, Y, z, trans = FALSE, sparse = TRUE)
 \item{z}{numeric vector, the vector to left-multiply}
 
 \item{trans}{logical, indicating the inputs \code{X} and \code{Y} are transposed}
-
-\item{sparse}{logical, indicates to use Matrix::Matrix representations of large matrices}
 }
 \value{
 TODO

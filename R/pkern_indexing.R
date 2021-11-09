@@ -206,8 +206,8 @@ pkern_r2c = function(gdim, in.byrow=TRUE, out.byrow=FALSE, flipx=FALSE, flipy=FA
 #' Rotate a rectangular array by 45 degrees clockwise
 #'
 #' performs the rotation f(x,y) = (x + y, -x + y) about the center of a rectangular
-#' array (45 degrees clockwise), with distances scaled by 2 so that coordinates
-#' snap to those of a larger array.
+#' array, rotating the grid 45 degrees clockwise with distances scaled by 2 so that
+#' coordinates snap to those of a larger array.
 #'
 #' NAs are assigned to all output grid points not mapped to `z`.
 #'
@@ -215,7 +215,6 @@ pkern_r2c = function(gdim, in.byrow=TRUE, out.byrow=FALSE, flipx=FALSE, flipy=FA
 #' `gdim` is ignored (with a warning) and can be omitted. When `z` is a vector, it
 #' should be in column-vectorized order and have length `prod(gdim)`.
 #'
-#' The function sets
 #'
 #' @param z either a numeric matrix, its column-vectorization, a RasterLayer, or a list
 #' @param gdim integer vector c(ni, nj), the number of rows and columns in the grid
