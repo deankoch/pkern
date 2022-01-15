@@ -438,7 +438,7 @@ pkern_cmean = function(zobs, gdim, pars, gli=NULL, pc=FALSE)
 
   # initialize predictions vector and add the observed points
   zpred = vector(mode='numeric', length=prod(gdim))
-  #zpred[ pc[['s']] ] = zobs
+  zpred[ pc[['s']] ] = zobs
 
   # omit any NA points from zobs
   zd = zobs[sobs]
