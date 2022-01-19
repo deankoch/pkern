@@ -470,12 +470,17 @@ pkern_cmean = function(zobs, gdim, pars, gli=NULL, pc=FALSE)
     edx = pc[['ed']][['x']][['vectors']]
     edy = pc[['ed']][['y']][['vectors']]
     zd.mod = pkern_kprod(edx, edy, pkern_kprod(edx, edy, zd, trans=T)/pwv, trans=F)
+
+    # multiply by cross covariance to get conditional mean of subgrid points
     zpred[ pc[['s']] ] = pkern_kprod(pc[['vs']][['x']], pc[['vs']][['y']], zd.mod, trans=T)
   }
 
-  # compute predictions separately on the three subsets (third one is slowest by far)
+  # compute predictions separately on the three subsets (and is slowest by far)
   zpred[ pc[['oj']] ] = pkern_kprod(pc[['vs']][['x']], pc[['vso']][['y']], zd.mod, trans=T)
   zpred[ pc[['oi']] ] = pkern_kprod(pc[['vso']][['x']], pc[['vs']][['y']], zd.mod, trans=T)
+
+  # TODO: implement splitting function
+  # the third subset contains most of the data - split as needed
   zpred[ pc[['o']] ] = pkern_kprod(pc[['vso']][['x']], pc[['vso']][['y']], zd.mod, trans=T)
 
   #zpred[ pc[['s']] ] = zobs
