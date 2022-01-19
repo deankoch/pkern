@@ -438,7 +438,7 @@ pkern_cmean = function(zobs, gdim, pars, gli=NULL, pc=FALSE)
 
   # initialize predictions vector and add the observed points
   zpred = vector(mode='numeric', length=prod(gdim))
-  zpred[ pc[['s']] ] = zobs
+  #zpred[ pc[['s']] ] = zobs
 
   # omit any NA points from zobs
   zd = zobs[sobs]
@@ -470,6 +470,7 @@ pkern_cmean = function(zobs, gdim, pars, gli=NULL, pc=FALSE)
     edx = pc[['ed']][['x']][['vectors']]
     edy = pc[['ed']][['y']][['vectors']]
     zd.mod = pkern_kprod(edx, edy, pkern_kprod(edx, edy, zd, trans=T)/pwv, trans=F)
+    zpred[ pc[['s']] ] = pkern_kprod(pc[['vs']][['x']], pc[['vs']][['y']], zd.mod, trans=T)
   }
 
   # compute predictions separately on the three subsets (third one is slowest by far)
@@ -477,6 +478,7 @@ pkern_cmean = function(zobs, gdim, pars, gli=NULL, pc=FALSE)
   zpred[ pc[['oi']] ] = pkern_kprod(pc[['vso']][['x']], pc[['vs']][['y']], zd.mod, trans=T)
   zpred[ pc[['o']] ] = pkern_kprod(pc[['vso']][['x']], pc[['vso']][['y']], zd.mod, trans=T)
 
+  #zpred[ pc[['s']] ] = zobs
   # finish
   return(zpred)
 }
