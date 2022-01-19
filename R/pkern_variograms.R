@@ -107,6 +107,7 @@ pkern_tvg = function(pars, d=NULL)
 }
 
 
+# TODO: optimization
 #' Sample variogram for regular 2D gridded data along x direction
 #'
 #' The function estimates the variogram ("2-gamma") of point pairs located on the
@@ -227,10 +228,10 @@ pkern_xvario = function(gdim, vec, simple=TRUE, fit.method='rmedian', quiet=FALS
       # formulate the variogram statistic by various methods
       dabs.vec = unlist(dabs, use.names=FALSE)
       if(fit.method=='matheron') vgx[idx.dj] = ( mean(dabs.vec)^2 )
-      if(fit.method=='rmedian') vgx[idx.dj] = stats::median( sqrt(dabs.vec) )^4 / 0.457
+      if(fit.method=='rmedian') vgx[idx.dj] = (stats::median( sqrt(dabs.vec) )^4) / 0.457
       if(fit.method=='rmean')
       {
-        ch.factor = 0.457 + ( 0.494 / n[idx.dj] ) + ( 0.494 / ( n[idx.dj]^2 ) )
+        ch.factor = 0.457 + ( 0.494 / n[idx.dj] ) #+ ( 0.494 / ( n[idx.dj]^2 ) )
         vgx[idx.dj] = mean( sqrt(dabs.vec) )^4 / ch.factor
       }
     }
@@ -242,6 +243,7 @@ pkern_xvario = function(gdim, vec, simple=TRUE, fit.method='rmedian', quiet=FALS
 }
 
 
+# TODO: refactoring "gdim" > "g" (list)
 #' Directional sample variograms for regular 2D gridded data
 #'
 #' A wrapper for calls to `pkern_xvario` to get the directional sample variograms
@@ -254,19 +256,24 @@ pkern_xvario = function(gdim, vec, simple=TRUE, fit.method='rmedian', quiet=FALS
 #' input grid (see `pkern_r45`) assuming equal y and x resolution. For unequal resolution
 #' the rotation angle is `atan(gres[2]/gres[1])`.
 #'
-#' Note that input `lags` is specified in terms of grid line indices (integers), not
-#' distances (their product with the x or y resolution). However, non-integer separation
-#' distances can be specified by setting the resolution of the input grid (dy, dx) in
-#' argument `gres`. When `gres` is supplied, the output "lags" values are scaled accordingly
-#' and `dmax` is interpreted as a distance, rather than a number of grid lines.
+#' For convenience, `gdim` can be a list containing both the 'gdim' and 'gres' arguments.
+#' If the sub-list `gdim$sg` exists, the function copies these arguments from `gdim$sg$gdim`
+#' and `gdim$sg$gres`. Otherwise it looks for them in `gdim$gdim` and `gdim$gres`.
+#' For example, `gdim` can be the output of `pkern_snap` (to sample from snapped points) or
+#' `pkern_fromRaster` (to sample from raster values).
 #'
-#' When `gres` is not supplied, the function assumes that the x grid lines have the same
-#' spacing distance (1) as the y grid lines. In this case, diagonally adjacent
-#' grid points have separation distance `sqrt(2)`.
+#' You can (and, with large grids, probably should) set `dmax` to specify a maximum
+#' sampling distance. This both speeds computations, and omits pathological tail behavior
+#' from variogram fitting downstream. `dmax` should be given in the same units as `gres`.
+#' Output lags are also given in these units, as are the x-axis values drawn by
+#' `pkern_vario_plot`.
+#'
+#' When `gres` is not supplied (directly, or in `gdim`), the function assumes
+#' that the x and y grid lines have spacing 1.
 #'
 #' @param gdim vector c(ny, nx) of positive integers, the number of grid lines
 #' @param vec numeric vector of data, in column vectorized order (length `prod(dims)`)
-#' @param lags list c(dy, dx) of positive integer vectors, grid line lags to sample
+#' @param dmax numeric, the maximum lag distance (only shorter lags are sampled)
 #' @param fit.method character, one of "matheron", "rmean", "rmedian", passed to `pkern_xvario`
 #' @param diagonal logical, if TRUE, semivariogram results are returned also for diagonals
 #' @param gres length-2 vector of positive numeric, the spacing distance of y and x grid lines
@@ -294,7 +301,7 @@ pkern_xvario = function(gdim, vec, simple=TRUE, fit.method='rmedian', quiet=FALS
 #' vario = pkern_vario(gdim, vec, lags=seq(10), gres=gres, quiet=TRUE)
 #' pkern_vario_plot(vario, pars.2d)
 #'
-pkern_vario = function(gdim, vec, lags=NA, fit.method='rmedian', diagonal=TRUE,
+pkern_vario = function(gdim, vec, dmax=NA, fit.method='rmedian', diagonal=TRUE,
                        gres=NA, quiet=FALSE, nmax=1e4, vcalc=TRUE)
 {
   # handle invalid fit.method
@@ -309,9 +316,7 @@ pkern_vario = function(gdim, vec, lags=NA, fit.method='rmedian', diagonal=TRUE,
     gdim = gdim[['gdim']]
   }
 
-  # set default sample lags and compute sample variance
-  if( anyNA(lags) ) lags = lapply(gdim, \(d) seq(d-1))
-  if( !is.list(lags) ) lags = list(y=lags, x=lags)
+  # compute sample variance
   if( !is.list(vec) ) vec = list(vec)
   svar = ifelse(vcalc, stats::var(unlist(vec), na.rm=TRUE), NA)
 
@@ -321,14 +326,25 @@ pkern_vario = function(gdim, vec, lags=NA, fit.method='rmedian', diagonal=TRUE,
   if( length(gres) == 1 ) stop('gres must have length 2')
   if( !all( yxnm %in% names(gres) ) ) gres = stats::setNames(gres, yxnm)
 
+  # set default sample lags
+  #if( anyNA(lags) ) lags = lapply(gdim, \(d) seq(d-1))
+  #if( !is.list(lags) ) lags = list(y=lags, x=lags)
+
+  # set default dmax to diagonal span of grid (this samples all lags)
+  diagstep = sqrt( sum( gres^2 ) )
+  if( is.na(dmax) ) dmax = min( gdim ) * diagstep
+
+  # set sample lags based on dmax (always include at least one)
+  lags = ceiling(dmax/gres) |> pmin(gdim) |> pmax(c(1,1)) |> as.list() |> lapply(seq)
+
   # compute x semivariances
   if( !quiet ) cat('\nidentifying horizontal lags...')
-  xout = pkern_xvario(gdim, vec, fit.method=fit.method, quiet=quiet, lags=lags[[2]], nmax=nmax)
+  xout = pkern_xvario(gdim, vec, fit.method=fit.method, quiet=quiet, lags=lags[['x']], nmax=nmax)
 
   # repeat in row-vectorized order to get y semivariances
   if( !quiet ) cat('\nidentifying vertical lags...')
   vec.rv = lapply(vec, \(v) v[pkern_r2c(gdim, in.byrow=FALSE, out.byrow=TRUE)])
-  yout = pkern_xvario(rev(gdim), vec.rv, fit.method=fit.method, quiet=quiet, lags=lags[[1]], nmax=nmax)
+  yout = pkern_xvario(rev(gdim), vec.rv, fit.method=fit.method, quiet=quiet, lags=lags[['y']], nmax=nmax)
 
   # scale lags by resolution to get distances, then bundle everything into an output list
   yout[['lags']] = gres['y'] * yout[['lags']]
@@ -345,18 +361,12 @@ pkern_vario = function(gdim, vec, lags=NA, fit.method='rmedian', diagonal=TRUE,
     if( !quiet ) cat('\nrotating coordinate system by 45 degrees:\n')
     vec45 = lapply(vec, \(v) c(pkern_r45(v, gdim)))
 
-    # find the dimensions of rotated grid (based on first list entry of vec)
+    # find the dimensions of rotated grid - note that vario45 inflates distances by factor 2
     gdim45 = dim( pkern_r45(vec[[1]], gdim) )
+    gres45 = c(y=diagstep/2, x=diagstep/2)
 
     # recursive call to get component variograms in new coordinate system
-    vario45 = pkern_vario(gdim45, vec45, fit.method=fit.method, quiet=quiet, diagonal=F, nmax=nmax, vcalc=FALSE)
-
-    # distance of each increment in lags: note that vario45 inflates distances by factor 2
-    gresdiag = sqrt( sum( gres^2 ) ) / 2
-
-    # scale lags values to get distances, then bundle everything into output list
-    vario45[['y']][['lags']] = gresdiag * vario45[['y']][['lags']]
-    vario45[['x']][['lags']] = gresdiag * vario45[['x']][['lags']]
+    vario45 = pkern_vario(gdim45, vec45, fit.method=fit.method, quiet=quiet, diagonal=F, gres=gres45, nmax=nmax, vcalc=F, dmax=dmax)
     list.out = c(list.out, list(d1=vario45[['y']], d2=vario45[['x']]))
   }
 
@@ -592,12 +602,14 @@ pkern_vario_fit = function(vario, ypars='gau', xpars=ypars, psill=NULL, nug=NULL
 
 #' Plot 1-dimensional empirical semivariograms for a separable model
 #'
-#' Plots the output of `pkern_vario` or `pkern_xvario`, optionally includind the theoretical
+#' Plots the output of `pkern_vario` or `pkern_xvario`, optionally including the theoretical
 #' semivariogram values for a model specified in `pars` (eg the return value of `pkern_vario_fit`).
+#' Note that the plot shows semivariance (gamma), whereas the "vg" elements returned by
+#' `pkern_vario` are variogram values (2*gamma).
 #'
 #' `pars` should be a list containing named elements: "y" and "x", lists of y and x kernel
-#' parameters in form recognized by `pkern_corr`; "v", the pointwise variance in the absence
-#' of a nugget effect and, optionally, "nug", the variance of the nugget effect.
+#' parameters in form recognized by `pkern_corr`; "psill", the partial sill and, optionally,
+#' "nug", the nugget variance.
 #'
 #' `plotpars` applies to all plots. It should be a list containing any of the following elements:
 #'
@@ -763,7 +775,7 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
     #if( plotpars[['shade']] ) colmap = rev( grDevices::gray.colors( max(n) ) )[n]
 
     # make the scatterplot of sampled semivariances
-    plot(lags, vg, xlab='lag', ylab='semivariance', xlim=xlim, ylim=ylim, main=main, pch=16)
+    plot(lags, vg/2, xlab='lag', ylab='semivariance', xlim=xlim, ylim=ylim/2, main=main, pch=16)
 
     # add bubbles indicating sample sizes
     #points(lags, vg, pch=1, cex=n/max(n))
@@ -801,7 +813,7 @@ pkern_vario_plot = function(vario, pars=NULL, plotpars=NULL)
     }
 
     # add line plot showing semivariance at requested lags
-    graphics::lines(lags, fit)
+    graphics::lines(lags, fit/2)
   }
 
   return(invisible())
