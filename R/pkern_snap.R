@@ -269,7 +269,8 @@ pkern_snap = function(gyx, pts, sep=NULL, distinct=TRUE, quiet=FALSE)
   g = list(gres=c(1,1), sg=list())
 
   # default unit resolution and handle raster grid input
-  if( 'RasterLayer' %in% class(gyx) )
+  spatnms = c('SpatRaster', 'RasterLayer', 'RasterStack')
+  if( any( spatnms %in% class(gyx) ) )
   {
     # resolution and grid line locations
     g[['gres']] = pkern_fromRaster(gyx, 'gres')

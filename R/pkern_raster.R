@@ -6,7 +6,7 @@
 
 #' Check if raster package is loaded and print error message otherwise
 #'
-#' @return nothing
+#' @return logical vector, indicating if the package is loaded
 #' @export
 #'
 #' @examples
@@ -14,15 +14,17 @@
 pkern_checkRaster = function()
 {
   raster.loaded = requireNamespace('raster', quietly=TRUE)
-  if( !raster.loaded ) stop('could not find raster package! Try library(raster)')
+  terra.loaded = requireNamespace('terra', quietly=TRUE)
+  if( !(raster.loaded | terra.loaded) ) stop('terra/raster not loaded. Try library(terra)')
+  return(invisible(c(raster=raster.loaded, terra=terra.loaded)) )
 }
 
 
 #' Vectorize a RasterLayer in column-vectorized order
 #'
-#' Calls to raster::values or raster::getValues produce the data in row-vectorized
-#' order. This function reorders them to column-vectorized order so they can be
-#' passed to other pkern_* functions
+#' The `values` function from the raster and terra packages returns data in row-vectorized
+#' order. This function reorders them to column-vectorized order so they can be passed to
+#' other pkern_* functions
 #'
 #' The return value depends on argument `what`:
 #'
@@ -32,7 +34,7 @@ pkern_checkRaster = function()
 #' "gval": returns a vector containing the raster data in column-vectorized order
 #' "all": returns a named list containing the above four objects
 #'
-#' @param r a RasterLayer to vectorize
+#' @param r a RasterLayer, RasterStack, or SpatRaster to vectorize
 #' @param what character, one of: 'gdim', 'gres', 'crs', 'gyx', 'gval' or 'all'
 #'
 #' @return For default `what=='all'`, a named list containing 4 objects (see details)
@@ -40,53 +42,108 @@ pkern_checkRaster = function()
 #'
 #' @examples
 #' if( requireNamespace('raster') ) {
+#'
+#' # open example file as RasterLayer, , then to SpatRaster
 #' r.in = system.file('external/rlogo.grd', package='raster') |> raster::raster(band=1)
+#'
+#' # convert to list understood by pkern
 #' pkern.in = pkern_fromRaster(r.in)
 #' pkern_plot(pkern.in)
 #' pkern.in$gval |> matrix(pkern.in$gdim) |> pkern_plot()
+#'
+#' # open a RasterStack and notice only first band loaded
+#' r.in = system.file('external/rlogo.grd', package='raster') |> raster::stack()
+#' str(pkern_fromRaster(r.in))
+#'
+#' # same with terra
+#' if( requireNamespace('terra') ) {
+#' str(pkern_fromRaster(terra::rast(r.in)))
 #' }
 pkern_fromRaster = function(r, what='all')
 {
   # stop with an error message if raster package is unavailable
   pkern_checkRaster()
 
-  # extract dimensions and return if requested
-  gdim = dim(r)[1:2] |> stats::setNames(c('y', 'x'))
-  if( what == 'gdim' ) return(gdim)
+  # expected object classes and names
+  raster_nm = c('RasterLayer', 'RasterStack')
+  terra_nm = c('SpatRaster')
 
-  # notice return from raster::res is in reverse order (dx, dy)
-  gres = raster::res(r)[2:1] |> stats::setNames(c('y', 'x'))
-  if( what == 'gres' ) return(gres)
-
-  # extract CRS string if available
-  gcrs = raster::wkt(r)
-  if( what == 'crs' ) return(gcrs)
-
-  # extract grid line positions
-  if( what != 'gval' )
+  # handle rasters
+  if( any(raster_nm %in% class(r)) )
   {
-    gy = sort(raster::yFromRow(r, seq(gdim['y'])))
-    gx = sort(raster::xFromCol(r, seq(gdim['x'])))
-    gyx = list(y=gy, x=gx)
+    # extract dimensions and return if requested
+    gdim = dim(r)[1:2] |> stats::setNames(c('y', 'x'))
+    if( what == 'gdim' ) return(gdim)
 
-    # finish grid line mode
-    if( what == 'gyx' ) return(gyx)
+    # notice return from raster::res is in reverse order (dx, dy)
+    gres = raster::res(r)[2:1] |> stats::setNames(c('y', 'x'))
+    if( what == 'gres' ) return(gres)
+
+    # extract CRS string if available
+    gcrs = raster::wkt(r)
+    if( what == 'crs' ) return(gcrs)
+
+    # extract grid line positions
+    if( what != 'gval' )
+    {
+      gy = sort(raster::yFromRow(r, seq(gdim['y'])))
+      gx = sort(raster::xFromCol(r, seq(gdim['x'])))
+      gyx = list(y=gy, x=gx)
+
+      # finish grid line mode
+      if( what == 'gyx' ) return(gyx)
+    }
+
+    # extract data in column-vectorized order and finish
+    gval = raster::getValues(r)[ pkern_r2c(gdim) ]
+    if(what == 'gval') return(gval)
+    return( list(gdim=gdim, gres=gres, crs=gcrs, gyx=gyx, gval=gval) )
   }
 
-  # extract data in column-vectorized order and finish
-  gval = raster::getValues(r)[ pkern_r2c(gdim) ]
-  if(what == 'gval') return(gval)
-  return( list(gdim=gdim, gres=gres, crs=gcrs, gyx=gyx, gval=gval) )
+  # handle terra objects
+  if( any(terra_nm %in% class(r)) )
+  {
+    # extract dimensions and return if requested
+    gdim = dim(r)[1:2] |> stats::setNames(c('y', 'x'))
+    if( what == 'gdim' ) return(gdim)
+
+    # notice return from terra::res is in reverse order (dx, dy)
+    gres = terra::res(r)[2:1] |> stats::setNames(c('y', 'x'))
+    if( what == 'gres' ) return(gres)
+
+    # extract CRS string if available
+    gcrs = terra::crs(r)
+    if( what == 'crs' ) return(gcrs)
+
+    # extract grid line positions
+    if( what != 'gval' )
+    {
+      gy = sort(terra::yFromRow(r, seq(gdim['y'])))
+      gx = sort(terra::xFromCol(r, seq(gdim['x'])))
+      gyx = list(y=gy, x=gx)
+
+      # finish grid line mode
+      if( what == 'gyx' ) return(gyx)
+    }
+
+    # extract data in column-vectorized order and finish
+    gval = terra::values(r)[ pkern_r2c(gdim) ]
+    if(what == 'gval') return(gval)
+    return( list(gdim=gdim, gres=gres, crs=gcrs, gyx=gyx, gval=gval) )
+
+  }
+
+
 }
 
-#' Convert column-vectorized grid to RasterLayer
+#' Convert column-vectorized grid to SpatRaster
 #'
 #' @param g either the column-vectorized data or a list containing it (in element "gval")
 #' @param gdim c(ny, nx), the number rows and columns in the full grid
 #' @param template optional RasterLayer to use as template (for setting crs, resolution etc)
 #'
-#' Produces a RasterLayer from a vector or matrix. This essentially a wrapper for various
-#' `raster::raster` calls where the input data is in column-vectorized form.
+#' Converts a column-vectorized vector or matrix to a SpatRaster, or, if terra is unavailable,
+#' a RasterLayer.
 #'
 #' `g` can either be a matrix (in which case `gdim` can be omitted) or its vectorized
 #' equivalent, or a list containing elements returned by `pkern_fromRaster`. If the list
@@ -102,13 +159,14 @@ pkern_fromRaster = function(r, what='all')
 #' if( requireNamespace('raster') ) {
 #' r.in = system.file('external/rlogo.grd', package='raster') |> raster::raster(band=1)
 #' pkern.in = pkern_fromRaster(r.in)
-#' print(pkern_toRaster(pkern.in))
-#' print(r.in)
+#' r = pkern_toRaster(pkern.in)
+#' print(r)
 #' }
 pkern_toRaster = function(g=NULL, gdim=NULL, template=NULL)
 {
-  # stop with an error message if raster package is unavailable
-  pkern_checkRaster()
+  # stop with an error message if raster/terra package is unavailable
+  is_loaded = pkern_checkRaster()
+  r_out = NULL
 
   # flags for different types of raster calls
   has.template = !is.null(template)
@@ -122,11 +180,6 @@ pkern_toRaster = function(g=NULL, gdim=NULL, template=NULL)
   rcrs = ''
   if( has.properties )
   {
-    # check for expected elements
-    # nm.expected = c('gdim', 'gres', 'gyx', 'gval')
-    # err.nm = paste('g must contain named elements', paste(nm.expected, collapse=', '))
-    # if( !all( nm.expected %in% names(g) )) stop(err.nm)
-
     # unpack the data (overwrites argument to `gdim`)
     if( !is.null( g[['gdim']] ) ) gdim = g[['gdim']]
     if( !is.null( g[['crs']] ) ) rcrs = g[['crs']]
@@ -137,7 +190,8 @@ pkern_toRaster = function(g=NULL, gdim=NULL, template=NULL)
     g = g[['gval']]
   }
 
-  # extract `gdim` from template when supplied
+  # extract `gdim` from template as needed
+  if( is.matrix(g) ) gdim = dim(g)
   if( is.null(gdim) )
   {
     # make sure we have a template then extract its dimensions in correct order
@@ -149,30 +203,41 @@ pkern_toRaster = function(g=NULL, gdim=NULL, template=NULL)
   has.values = !is.null(g)
   if( (!is.matrix(g)) & has.values ) g = matrix(g, gdim)
 
-  # the raster call is simple with a template
-  if( (has.template | !has.properties) & has.values ) return(raster::raster(g, template=template))
+  # build from template if available
+  if( has.template & has.values )
+  {
+    if( is_loaded['terra'] ) return( terra::setValues(terra::rast(template), values=g) )
+    if( is_loaded['raster'] ) return( raster::raster(g, template=raster::raster(template)) )
+    pkern_checkRaster()
+  }
 
   # compute dimensional stuff when properties supplied
   if( has.properties )
   {
     # set defaults for gres and gyx
     if( is.null(gres) ) gres = c(1,1)
-    if( is.null(gyx) ) gyx = Map(\(d,s) c(1,d)-(s/2), d=gdim, s=gres)
+    if( is.null(gyx) ) gyx = lapply(setNames(gdim, c('y', 'x')), \(d) c(1, d))
 
-    # extract coordinate "boundaries" as required by raster
+    # extract coordinate "boundaries" as required by raster/terra
     yxb = Map(\(g,s) range(g) + (c(-1,1) * s/2), g=gyx, s=gres)
 
-    # without a template the call has separate arguments for the four extent points
-    if( has.values )
+    # terra is preferred when available
+    if( is_loaded['terra'] )
     {
-      # build the raster and return
-      return( raster::raster(g, yxb[[2]][1], yxb[[2]][2], yxb[[1]][1], yxb[[1]][2], crs=rcrs) )
-    }
-  }
+      gext = terra::ext(do.call(c, rev(yxb)))
+      r_out = terra::rast(extent=gext, resolution=rev(gres), crs=rcrs)
+      if( has.values ) r_out = terra::setValues(r_out, g)
 
-  # without values we can use a simpler looking call by passing an extent object
-  ext = raster::extent(do.call(c, yxb))
-  return( raster::raster(crs=rcrs, ext=ext, resolution=gres) )
+    } else if( is_loaded['raster'] ) {
+
+    # attempt to use raster if terra unavailable
+    gext = raster::extent(do.call(c, rev(yxb)))
+    r_out = raster::raster(ext=gext, resolution=rev(gres), crs=rcrs)
+    if( has.values ) r_out = raster::setValues(r_out, g)
+
+    }
+    return(r_out)
+  }
 }
 
 

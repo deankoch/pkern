@@ -100,7 +100,7 @@ pkern_toString = function(pars, nsig=3)
 #' `gdim` and `gyx` can be omitted when their values can be derived from `z` (eg. when `z`
 #' is the output from `pkern_fromRaster` or when is a RasterLayer, but not when it is a vector).
 #'
-#' @param z numeric vector, matrix, RasterLayer, or list
+#' @param z numeric vector, matrix, SpatRaster, RasterLayer, or list
 #' @param gdim c(ni, nj), the number of rows and columns in the grid
 #' @param gyx list of numeric vectors, the y and x grid line coordinates
 #' @param gres positive numeric vector, distance scaling factors along y and x directions
@@ -117,11 +117,12 @@ pkern_plot = function(z, gdim=NULL, gyx=NULL, gres=1, ppars=list())
   if( length(gres) == 1 ) gres = rep(gres, 2)
 
   # extract grid size from matrix/raster input
-  if( any( c('matrix', 'RasterLayer') %in% class(z) ) )
+  spatnms = c('SpatRaster', 'RasterLayer', 'RasterStack')
+  if( any( c('matrix', spatnms) %in% class(z) ) )
   {
     # we use order (ny, nx)
     gdim = dim(z)[1:2]
-    if( 'RasterLayer' %in% class(z) )
+    if( any( spatnms %in% class(z) ) )
     {
       if( is.null(gyx) ) gyx = pkern_fromRaster(z, what='gyx')
       if( is.null(gdim) ) gdim = pkern_fromRaster(z, what='gdim')

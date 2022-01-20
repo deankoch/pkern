@@ -159,8 +159,8 @@ pkern_idx_sg = function(gdim, ij=NULL, nosort=FALSE)
 #' have different conventions, so this function is useful for reordering vectorizations when
 #' switching between methods.
 #'
-#' `gdim` can be a length-2 vector or a RasterLayer object, from which the dimensions are
-#' extracted.
+#' `gdim` can be a length-2 vector or a SpatRaster/RasterLayer object, from which the
+#' dimensions are extracted.
 #'
 #' @param gdim c(ni, nj), the number of rows and columns in the grid
 #' @param in.byrow logical indicating if source indexing is row-vectorized
@@ -188,7 +188,8 @@ pkern_idx_sg = function(gdim, ij=NULL, nosort=FALSE)
 pkern_r2c = function(gdim, in.byrow=TRUE, out.byrow=FALSE, flipx=FALSE, flipy=FALSE)
 {
   # handle raster input and unpack
-  if( 'RasterLayer' %in% class(gdim) ) gdim = dim(gdim)[1:2]
+  spatnms = c('SpatRaster', 'RasterLayer', 'RasterStack')
+  if( any( spatnms %in% class(gdim) ) ) gdim = dim(gdim)[1:2]
 
   # compute a matricized version of indicator index
   idx = seq(prod(gdim)) |> matrix(gdim[1], byrow=in.byrow)
@@ -211,9 +212,9 @@ pkern_r2c = function(gdim, in.byrow=TRUE, out.byrow=FALSE, flipx=FALSE, flipy=FA
 #'
 #' NAs are assigned to all output grid points not mapped to `z`.
 #'
-#' When `z` is an object containing the grid size (matrix, RasterLayer or list),
-#' `gdim` is ignored (with a warning) and can be omitted. When `z` is a vector, it
-#' should be in column-vectorized order and have length `prod(gdim)`.
+#' When `z` is an object containing the grid size (matrix, SpatRaster, RasterLayer, or
+#' list), `gdim` is ignored (with a warning) and can be omitted. When `z` is a vector,
+#' it should be in column-vectorized order and have length `prod(gdim)`.
 #'
 #'
 #' @param z either a numeric matrix, its column-vectorization, a RasterLayer, or a list
@@ -243,7 +244,8 @@ pkern_r2c = function(gdim, in.byrow=TRUE, out.byrow=FALSE, flipx=FALSE, flipy=FA
 pkern_r45 = function(z, gdim=NULL)
 {
   # handle raster input
-  if( 'RasterLayer' %in% class(z) )
+  spatnms = c('SpatRaster', 'RasterLayer', 'RasterStack')
+  if( any( spatnms %in% class(z) ) )
   {
     if( !is.null(gdim) ) warning('argument to gdim was ignored')
     gdim = pkern_fromRaster(z, 'gdim')
@@ -294,9 +296,9 @@ pkern_r45 = function(z, gdim=NULL)
 #' order.
 #'
 #' `g` should either be a list of "y" and "x" coordinates, or an object from which they
-#' can be extracted (RasterLayer, or list output from functions like `pkern_snap`,
-#' `pkern_fromRaster`). If `g` is a vector of length 2, it is assumed to be the
-#' dimensions (ni, nj) of the grid, and a sequence of integer grid line positions
+#' can be extracted (SpatRaster, RasterLayer, or list output from functions like
+#' `pkern_snap`, `pkern_fromRaster`). If `g` is a vector of length 2, it is assumed to
+#' be the dimensions (ni, nj) of the grid, and a sequence of integer grid line positions
 #' is generated.
 #'
 #' @param g a list of grid line coordinates, or an object containing them (see details)
@@ -321,7 +323,8 @@ pkern_coords = function(g, out='matrix', nosort=FALSE, quiet=FALSE)
   }
 
   # handle various input classes
-  if( 'RasterLayer' %in% class(g) ) g = pkern_fromRaster(g, what='yx')
+  spatnms = c('SpatRaster', 'RasterLayer', 'RasterStack')
+  if( any( spatnms %in% class(g) ) ) g = pkern_fromRaster(g, what='yx')
   if( !is.null( g[['yx']] ) ) g = g[['yx']]
   if( !is.null( g[['g']] ) ) g = g[['g']]
 
