@@ -410,9 +410,9 @@ pkern_vario = function(gdim, vec, dmax=NA, fit.method='rmedian', diagonal=TRUE,
 #'
 #' `fit.method` controls the type of weights assigned to the sum of squares from each
 #' spatial lag: '1' assigns unit weight to all lags (OLS); 'n' weights be sample size;
-#' 'n/d' uses sample size divided by squared distance (the default in `gstat`); and
-#' 'n/v' (the default) uses the robust estimator of Cressie (1993, Ch. 2.6.2), which
-#' divides sample size by squared theoretical semivariance.
+#' 'n/d' uses sample size divided by squared distance (the default here, as in `gstat`);
+#' and 'n/v uses the robust estimator of Cressie (1993, Ch. 2.6.2), which divides sample
+#' size by squared theoretical semivariance.
 #'
 #'
 #' @param vario list, the return value from a call to `pkern_vario`
@@ -448,15 +448,24 @@ pkern_vario = function(gdim, vec, dmax=NA, fit.method='rmedian', diagonal=TRUE,
 #' pkern_plot(pars.fitted2)
 #'
 pkern_vario_fit = function(vario, ypars='gau', xpars=ypars, psill=NULL, nug=NULL, add=0, dmax=Inf,
-                           fit.method='n/v')
+                           fit.method='n/d')
 {
   # set defaults for partial sill (first parameter) and nugget (second parameter)
-  if( is.null(psill) ) psill = c(min=1e-9, ini=vario[['v']], max=4*vario[['v']])
-  if( is.null(nug) ) nug = c(min=1e-3, ini=vario[['v']]/2, max=4*vario[['v']])
+  #svmin = sapply(vario[c('y', 'x', 'd1', 'd2')], \(x) min(x[['vg']][-1])) |> min()
+  sdv =  sqrt(vario[['v']])
+  #if( is.null(psill) ) psill = c(min=sdv/2, ini=sdv, max=2*sdv)
+  #if( is.null(nug) ) nug = c(min=pmin(1e-3, svmin), max=pmin(1, sdv))
+  psill = c(min=0, ini=sdv, max=2*sdv)
+  nug = c(min=1e-4, ini=1e-3, max=sdv)
+  if( !( 'ini' %in% names(nug) ) ) nug['ini'] = nug['ini'] + nug['ini'] / 2
+
+  # truncate max distance to max lag, compute number of cells this represents
+  dmax = sapply(vario[c('y', 'x', 'd1', 'd2')], \(x) max(x[['lags']])) |> max() |> pmin(dmax)
+  nmax = ceiling(dmax/vario[['gres']])
 
   # set up defaults and bounds for kernel parameters (2-4 additional parameters)
-  ypars = pkern_bds(ypars, vario[['gres']]['y'])
-  xpars = pkern_bds(xpars, vario[['gres']]['x'])
+  ypars = pkern_bds(ypars, gres=vario[['gres']]['y'], nmax=nmax['y'])
+  xpars = pkern_bds(xpars, gres=vario[['gres']]['x'], nmax=nmax['x'])
 
   # vectorized bounds for all covariance parameters
   plower = c(psill[1], nug[1], xpars[['lower']], ypars[['lower']])
