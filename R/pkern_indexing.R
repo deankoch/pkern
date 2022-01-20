@@ -330,7 +330,7 @@ pkern_coords = function(g, out='matrix', nosort=FALSE, quiet=FALSE)
   spatnms = c('SpatRaster', 'RasterLayer', 'RasterStack')
   if( any( spatnms %in% class(g) ) ) g = pkern_fromRaster(g, what='yx')
   if( !is.null( g[['crs']] ) ) crs_out = g[['crs']]
-  if( !is.null( g[['yx']] ) ) g = g[['yx']]
+  if( !is.null( g[['gyx']] ) ) g = g[['gyx']]
   if( !is.null( g[['g']] ) ) g = g[['g']]
 
   # handle unnamed input
@@ -367,5 +367,7 @@ pkern_coords = function(g, out='matrix', nosort=FALSE, quiet=FALSE)
   sf.loaded = requireNamespace('sf', quietly=TRUE)
   if( !sf.loaded ) stop('sf package not loaded. Try library(sf)')
   cat(paste('processing', ng, 'grid points...'))
+
+
   return( st_as_sf(as.data.frame(omat), coords=c('x', 'y'), crs=crs_out) )
 }
