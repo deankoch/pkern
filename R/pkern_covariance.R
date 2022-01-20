@@ -159,25 +159,24 @@ pkern_rho = function(cval, pars, d=1, upper=1e3*d)
 #' (see `pkern_corr`).
 #'
 #' Bounds for shape parameters are hard-coded, whereas the bounds for the range parameter
-#' are determined based on the grid resolution (`ds`, the distance between grid lines in
-#' y and x directions) and a user supplied correlation range; `cmin` is the minimum allowable
-#' correlation between adjacent grid points, and `cmax` is the maximum. The corresponding "rho"
-#' values are then estimated using `pkern_rho` (via a grid search over the permissible
-#' shape parameters, if there are any)
+#' are determined based on the grid layout (`gres`, `gdim`) and the arguments `cmin`, `cmax`.
+#' These are, respectively, the minimum correlation between adjacent grid points, and the
+#' maximum correlation between points at a distance of `nmax` cells apart. The corresponding
+#' range parameter values are then estimated using `pkern_rho`, which does a grid search over
+#' the permissible shape parameters (if there are any).
 #'
-#' Initial values for the shape parameters are set to the midpoints of their permissible
-#' ranges. Initial value for the range parameters are set such that adjacent cells have
-#' correlation `cini`
+#' Initial values for the range and shape parameters, when missing from `pars`, are set to
+#' the midpoints of their permissible ranges.
 #'
 #' By default `cmin` is set to 0.05, so that the effective range of the kernel is bounded
-#' below by the shortest interpoint distance. The default for `cmax` is the midpoint between
-#' `cini` and 1. `cini` is by default set to
+#' below by the shortest interpoint distance. The default for `cmax` was selected by trial
+#' and error.
 #'
 #' @param pars kernel parameter list (recognized by `pkern_corr`) or list of two of them
 #' @param gres vector c(dy, dx) or positive numeric, the distances between adjacent grid lines
-#' @param cmin positive numeric, minimum allowable correlation between adjacent grid points
-#' @param cini positive numeric, initial correlation between adjacent grid points
-#' @param cmax positive numeric, maximum allowable correlation between adjacent grid points
+#' @param nmax positive integer, the number of grid cells between "distant" points
+#' @param cmin positive numeric, minimum allowable correlation between adjacent points
+#' @param cmax positive numeric, maximum allowable correlation between "distant" points
 #'
 #'
 #' @return kernel parameter list containing "kp", "lower", "upper", or list of two such lists
@@ -185,29 +184,30 @@ pkern_rho = function(cval, pars, d=1, upper=1e3*d)
 #'
 #' @examples
 #'
-#' # suggested bounds depend on grid resolution
+#' # suggested bounds depend on grid resolution and nmax
 #' pars = 'mat'
 #' pkern_bds(pars)
 #' pkern_bds(pars, gres=100)
+#' pkern_bds(pars, gres=100, nmax=100)
 #'
 #' # specify separable 2D kernels with a vector of two names
 #' pars = c('exp', 'mat')
 #' pkern_bds(pars)
 #'
-#' # initial values are set based on lower and upper
+#' # incomplete parameter definition lists are filled in
 #' pars = list(k='mat', upper=c(10,10))
 #' pkern_bds(pars)
 #'
-pkern_bds = function(pars, gres=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
+pkern_bds = function(pars, gres=NA, nmax=1, cmin=0.05, cmax=0.95)
 {
   # handle character input (kernel names)
   if( is.character(pars) )
   {
     # convert to expected list format for recursive call and handle unexpected input
-    if( length(pars) == 1 ) return( pkern_bds(list(k=pars), gres=gres, cmin=cmin, cini=cini, cmax=cmax) )
+    if( length(pars) == 1 ) return( pkern_bds(list(k=pars), gres=gres, nmax=nmax, cmin=cmin, cmax=cmax) )
     if( length(pars) != 2 ) stop('expected vector of two kernel names in pars')
     pars = lapply(stats::setNames(pars, c('y', 'x')), \(p) list(k=p))
-    return( pkern_bds(pars, gres=gres, cmin=cmin, cini=cini, cmax=cmax) )
+    return( pkern_bds(pars, gres=gres, nmax=nmax, cmin=cmin, cmax=cmax) )
   }
 
   # single dimension case
@@ -227,7 +227,7 @@ pkern_bds = function(pars, gres=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
       if( pars[['k']] == 'mat' )
       {
         # these bounds are suggestions based on experimentation
-        bds.shp = c(1, 20)
+        bds.shp = c(1, 25)
         shp.ini = 2
         nm.shp = 'kap'
       }
@@ -243,8 +243,8 @@ pkern_bds = function(pars, gres=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
 
       # set up a grid of test values and find rho for each one, then take min/max
       shp.test = seq(bds.shp[1], bds.shp[2], length.out = 100)
-      rhomin = min( sapply(shp.test, \(p) pkern_rho(cmin, utils::modifyList(pars, list(kp=c(NA, p))), gres)) )
-      rhomax = max( sapply(shp.test, \(p) pkern_rho(cmax, utils::modifyList(pars, list(kp=c(NA, p))), gres)) )
+      rhomin = min( sapply(shp.test, \(p) pkern_rho(sqrt(cmin), utils::modifyList(pars, list(kp=c(NA, p))), gres)) )
+      rhomax = max( sapply(shp.test, \(p) pkern_rho(sqrt(cmax), utils::modifyList(pars, list(kp=c(NA, p))), gres * nmax)) )
 
       # append bounds as needed
       if( is.null( pars[['lower']] ) ) pars[['lower']] = c(rhomin, bds.shp[1])
@@ -254,7 +254,8 @@ pkern_bds = function(pars, gres=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
       if( is.null( pars[['kp']] ) )
       {
         #shp.ini = mean( c(pars[['lower']][2], pars[['upper']][2]) )
-        rho.ini = pkern_rho(cini, utils::modifyList(pars, list(kp=c(NA, shp.ini))), gres)
+        #rho.ini = pkern_rho(sqrt(cini), utils::modifyList(pars, list(kp=c(NA, shp.ini))), gres)
+        rho.ini = (rhomin + rhomax)/2
         pars[['kp']] = c(rho.ini, shp.ini)
       }
 
@@ -262,14 +263,14 @@ pkern_bds = function(pars, gres=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
 
       # no shape parameter case is simple 1d optimization
       nm.shp = NULL
-      rhomin = pkern_rho(cmin, pars, gres)
-      rhomax = pkern_rho(cmax, pars, gres)
+      rhomin = pkern_rho(sqrt(cmin), pars, gres)
+      rhomax = pkern_rho(sqrt(cmax), pars, nmax * gres)
 
       # append bounds and initial values as needed
       if( is.null( pars[['lower']] ) ) pars[['lower']] = rhomin
       if( is.null( pars[['upper']] ) ) pars[['upper']] = rhomax
-      if( is.null( pars[['kp']] ) ) pars[['kp']] = pkern_rho(cini, pars, gres)
-
+      #if( is.null( pars[['kp']] ) ) pars[['kp']] = pkern_rho(sqrt(cini), pars, gres)
+      if( is.null( pars[['kp']] ) ) pars[['kp']] = (rhomin + rhomax)/2
     }
 
     # name the elements of "kp", "lower", "upper"
@@ -286,11 +287,14 @@ pkern_bds = function(pars, gres=NA, cmin=0.05, cini=0.9, cmax=cini+(1-cini)/2)
     return(pars)
   }
 
+  # nmax should be a vector of length 2
+  if( length(nmax)==1 ) nmax = rep(nmax, 2)
+
   # else assume pars is a list containing two parameter lists "y" and "x"
   if( !all( c('y', 'x') %in% names(pars) ) ) stop('expected parameter lists "y" and "x" in pars')
 
   # recursive calls to build x and y component bounds and return results in list
-  pars.new = Map(\(p, s) pkern_bds(p, s, cmin, cini, cmax), p=pars[c('y', 'x')], s=gres)
+  pars.new = Map(\(p, s, n) pkern_bds(p, s, n, cmin, cmax), p=pars[c('y', 'x')], s=gres, n=nmax)
   return( utils::modifyList(pars, stats::setNames(pars.new, c('y', 'x')) ) )
 }
 
