@@ -472,7 +472,8 @@ pkern_snap_1d = function(g, pts, sep=1, distinct=TRUE)
   } else {
 
     # with duplication: snap to nearest grid line
-    map.dmin = lapply(dmat.list, \(d) apply(d, 1, which.min) )
+    # note: max.col(-d) equivalent to but faster than: apply(d, 1, which.min)
+    map.dmin = lapply(dmat.list, \(d) max.col(-d) )
   }
 
   # extract squared snapping distances for each point, total score for each candidate
@@ -626,5 +627,50 @@ pkern_estimate_sep = function(g, pts, distinct=TRUE, bias=10, dlim=NULL)
   return(dsep)
 }
 
+# testing a replacement for above
+pkern_est_sep = function(pts, gres=c(1,1), nmax=Inf)
+{
+  # expected object classes and names
+  sfnm = c('sf','sfc', 'sfg')
+  spnm = c('SpatialPoints', 'SpatialPointsDataFrame')
+  yxnm = stats::setNames(nm=c('y', 'x'))
 
+  # coerce various point input types and set expected column order
+  if( any(sfnm %in% class(pts)) ) pts = sf::st_coordinates(pts)[,2:1]
+  if( any(spnm %in% class(pts)) & requireNamespace('sp', quietly=TRUE)) pts = sp::coordinates(pts)[,2:1]
+  if( is.data.frame(pts) ) pts = as.matrix(pts)
+  if( !all(yxnm %in% names(pts)) ) colnames(pts)[1:2] = yxnm
+  npts = nrow(pts)
 
+  # take a sample as needed
+  pts_temp = pts
+  idx_sample = seq(npts)
+  if(npts > nmax) idx_sample = sample.int(npts, size=nmax)
+  pts_temp = pts[idx_sample,]
+  npts_temp = length(idx_sample)
+
+  # index for omitting 0's on diagonal of distance matrix
+  idx_diag = seq(1, npts_temp^2, by=npts_temp+1)
+
+  # compute all interpoint distances in 2d, then along each dimension
+  dmat = stats::dist(pts_temp)
+  ydmat = stats::dist(pts_temp[,1])
+  xdmat = stats::dist(pts_temp[,2])
+
+  # compute a quantile representing the interpoint distance of adjacent points
+  p_adjacent = 4 * (npts - sqrt(npts)) / ( npts * (npts-1) )
+  d_adjacent = quantile(dmat[-idx_diag], p_adjacent)
+  yd_adjacent = quantile(ydmat[-idx_diag], p_adjacent/2)
+  xd_adjacent = quantile(xdmat[-idx_diag], p_adjacent/2)
+  # based on estimated probability of randomly drawing a point neighbour for square grid
+
+  # estimates for y/x resolution ratio and interpoint distances along x, y dims
+  yx_scale = yd_adjacent/xd_adjacent
+  d_x = sqrt( (d_adjacent^2) / (1 + yx_scale^2) )
+  d_y = yx_scale * d_x
+
+  # transform to number of grid cells and return as named vector
+  sep_y = pmax(1, floor(d_x/gres[1]) )
+  sep_x = pmax(1, floor(d_y/gres[2]) )
+  return(c(y=sep_y, x=sep_x))
+}
