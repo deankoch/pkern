@@ -302,16 +302,19 @@ pkern_r45 = function(z, gdim=NULL)
 #' is generated.
 #'
 #' @param g a list of grid line coordinates, or an object containing them (see details)
-#' @param out character indicating return value type, either 'list' or 'matrix'
+#' @param out character indicating return value type, either 'list', 'matrix', or 'sf'
 #' @param nosort logical indicating to assume input `g` is sorted correctly
 #' @param quiet logical indicated to drop warnings
 #'
-#' @return a matrix or list of grid coordinates in column vectorized order
+#' @return a matrix, list, or sf POINT collection, in column vectorized order (wrt grid)
 #' @export
 #'
 #' @examples
 #' pkern_coords(g=c(3,2))
 #' pkern_coords(g=list(y=1:5, x=2:3))
+#' if( requireNamespace('sf') ) {
+#' pkern_coords(g=list(y=1:5, x=2:3), out='sf')
+#' }
 pkern_coords = function(g, out='matrix', nosort=FALSE, quiet=FALSE)
 {
   # handle numeric vectors for g
@@ -323,8 +326,10 @@ pkern_coords = function(g, out='matrix', nosort=FALSE, quiet=FALSE)
   }
 
   # handle various input classes
+  crs_out = ''
   spatnms = c('SpatRaster', 'RasterLayer', 'RasterStack')
   if( any( spatnms %in% class(g) ) ) g = pkern_fromRaster(g, what='yx')
+  if( !is.null( g[['crs']] ) ) crs_out = g[['crs']]
   if( !is.null( g[['yx']] ) ) g = g[['yx']]
   if( !is.null( g[['g']] ) ) g = g[['g']]
 
@@ -354,5 +359,13 @@ pkern_coords = function(g, out='matrix', nosort=FALSE, quiet=FALSE)
   # return in requested class
   olist = Map(\(gl, i) gl[i], g, pkern_vec2mat(seq(ng), gdim, out='list'))
   if( out == 'list' ) return(olist)
-  return( do.call(cbind, olist) )
+  omat = do.call(cbind, olist)
+  colnames(omat) = c('y', 'x')
+  if( out == 'matrix' ) return( omat )
+
+  # sf output requires a bit more work
+  sf.loaded = requireNamespace('sf', quietly=TRUE)
+  if( !sf.loaded ) stop('sf package not loaded. Try library(sf)')
+  cat(paste('processing', ng, 'grid points...'))
+  return( st_as_sf(as.data.frame(omat), coords=c('x', 'y'), crs=crs_out) )
 }
