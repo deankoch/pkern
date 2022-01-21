@@ -198,7 +198,7 @@ pkern_rho = function(cval, pars, d=1, upper=1e3*d)
 #' pars = list(k='mat', upper=c(10,10))
 #' pkern_bds(pars)
 #'
-pkern_bds = function(pars, gres=NA, nmax=1, cmin=0.05, cmax=0.95)
+pkern_bds = function(pars, gres=NA, nmax=1, cmin=0.05, cmax=0.5)
 {
   # handle character input (kernel names)
   if( is.character(pars) )
@@ -228,7 +228,7 @@ pkern_bds = function(pars, gres=NA, nmax=1, cmin=0.05, cmax=0.95)
       {
         # these bounds are suggestions based on experimentation
         bds.shp = c(1, 25)
-        shp.ini = 2
+        shp.ini = 10
         nm.shp = 'kap'
       }
 
@@ -318,7 +318,7 @@ pkern_bds = function(pars, gres=NA, nmax=1, cmin=0.05, cmax=0.95)
 #' pkern_unpack(pars, 1:3)
 pkern_unpack = function(pars, kp=NULL)
 {
-  # vectorization in order x, y
+  # vectorization in order y, x
   if( is.null(kp) ) return( c(pars[['y']][['kp']], pars[['x']][['kp']]) )
 
   # determine number of parameters from each kernel
