@@ -414,6 +414,10 @@ pkern_vario = function(gdim, vec, dmax=NA, fit.method='rmedian', diagonal=TRUE,
 #' and 'n/v uses the robust estimator of Cressie (1993, Ch. 2.6.2), which divides sample
 #' size by squared theoretical semivariance.
 #'
+#' when `xpars` is set to `NULL`, the function fits only the y parameters, and the x
+#' kernel is made identical to the y kernel. For example with the Gaussian kernel, this
+#' enforces isotropy.
+#'
 #'
 #' @param vario list, the return value from a call to `pkern_vario`
 #' @param ypars character or list, recognizable (as `pars`) by `pkern_corr`
@@ -447,133 +451,89 @@ pkern_vario = function(gdim, vec, dmax=NA, fit.method='rmedian', diagonal=TRUE,
 #' pkern_vario_plot(vario, pars.fitted2)
 #' pkern_plot(pars.fitted2)
 #'
-pkern_vario_fit = function(vario, ypars='gau', xpars=ypars, psill=NULL, nug=NULL, add=0, dmax=Inf,
+pkern_vario_fit = function(vario, ypars='mat', xpars=ypars, psill=NULL, nug=NULL, add=0, dmax=Inf,
                            fit.method='n/d')
 {
+
+  # TODO: find better initials for nug and psill
+
+  # set default bounds for nugget effect
+  vario_l1med = median(sapply(vario[c('x', 'y', 'd1', 'd2')], \(x) x[['vg']][2] ))
+  vario_mode = sapply(vario[c('x', 'y', 'd1', 'd2')], \(x) x[['vg']][-1] ) |> unlist()
+  vario_v =  sqrt(vario[['v']])
+  if( is.null(nug) ) nug = c(min=1e-6, ini=vario_l1med/2, max=vario_l1med)
+  if( is.null(psill) ) psill = c(min=vario_l1med, ini=pmax(vario_l1med, vario_v), max=2*vario_v)
+
   # set defaults for partial sill (first parameter) and nugget (second parameter)
   #svmin = sapply(vario[c('y', 'x', 'd1', 'd2')], \(x) min(x[['vg']][-1])) |> min()
-  sdv =  sqrt(vario[['v']])
-  #if( is.null(psill) ) psill = c(min=sdv/2, ini=sdv, max=2*sdv)
-  #if( is.null(nug) ) nug = c(min=pmin(1e-3, svmin), max=pmin(1, sdv))
-  psill = c(min=0, ini=sdv, max=2*sdv)
-  nug = c(min=1e-4, ini=1e-3, max=sdv)
-  if( !( 'ini' %in% names(nug) ) ) nug['ini'] = nug['ini'] + nug['ini'] / 2
 
   # truncate max distance to max lag, compute number of cells this represents
   dmax = sapply(vario[c('y', 'x', 'd1', 'd2')], \(x) max(x[['lags']])) |> max() |> pmin(dmax)
   nmax = ceiling(dmax/vario[['gres']])
 
-  # set up defaults and bounds for kernel parameters (2-4 additional parameters)
+  # identical kernel parameter strings prompt initial constrained fit to get initial values
+  ykp_ini = NULL
+  if( is.character(ypars) & identical(ypars, xpars) )
+  {
+    ini_result = pkern_vario_fit(vario, ypars, NULL, psill, nug, add, dmax, fit.method)
+    ykp_ini = ini_result[['y']][['kp']]
+    nug['ini'] = ini_result[['nug']]
+    psill['ini'] = ini_result[['psill']]
+  }
+
+  # set up defaults and bounds for y kernel parameters
   ypars = pkern_bds(ypars, gres=vario[['gres']]['y'], nmax=nmax['y'])
-  xpars = pkern_bds(xpars, gres=vario[['gres']]['x'], nmax=nmax['x'])
+  if( !is.null(ykp_ini) ) ypars[['kp']] = ykp_ini
+
+  # construct x kernel as needed
+  if( !is.null(xpars) )
+  {
+    xpars = pkern_bds(xpars, gres=vario[['gres']]['x'], nmax=nmax['x'])
+    if( !is.null(ykp_ini) ) xpars[['kp']] = ykp_ini
+  }
 
   # vectorized bounds for all covariance parameters
-  plower = c(psill[1], nug[1], xpars[['lower']], ypars[['lower']])
-  pinitial = c( psill[2], nug[2], xpars[['kp']], ypars[['kp']] )
-  pupper = c(psill[3], nug[3], xpars[['upper']], ypars[['upper']])
+  plower = c(psill[1], nug[1], ypars[['lower']], xpars[['lower']])
+  pinitial = c( psill[2], nug[2], ypars[['kp']], xpars[['kp']] )
+  pupper = c(psill[3], nug[3], ypars[['upper']], xpars[['upper']])
 
-  # build matrices to hold pertinent info from `vario` (omit zero point in first index)
-  midx = names(vario) %in% c('x', 'y', 'd1', 'd2')
-  mvario = lapply(vario[midx], \(vg) cbind(n=vg[['n']][-1], lags=vg[['lags']][-1], vg=vg[['vg']][-1]))
-
-  # truncate at dmax
-  mvario = Map(\(m, i) m[i,], mvario, sapply(mvario, \(m) m[, 'lags'] < dmax))
-  msg.err = 'each direction must contain at least one lag. Try increasing dmax'
-  if( any( sapply(mvario, length) == 0 ) ) stop(msg.err)
+  # check for dmax set too low
+  vario_valid = sapply(vario[c('x', 'y', 'd1', 'd2')], \(x) sum( x[['lags']] < dmax ) > 1 )
+  if( !all(vario_valid) ) stop('Not enough lags sampled. Try increasing dmax')
 
   # define anonymous objective function for optimizer
-  fn = function(pv, p, mv, gres, fit.method)
+  fn = function(pv, p, vario_in, gres, fit.method, dmax)
   {
     # pv, numeric vector of parameters
     # p, list of "x", "y" kernel parameter lists associated with pv
-    # mv, list of matrices ("x", "y" and optionally "d1", "d2") with columns "n", "lags", "vg"
-    # gres, numeric vector of grid line spacings in x and y directions
+    # vario, list, the output of pkern_vario
+    # gres, numeric vector of grid line spacing distancec in x and y directions
 
-    # extract kernel parameters as lists (omit first elements, the variance components)
-    p = pkern_unpack(p, pv[-(1:2)])
+    # when x kernel parameters not supplied, the x kernel becomes a copy of the y kernel
+    if( is.null(p[['x']]) )
+    {
+      # copy kernel structure and parameters
+      p[['x']] = p[['y']]
+      pv = c(pv, pv[-(1:2)])
+    }
 
-    # generate theoretical semivariance values along x and y for each lag
-    #yvg = pkern_tvario(pars=p[['y']], psill=pv[1], nug=pv[2], d=mv[['y']][,'lags'])
-    #xvg = pkern_tvario(pars=p[['x']], psill=pv[1], nug=pv[2], d=mv[['x']][,'lags'])
-    yvg = pkern_tvg(pars=c(p[['y']], list(psill=pv[1], nug=pv[2])), d=mv[['y']][,'lags'])
-    xvg = pkern_tvg(pars=c(p[['x']], list(psill=pv[1], nug=pv[2])), d=mv[['x']][,'lags'])
+    # extract kernel parameters as lists
+    pars_in = c(pkern_unpack(p, pv[-(1:2)]), list(psill=pv[1], nug=pv[2], gres=gres))
+    pars_in_x = c(pars_in[['x']], modifyList(pars_in, list(x=NULL, y=NULL)))
+    pars_in_y = c(pars_in[['y']], modifyList(pars_in, list(x=NULL, y=NULL)))
 
-    # set up weights for y direction
-    wy = switch(fit.method,
-                '1' = 1,
-                'n' = mv[['y']][,'n'],
-                'n/v'= mv[['y']][,'n'] / (yvg)^2,
-                'n/d'=( mv[['y']][,'n'] / (mv[['y']][,'lags'])^2 ))
+    # compute weighted sum of squares along x direction
+    wss.x = pkern_vario_wss(vario_in, nm='x', pars=pars_in_x, fit.method=fit.method, dmax=dmax)
 
-    # set up weights for x direction
-    wx = switch(fit.method,
-                '1' = 1,
-                'n' = mv[['x']][,'n'],
-                'n/v'= mv[['x']][,'n'] / (xvg)^2 ,
-                'n/d'=( mv[['x']][,'n'] / (mv[['x']][,'lags'])^2 ))
-
-    # compute weighted sums of squares along both dimensions and return their sum
-    wss.y = sum( wy * ( ( mv[['y']][,'vg'] - yvg )^2 ) )
-    wss.x = sum( wx * ( ( mv[['x']][,'vg'] - xvg )^2 ) )
+    # repeat for y direction
+    wss.y = pkern_vario_wss(vario_in, 'y', pars=pars_in_y, fit.method=fit.method, dmax=dmax)
 
     # do the same for the 45 degree rotated version if it is supplied
     wss.d1 = wss.d2 = 0
-    if( length(mv) == 4 )
+    if( all( c('d1', 'd2') %in% vario_in ) )
     {
-      # find unit distance along diagonals and componentwise distances for each lag
-      #udist = sqrt( sum( gres^2 ) ) #* ( sqrt(2) )
-      # d1.ylags = gres[1] * mv[['d1']][,'lags'] / udist
-      # d1.xlags = gres[2] * mv[['d1']][,'lags'] / udist
-
-      # find  on first diagonal
-      # generate theoretical semivariance values for each lag on first diagonal
-
-      # yvg.d1 = pkern_tvario(pars=p[['y']], psill=sqrt(pv[1]), d=d1.ylags)
-      # xvg.d1 = pkern_tvario(pars=p[['x']], psill=sqrt(pv[1]), d=d1.xlags)
-      #yvg.d1 = pkern_tvg(pars=c(p[['y']], list(psill=sqrt(pv[1]))), d=d1.ylags)
-      #xvg.d1 = pkern_tvg(pars=c(p[['x']], list(psill=sqrt(pv[1]))), d=d1.xlags)
-
-      #yvg = pkern_tvg(pars=c(p[['y']], list(psill=pv[1], nug=pv[2])), d=mv[['y']][,'lags'])
-      #xvg = pkern_tvg(pars=c(p[['x']], list(psill=pv[1], nug=pv[2])), d=mv[['x']][,'lags'])
-
-      # nugget gets added after the product
-      #d1vg = pv[2] + ( xvg.d1 * yvg.d1 )
-
-      # find unit distance along diagonals and componentwise distances for each lag
-      udist = sqrt( sum( gres^2 ) ) #* ( sqrt(2) )
-      d1lags = lapply(gres, \(gr) gr * mv[['d1']][,'lags'] / udist)
-
-      # compute variogram
-      d1vg = pkern_tvg(pars=c(p, list(psill=pv[1], nug=pv[2])), d=d1lags)
-
-
-      # repeat for the other diagonal
-      # d2.ylags = gres[1] * mv[['d2']][,'lags'] / udist
-      # d2.xlags = gres[2] * mv[['d2']][,'lags'] / udist
-      # yvg.d2 = pkern_tvario(pars=p[['y']], psill=sqrt(pv[1]), d=d2.ylags)
-      # xvg.d2 = pkern_tvario(pars=p[['x']], psill=sqrt(pv[1]), d=d2.xlags)
-      # d2vg = pv[2] + ( xvg.d2 * yvg.d2 )
-      d2lags = lapply(gres, \(gr) gr * mv[['d2']][,'lags'] / udist)
-      d2vg = pkern_tvg(pars=c(p, list(psill=pv[1], nug=pv[2])), d=d2lags)
-
-      # set up weights for d1 direction
-      wd1 = switch(fit.method,
-                   '1' = 1,
-                   'n' = mv[['d1']][,'n'],
-                   'n/v'= mv[['d1']][,'n'] / (d1vg)^2,
-                   'n/d'= mv[['d1']][,'n'] / (mv[['d1']][,'lags'])^2 )
-
-
-      # set up weights for d2 direction
-      wd2 = switch(fit.method,
-                   '1' = 1,
-                   'n' = mv[['d2']][,'n'],
-                   'n/v'= mv[['d2']][,'n'] / (d2vg)^2 ,
-                   'n/d'= mv[['d2']][,'n'] / (mv[['d2']][,'lags'])^2 )
-
-      # compute weighted sums of squares along both dimensions and return their sum
-      wss.d1 = sum( wd1 * ( ( mv[['d1']][,'vg'] - d1vg )^2 ) )
-      wss.d2 = sum( wd2 * ( ( mv[['d2']][,'vg'] - d2vg )^2 ) )
+      wss.d1 = pkern_vario_wss(vario_in, nm='d1', pars=pars_in, fit.method=fit.method, dmax=dmax)
+      wss.d2 = pkern_vario_wss(vario_in, nm='d2', pars=pars_in, fit.method=fit.method, dmax=dmax)
     }
 
     # compute total of weighted sums of squares
@@ -588,27 +548,219 @@ pkern_vario_fit = function(vario, ypars='gau', xpars=ypars, psill=NULL, nug=NULL
   if(add>0) list.ini = c(list.ini, lapply(seq(add), \(ini) plower+stats::runif(np)*(pupper-plower)) )
 
   # run the optimizer for each one
-  list.optim = lapply(list.ini, \(ini) stats::optim(par=ini,
+  list_optim = lapply(list.ini, \(ini) stats::optim(par=ini,
                                                     f=fn,
                                                     method='L-BFGS-B',
                                                     lower=plower,
                                                     upper=pupper,
                                                     p=list(y=ypars, x=xpars),
-                                                    mv=mvario,
+                                                    vario_in=vario,
                                                     gres=vario[['gres']],
-                                                    fit.method=fit.method))
+                                                    fit.method=fit.method,
+                                                    dmax=dmax,
+                                                    control=list(maxit=1e4,
+                                                                 parscale=pupper-plower)))
 
   # select the best fit
-  idx.best = which.min( sapply(list.optim, \(result) result$value) )
-  result.optim = list.optim[[idx.best]]
+  idx_best = which.min( sapply(list_optim, \(result) result$value) )
+  result_optim = list_optim[[idx_best]]
 
-  # unpack fitted parameters and return in a list
-  psillfit = stats::setNames(result.optim$par[1], 'fitted')
-  nugfit = stats::setNames(result.optim$par[2], 'fitted')
-  pfit = pkern_unpack(list(y=ypars, x=xpars), result.optim$par[-(1:2)])
-  return( list(y=pfit[['y']], x=pfit[['x']], psill=psillfit, nug=nugfit, gres=vario[['gres']]) )
+  # unpack fitted sill, nugget, copy the rest
+  psill_optim = stats::setNames(result_optim[['par']][1], 'fitted')
+  nug_optim = stats::setNames(result_optim[['par']][2], 'fitted')
+  kp_optim =  result_optim[['par']][-(1:2)]
+
+  # handle NULL x kernel parameters (copy from y)
+  if( is.null(xpars) )
+  {
+    # copy kernel structure and parameters
+    xpars = ypars
+    kp_optim = rep(kp_optim, 2)
+  }
+
+  # unpack kernel parameters and finish
+  pfit = pkern_unpack(list(y=ypars, x=xpars), kp_optim)
+  return( list(y=pfit[['y']], x=pfit[['x']], psill=psill_optim, nug=nug_optim, gres=vario[['gres']]))
 }
 
+# TODO: write up documentation for this
+# helper for pkern_vario_fit
+# pars=c(p, list(psill=psill, nug=nug)
+pkern_vario_wss = function(vario_in, nm, pars, fit.method, dmax=dmax)
+{
+  # check for valid direction name argument
+  if( !( nm %in% c('x', 'y', 'd1', 'd2') ) ) stop('nm must be one of "x", "y", "d1", "d2"')
+
+  # extract lags data from variogram list (omit lag-0 first entry)
+  lags = vario_in[[nm]][['lags']][-1]
+  idx_valid = lags < dmax
+  if( sum(idx_valid) == 0 ) return(Inf)
+  lags_valid = lags[idx_valid]
+
+  # handle special case of diagonals - pars must be a list with both x and y component
+
+  if( any( c('d1', 'd2') %in% nm ) )
+  {
+    # check for required input in  this case
+    if( !( c('gres') %in% names(pars) ) ) stop('gres must be included in pars')
+
+    # compute component-wise distances for each lag
+    udist = sqrt( sum( pars[['gres']]^2 ) )
+    lags_valid = lapply(pars[['gres']], \(gr) gr * lags_valid / udist)
+  }
+
+  # theoretical variogram values
+  tvg = pkern_tvg(pars, d=lags_valid)
+
+  # set up weights
+  n_valid = vario_in[[nm]][['n']][-1][idx_valid]
+  vg_valid = vario_in[[nm]][['vg']][-1][idx_valid]
+  w = switch(fit.method,
+             '1' = 1,
+             'n' = n_valid,
+             'n/v'= n_valid/(vg_valid^2),
+             'n/d'= n_valid/(lags[idx_valid]^2) )
+
+  # compute weighted sums of squares along both dimensions and return their sum
+  return( sum( w * ( ( vg_valid - tvg )^2 ) ) )
+}
+
+
+#' Transform data forward and back
+#'
+#' Apply a transformation to the data vector(s) in `x`
+#'
+#' `x` can be a data vector, or a list of them. Data vector lists are handled by applying
+#' the (back) transform to each element separately and returning the results in a list with
+#' the same structure.
+#'
+#' `x` can also be the return value of pkern_transform (a list with elements "z", "nm", "bfun"),
+#' in which case the transform is applied to `x$z`, and the back-transform function is composed
+#' appropriately with the previous one. This allows calls to pkern_transform to be chained
+#' together (see examples).
+#'
+#' Available functions (valid choices for `nm`) are:
+#'
+#'  "linear": applies `base::scale` with default options
+#'  "log": uses log(x + `log_offset`)
+#'  "nscore": uses the normal score quantiles returned (in `y`) by `base::qqnorm`
+#'  "nscore_smooth": same as "nscore"
+#'
+#' "nscore" and "nscore_smooth" differ in their method of constructing a back-transform;
+#' The former uses linear interpolation (`stats::approx`) and the latter uses spline
+#' interpolation (`stats::spline`). In both cases, the interpolators are constrained to
+#' predict within the range of `x`. The implementation of "nscore" is adapted from
+#' `mstats::backtr` and `mstats::nscore_model`.
+#'
+#' `log_offset` is a small additive constant to ensure strict positivity of inputs to log().
+#' It is ignored when `nm` is not "log".
+#'
+#' @param x, numeric data vector to transform (or list of them), or the output of pkern_transform
+#' @param nm, the transformation name, one of 'linear', 'log', 'nscore', 'nscore_smooth'
+#'
+#' @return list containing the transformed data, the transform name, and the back-transform function
+#' @export
+#'
+#' @examples
+#'
+#' # generate large spread of random data
+#' random_data = runif(-1e6, 1e6, n=1e3)
+#'
+#' # log tranform:
+#' transf_result = random_data |> pkern_transform('log')
+#'
+#' # the function returns in a list:
+#' z = transf_result$z # the transformed data
+#' transf_result$nm |> print() # the transform name
+#' bfun = transf_result$bfun # the back-transform function
+#'
+#' # round trip accuracy is fine
+#' (bfun(z) - random_data) |> abs() |> max()
+#'
+#' # transform calls can be composed
+#' transf_result = random_data |> pkern_transform('linear') |> pkern_transform('log') |> pkern_transform('linear')
+#' print(transf_result$nm)
+#' (transf_result$bfun(transf_result$z) - random_data) |> abs() |> max()
+#'
+pkern_transform = function(x, nm='nscore_smooth', log_offset=1e-6)
+{
+  # process list arguments to x
+  model_x = identity
+  nm_x = ''
+  if( is.list(x) )
+  {
+    # check for invalid input
+    model_elements = c('z', 'name', 'bfun')
+    err_elements = paste('list input to x must contain:', paste(model_elements, collapse=', '))
+    if( !all( c('z', 'bfun') %in% names(x) ) ) stop(err_elements)
+    if( !is.function( x[['bfun']] ) ) stop('x$bfun must be a function')
+
+    # copy inverse function for input list x then overwrite x with data values
+    model_x = x[['bfun']]
+    nm_x = x[['nm']]
+    x = x[['z']]
+  }
+
+  # drop names from x
+  x = unname(x)
+
+  # define valid model choices
+  nm_str = c('linear', 'log', 'nscore', 'nscore_smooth')
+  err_msg = paste('tpars$model must be one of:', paste(nm_str, collapse=', '))
+
+  # check for valid model specification
+  if( !(nm %in% nm_str) ) stop(err_msg)
+
+  # scale and center
+  if(nm == 'linear')
+  {
+    scale_out = scale(x)
+    x_out = scale_out |> c()
+    scale_centre = attr(scale_out, 'scaled:center')
+    scale_mult = attr(scale_out, 'scaled:scale')
+
+    # define the back-transform function
+    model_back = \(z) scale_centre + ( scale_mult * z )
+  }
+
+  # log transform
+  if(nm == 'log')
+  {
+    # recentre so that minimum is log_offset
+    scale_min = log_offset - min(x)
+    x_out = log(x + scale_min)
+
+    # define the back-transform function
+    model_back = \(z) exp(z) - scale_min
+  }
+
+  # normal score transforms
+  if( nm %in% c('nscore', 'nscore_smooth') )
+  {
+    # compute normal scores and sorted x values with padding
+    x_out = qqnorm(x, plot.it=FALSE)[['x']]
+    x_pad = c(min(x), sort(x), max(x))
+
+    # anonymous function to make y values matching x_pad
+    y_pad = \(z) c(min(c(x_out, z)), sort(x_out), max(x_out, z))
+
+    # use linear interpolation for back-transform
+    if( nm == 'nscore' ) model_back = \(z) approx(y_pad(z), x_pad, xout=z, ties=mean)[['y']]
+
+    # use spline interpolation for back-transform
+    if( nm == 'nscore_smooth' ) model_back = \(z) spline(y_pad(z), x_pad, xout=z, ties=mean)[['y']]
+  }
+
+  # compose the new back-transform function with existing one
+  model_out = \(z) model_x(model_back(z))
+  nm_out = paste0(nm, '(', nm_x, ')')
+
+  # return the transformed values and the inverse function in a list
+  return( list(z=x_out, nm=nm_out, bfun=model_out) )
+}
+
+
+# TODO: update docs
 #' Plot 1-dimensional empirical semivariograms for a separable model
 #'
 #' Plots the output of `pkern_vario` or `pkern_xvario`, optionally including the theoretical
