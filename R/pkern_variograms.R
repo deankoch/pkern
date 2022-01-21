@@ -628,11 +628,11 @@ pkern_vario_wss = function(vario_in, nm, pars, fit.method, dmax=dmax)
 
 #' Transform data forward and back
 #'
-#' Apply a transformation to the data vector(s) in `x`
+#' Apply a transformation to the data vector(s) in `x` and return the back-transform function.
 #'
-#' `x` can be a data vector, or a list of them. Data vector lists are handled by applying
-#' the (back) transform to each element separately and returning the results in a list with
-#' the same structure.
+#' `x` can be a numeric vector or a list of them. Data vector lists are handled in
+#' `pken_transform` (and its returned `bfun` function) by applying the (back) transform to
+#' each element using lapply, returning data as a list with the same structure as the input.
 #'
 #' `x` can also be the return value of pkern_transform (a list with elements "z", "nm", "bfun"),
 #' in which case the transform is applied to `x$z`, and the back-transform function is composed
@@ -646,19 +646,21 @@ pkern_vario_wss = function(vario_in, nm, pars, fit.method, dmax=dmax)
 #'  "nscore": uses the normal score quantiles returned (in `y`) by `base::qqnorm`
 #'  "nscore_smooth": same as "nscore"
 #'
-#' "nscore" and "nscore_smooth" differ in their method of constructing a back-transform;
+#' "nscore" and "nscore_smooth" differ in their method of constructing the back-transform;
 #' The former uses linear interpolation (`stats::approx`) and the latter uses spline
-#' interpolation (`stats::spline`). In both cases, the interpolators are constrained to
-#' predict within the range of `x`. The implementation of "nscore" is adapted from
-#' `mstats::backtr` and `mstats::nscore_model`.
+#' interpolation (`stats::spline`).In both cases, the interpolators are constrained to
+#' predict within the range of `x`, by padding their training data with extreme values from
+#' both the transformed `x` input and the input `z` values. This implementation of "nscore"
+#' is adapted from `mstats::backtr` and `mstats::nscore_model`.
 #'
 #' `log_offset` is a small additive constant to ensure strict positivity of inputs to log().
 #' It is ignored when `nm` is not "log".
 #'
 #' @param x, numeric data vector to transform (or list of them), or the output of pkern_transform
 #' @param nm, the transformation name, one of 'linear', 'log', 'nscore', 'nscore_smooth'
+#' @param log_offset, positive numeric, ignored if `nm` is not "log"
 #'
-#' @return list containing the transformed data, the transform name, and the back-transform function
+#' @return list with: transformed data "z", transform name "nm", and back-transform function "bfun"
 #' @export
 #'
 #' @examples
@@ -682,23 +684,53 @@ pkern_vario_wss = function(vario_in, nm, pars, fit.method, dmax=dmax)
 #' print(transf_result$nm)
 #' (transf_result$bfun(transf_result$z) - random_data) |> abs() |> max()
 #'
+#' # both pkern_transform and its returned back-transform function are vectorized for lists
+#' random_data = lapply(1:10, \(x) runif(-1e6, 1e6, n=1e3))
+#' transf_result = random_data |> pkern_transform('linear') |> pkern_transform('log')
+#' btrans_result = transf_result$bfun(transf_result$z)
+#' str(btrans_result)
+#' mapply(\(x, bx) max(abs(x-bx)), btrans_result, random_data) |> max()
+#'
 pkern_transform = function(x, nm='nscore_smooth', log_offset=1e-6)
 {
   # process list arguments to x
+  is_data_vector = FALSE
   model_x = identity
   nm_x = ''
   if( is.list(x) )
   {
-    # check for invalid input
-    model_elements = c('z', 'name', 'bfun')
-    err_elements = paste('list input to x must contain:', paste(model_elements, collapse=', '))
-    if( !all( c('z', 'bfun') %in% names(x) ) ) stop(err_elements)
-    if( !is.function( x[['bfun']] ) ) stop('x$bfun must be a function')
+    # check for data vector lists
+    is_data_vector = all( sapply(x, is.numeric) )
 
-    # copy inverse function for input list x then overwrite x with data values
-    model_x = x[['bfun']]
-    nm_x = x[['nm']]
-    x = x[['z']]
+    # handle list input to x that is not a data vector
+    if( !is_data_vector )
+    {
+      # checking for valid list structure (expecting chained call)
+      model_elements = c('z', 'nm', 'bfun')
+      err_elements = paste('list input to x must contain:', paste(model_elements, collapse=', '))
+      if( !all( c('z', 'bfun') %in% names(x) ) ) stop(err_elements)
+      if( !is.function( x[['bfun']] ) ) stop('x$bfun must be a function')
+
+      # copy inverse function for input list x then overwrite x with data values
+      model_x = x[['bfun']]
+      nm_x = x[['nm']]
+      x = x[['z']]
+
+      # set data vector flag for chained calls
+      if( is.list(x) ) is_data_vector = all( sapply(x, is.numeric) )
+    }
+  }
+
+  # handle data vector lists
+  if( is_data_vector )
+  {
+    # recursive call with vectorized data
+    x_recursive = list(z=unlist(x), nm=nm_x, bfun=model_x)
+    transform_res = pkern_transform(x_recursive, nm, log_offset)
+
+    # reshape results as list in 'z'
+    transform_res[['z']] = utils::relist(transform_res[['z']], x)
+    return(transform_res)
   }
 
   # drop names from x
@@ -720,18 +752,30 @@ pkern_transform = function(x, nm='nscore_smooth', log_offset=1e-6)
     scale_mult = attr(scale_out, 'scaled:scale')
 
     # define the back-transform function
-    model_back = \(z) scale_centre + ( scale_mult * z )
+    model_back = \(z) {
+
+      if( !is.list(z) ) z = list(z)
+      z_out = lapply(z, \(z_in) scale_centre + ( scale_mult * z_in ) )
+      if( length(z_out) == 1 ) z_out = unname( unlist(z_out) )
+      return(z_out)
+    }
   }
 
   # log transform
   if(nm == 'log')
   {
-    # recentre so that minimum is log_offset
+    # re-centre so that minimum is log_offset
     scale_min = log_offset - min(x)
     x_out = log(x + scale_min)
 
     # define the back-transform function
-    model_back = \(z) exp(z) - scale_min
+    model_back = \(z) {
+
+      if( !is.list(z) ) z = list(z)
+      z_out = lapply(z, \(z_in) exp(z_in) - scale_min )
+      if( length(z_out) == 1 ) z_out = unname( unlist(z_out) )
+      return(z_out)
+    }
   }
 
   # normal score transforms
@@ -745,14 +789,32 @@ pkern_transform = function(x, nm='nscore_smooth', log_offset=1e-6)
     y_pad = \(z) c(min(c(x_out, z)), sort(x_out), max(x_out, z))
 
     # use linear interpolation for back-transform
-    if( nm == 'nscore' ) model_back = \(z) approx(y_pad(z), x_pad, xout=z, ties=mean)[['y']]
+    if( nm == 'nscore' )
+    {
+      model_back = \(z) {
+
+        if( !is.list(z) ) z = list(z)
+        z_out = lapply(z, \(z_in) stats::approx(y_pad(z_in), x_pad, xout=z_in, ties=mean)[['y']] )
+        if( length(z_out) == 1 ) z_out = unname( unlist(z_out) )
+        return(z_out)
+      }
+    }
 
     # use spline interpolation for back-transform
-    if( nm == 'nscore_smooth' ) model_back = \(z) spline(y_pad(z), x_pad, xout=z, ties=mean)[['y']]
+    if( nm == 'nscore_smooth' )
+    {
+      model_back = \(z) {
+
+        if( !is.list(z) ) z = list(z)
+        z_out = lapply(z, \(z_in) stats::spline(y_pad(z_in), x_pad, xout=z_in, ties=mean)[['y']] )
+        if( length(z_out) == 1 ) z_out = unname( unlist(z_out) )
+        return(z_out)
+      }
+    }
   }
 
   # compose the new back-transform function with existing one
-  model_out = \(z) model_x(model_back(z))
+  model_out = \(z) { model_x(model_back(z)) }
   nm_out = paste0(nm, '(', nm_x, ')')
 
   # return the transformed values and the inverse function in a list
