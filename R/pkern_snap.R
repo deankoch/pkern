@@ -653,19 +653,23 @@ pkern_est_sep = function(pts, gres=c(1,1), nmax=Inf)
   # index for omitting 0's on diagonal of distance matrix
   idx_diag = seq(1, npts_temp^2, by=npts_temp+1)
 
-  # compute all interpoint distances in 2d, then along each dimension
+  # compute all inter-point distances in 2d, then along each dimension
   dmat = stats::dist(pts_temp)
   ydmat = stats::dist(pts_temp[,1])
   xdmat = stats::dist(pts_temp[,2])
 
-  # compute a quantile representing the interpoint distance of adjacent points
+  # compute a quantile representing the inter-point distance of adjacent points
   p_adjacent = 4 * (npts - sqrt(npts)) / ( npts * (npts-1) )
   d_adjacent = quantile(dmat[-idx_diag], p_adjacent)
   yd_adjacent = quantile(ydmat[-idx_diag], p_adjacent/2)
   xd_adjacent = quantile(xdmat[-idx_diag], p_adjacent/2)
   # based on estimated probability of randomly drawing a point neighbour for square grid
 
-  # estimates for y/x resolution ratio and interpoint distances along x, y dims
+  # handle 0-distance results
+  if(yd_adjacent==0) yd_adjacent = sort(unique(ydmat[-idx_diag]))[2]
+  if(xd_adjacent==0) xd_adjacent = sort(unique(xdmat[-idx_diag]))[2]
+
+  # estimate y/x resolution ratio and inter-point distances along x, y dims
   yx_scale = yd_adjacent/xd_adjacent
   d_x = sqrt( (d_adjacent^2) / (1 + yx_scale^2) )
   d_y = yx_scale * d_x
