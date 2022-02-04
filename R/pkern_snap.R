@@ -37,8 +37,7 @@
 #' `ppars` is a list with any of the following (optional) named elements: "gcol", "mcol",
 #' "dcol", and "pcol". They are the colors of, respectively, the grid lines, the snapped grid
 #' lines connecting lines, and points (passed as parameter "col" to the appropriate `graphics`
-#' call); and "yaxis" is a logical that applies only in the 1d case, indicating to plot point
-#' locations along the y (instead of x) axis.
+#' call).
 #'
 #' @param gyx numeric vector, matrix, dataframe or list, the grid line coordinates (see details)
 #' @param pts numeric vector, matrix, dataframe or list, the point coordinates (see details)
@@ -49,16 +48,17 @@
 #'
 #' @examples
 #' # 1d case
-#' g = seq(1, 100, by=2)
-#' ng = length(g)
-#' pts = g + stats::rnorm(ng)
-#' pkern_snap_plot(g, pts)
+#' gyx = seq(1, 100, by=2)
+#' pkern_snap_plot(gyx)
+#' ng = length(gyx)
+#' pts = gyx + stats::rnorm(ng)
+#' pkern_snap_plot(gyx, pts)
 #'
 #' # plot again with with points mapped to grid line that generated them
-#' pkern_snap_plot(gyx=list(gyx=g), pts)
+#' pkern_snap_plot(gyx=list(gyx=g, pmap=seq(gyx)), pts)
 #'
 #' # plot again with a random mapping
-#' pkern_snap_plot(list(gyx=g, pmap=sample(seq(ng), ng)), pts)
+#' pkern_snap_plot(list(gyx=gyx, pmap=sample(seq(ng), ng)), pts)
 #'
 #' # 2d case
 #' gdim = c(30, 25)
@@ -68,8 +68,9 @@
 #' pts = yx + stats::rnorm(prod(dim(yx)))
 #' pkern_snap_plot(gyx, pts)
 #'
-#' # plot again with a mapping from pts to gyx
-#' pkern_snap_plot(gyx=list(gyx=gyx), pts)
+#' # plot again with with points mapped to grid line that generated them
+#' pmap = Map(\(p, s) match(p, s), p=yx, s=gyx)
+#' pkern_snap_plot(gyx=list(gyx=gyx, pmap=pmap), pts)
 #'
 #' # TODO: examples with pkern_snap
 pkern_snap_plot = function(gyx, pts=NULL, ppars=list())
@@ -86,32 +87,18 @@ pkern_snap_plot = function(gyx, pts=NULL, ppars=list())
   is.1d = TRUE
   if( is.list(gyx) )
   {
-    # unpack list element gyx as list (connecting line mode)
+    # unpack list element gl as list (connecting line mode)
     if( !is.null( gyx[['gyx']] ) )
     {
       # extract mapping and grid line vector(s)
       pmap = gyx[['pmap']]
       gyx = gyx[['gyx']]
 
-      # error message for sanity checks below: pmap should be a mapping from pts to gyx
-      err.msg = 'mismatch in number of points and grid lines. Check pmap argument'
-
-      # handle 1d and 2d cases separately
-      if( is.list(gyx) )
-      {
-        # unpack mapping info and/or assign defaults
-        is.1d = FALSE
-        if( is.null(pmap) ) pmap = Map(\(p, s) match(p, s), p=expand.grid(gyx), s=gyx)
-        if( is.null(pts) ) pts = Map(\(s, i) s[i], s=gyx, i=pmap)
-        if( any( sapply(pmap, length) != sapply(pts, length) ) ) stop(err.msg)
-
-      } else {
-
-        # unpack mapping info and assign defaults for 1d case
-        if( is.null(pmap) ) pmap = seq_along(gyx)
-        if( is.null(pts) ) pts = gyx[pmap]
-        if( length(pmap) != length(pts) ) stop(err.msg)
-      }
+      # set defaults as needed and catch some invalid input errors
+      defaults_result = pkern_snap_plot_defaults(gyx, pmap, pts)
+      pmap = defaults_result[['pmap']]
+      pts = defaults_result[['pts']]
+      is_1d = defaults_result[['is_1d']]
 
     } else { is.1d = FALSE }
   }
@@ -121,35 +108,36 @@ pkern_snap_plot = function(gyx, pts=NULL, ppars=list())
   mcol = ifelse( is.null(ppars[['mcol']] ), 'grey40', ppars[['mcol']])
   dcol = ifelse( is.null(ppars[['dcol']] ), 'black', ppars[['dcol']])
   pcol = ifelse( is.null(ppars[['pcol']] ), 'grey50', ppars[['pcol']])
-  yaxis = ifelse( is.null(ppars[['yaxis']] ), FALSE, ppars[['yaxis']])
+
+  # set defaults as needed and catch some invalid input errors
+  defaults_result = pkern_snap_plot_defaults(gyx, pmap, pts)
+  pmap = defaults_result[['pmap']]
+  pts = defaults_result[['pts']]
+  is_1d = defaults_result[['is_1d']]
 
   # handle 1D case
-  if( is.1d )
+  if( is_1d )
   {
     # set limits for the plot
     pseq = seq_along(pts)
     ilim = range(pseq)
     plim = range(gyx, pts)
 
-    # plot horizontal grid lines
-    if( yaxis )
+    # scatterplot of points and grid lines with connecting lines showing snap position
+    plot(x=plim, y=ilim, xlab='x coordinate', ylab='input order', pch=NA, xaxt='n')
+    axis(side=1, at=gyx)
+    graphics::abline(v=gyx, col=gcol)
+    if( !is.null(pmap) )
     {
-      # scatterplot of points and grid lines with connecting lines showing snap position
-      plot(x=ilim, y=plim, xlab='input order', ylab='y coordinate', pch=NA)
-      graphics::abline(h=gyx, col=gcol)
-      graphics::abline(h=gyx[unique(pmap)], col=mcol)
-      if( !is.null(pmap) ) lapply(pseq, \(y) graphics::lines(x=rep(y,2), y=c(pts[y], gyx[pmap[y]]), col=dcol) )
-      graphics::points(pseq, pts, col=pcol)
+      # draw sub-grid line ticks
+      gx_occupied = gyx[unique(pmap)]
+      axis(side=1, at=gx_occupied, col.ticks='black', labels=FALSE)
 
-    } else {
-
-      # same as above but with arguments reversed (vertical grid lines)
-      plot(x=plim, y=ilim, xlab='x coordinate', ylab='input order', pch=NA)
-      graphics::abline(v=gyx, col=gcol)
-      graphics::abline(v=gyx[unique(pmap)], col=mcol)
-      if( !is.null(pmap) ) lapply(pseq, \(x) graphics::lines(x=c(pts[x], gyx[pmap[x]]), y=rep(x,2), col=dcol) )
-      graphics::points(pts, pseq, col=pcol)
+      # sub-grid lines
+      graphics::abline(v=gx_occupied, col=mcol)
+      lapply(pseq, \(x) graphics::lines(x=c(pts[x], gyx[pmap[x]]), y=rep(x,2), col=dcol) )
     }
+    graphics::points(pts, pseq, col=pcol)
 
     # finish
     return( invisible() )
@@ -164,17 +152,95 @@ pkern_snap_plot = function(gyx, pts=NULL, ppars=list())
   pseq = seq(length(pts[[1]]))
   plim = lapply(yxnm, \(d) range(gyx[[d]], pts[[d]]) )
 
-  # create the plot, add grid lines
-  plot(plim, pch=NA, xlab='x', ylab='y', asp=1)
+  # create the plot, add grid line ticks
+  plot(plim, pch=NA, xlab='x', ylab='y', asp=1, xaxt='n', yaxt='n')
+  axis(side=1, at=gyx[[2]], col.ticks='darkgrey')
+  axis(side=2, at=gyx[[1]], col.ticks='darkgrey')
   graphics::abline(h=gyx[['y']], v=gyx[['x']], col=gcol)
-  graphics::abline(h=gyx[['y']][ unique(pmap[['y']]) ], v=gyx[['x']][ unique(pmap[['x']]) ], col=mcol)
 
-  # add snapping vectors and finish
-  yxvec = lapply(yxnm, \(d) lapply(pseq, \(i) c(pts[[d]][i], gyx[[d]][ pmap[[d]][i] ]) ) )
-  Map(\(x, y) graphics::lines(x=x, y=y, col=dcol), x=yxvec[['x']], y=yxvec[['y']])
+  # add occupied grid lines add snapping vectors
+  if( !is.null(pmap) )
+  {
+    # add sub-grid line ticks
+    gy_occupied = gyx[['y']][ unique(pmap[['y']]) ]
+    gx_occupied = gyx[['x']][ unique(pmap[['x']]) ]
+    axis(side=1, at=gx_occupied, col.ticks='black', labels=FALSE)
+    axis(side=2, at=gy_occupied, col.ticks='black', labels=FALSE)
+
+    # sub-grid lines
+    graphics::abline(h=gy_occupied, v=gx_occupied, col=mcol)
+
+    # add snapping lines
+    yxvec = lapply(yxnm, \(d) lapply(pseq, \(i) c(pts[[d]][i], gyx[[d]][ pmap[[d]][i] ]) ) )
+    Map(\(x, y) graphics::lines(x=x, y=y, col=dcol), x=yxvec[['x']], y=yxvec[['y']])
+  }
+
+  # draw the points and finish
   graphics::points(pts, col=pcol)
   return( invisible() )
 }
+
+
+#' Set defaults for pmap and pts in pkern_snap_plot
+#'
+#' Helper function for pkern_snap_plot
+#'
+#' Parses the input arguments `gyx`, `pmap` and `pts`, returning a modified
+#' version of `pmap` and `pts` with defaults set as needed, along with the
+#' dimension.
+#'
+#' @param gyx numeric vector of grid-line coordinates, or two such vectors (y, x) in a list
+#' @param pmap integer vector of mapping indices, or two such vectors (y, x) in a list, or NULL
+#' @param pts integer vector of point coordinates, or two such vectors (y, x) in a list, or NULL
+#'
+#' @return list containing `pmap`, `pts`, and a logical indicating if input was 1d
+#' @export
+#'
+#' @examples
+pkern_snap_plot_defaults = function(gyx, pmap, pts)
+{
+  # define some error messages
+  err1 = 'mismatch in dimensions. Check that pmap and pts have the same class'
+  err2 = 'mismatch in number of points and grid lines. Check pmap argument'
+
+  # error 1: dimension mismatch check
+  in_list = list(gyx=gyx, pmap=pmap, pts=pts)
+  is_null = sapply(in_list, is.null)
+  is_list = sapply(in_list, is.list)
+  if( any(diff( is_list[!is_null] ) ) ) stop(err1)
+  is_1d = !is_list[!is_null][1]
+
+  # 1d case
+  if( is_1d )
+  {
+    # unpack mapping info and assign defaults for 1d case
+    if( is.null(pts) )
+    {
+      # treat grid-line intersections as points when pts is not supplied
+      if( is.null(pmap) ) pmap = seq_along(gyx)
+      pts = gyx[pmap]
+    }
+
+    # check for mismatched snapping vectors
+    if( !is.null(pmap) & ( length(pmap) != length(pts) ) ) stop(err2)
+
+    return(list(pmap=pmap, pts=pts, is_1d=TRUE))
+  }
+
+  # 2d case handled differently
+  if( is.null(pts) )
+  {
+    # treat grid-line intersections as points when pts is not supplied
+    if( is.null(pmap) ) pmap = Map(\(p, s) match(p, s), p=expand.grid(gyx), s=gyx)
+    pts = Map(\(s, i) s[i], s=gyx, i=pmap)
+  }
+
+  # check for mismatched snapping vectors
+  if( !is.null(pmap) & any( sapply(pmap, length) != sapply(pts, length) ) ) stop(err2)
+
+  return(list(pmap=pmap, pts=pts, is_1d=FALSE))
+}
+
 
 
 #' Snap an irregular set of 2d points to the nearest regular subgrid
@@ -229,31 +295,42 @@ pkern_snap_plot = function(gyx, pts=NULL, ppars=list())
 #' @examples
 #' # define a grid of coordinates and add jitter to a subgrid
 #' gdim = c(y=100, x=100)
-#' nsep = c(y=5, x=8)
-#' g = Map(\(p, s) seq(1, p, by=s), p=gdim, s=nsep)
-#' ng = prod(sapply(g, length))
-#' pts = expand.grid(g) + stats::rnorm(2*ng)
+#' gres = c(y=2, x=2)
+#' sep = c(y=5, x=8)
+#' gyx = Map(\(p, r) seq(1, p, by=r), p=gdim, r=gres)
+#' ng = prod(sapply(gyx, length))
+#' pts = Map(\(p, r) seq(1, p, by=r), p=gdim, r=sep*gres) |>
+#' expand.grid() + stats::rnorm(2*ng, 0 , 3)
 #'
 #' # plot grid and the point set generated from it
-#' pkern_snap_plot(g, pts)
+#' pkern_snap_plot(gyx, pts)
 #'
-#' # snap to grid lines, allowing duplicates
-#' snap = pkern_snap(g, pts, distinct=FALSE)
+#' # compute score for a range of y separation values, given sep_x=18
+#' sep_test = seq_along(gyx[['y']])
+#' g = list(gyx=gyx, gdim=gdim, gres=gres)
+#' pts_list = pts |> as.data.frame() |> as.list()
+#' test_score = sapply(sep_test, \(y) pkern_snap_score_2d(sep=c(y=y, x=8), g, pts_list))
+#' plot(sep_test, test_score, pch=16, cex=0.5)
+#' lines(sep_test, test_score)
+#'
+#' # estimate sep based on this score and the distance distribution among points
+#' sep = pkern_estimate_sep(g, pts)
+#' print(sep)
+#'
+#' # plot resulting snapping map
+#' snap = pkern_snap(g, pts, sep)
 #' pkern_snap_plot(snap, pts)
 #'
 #' # snap to grid lines, eliminate duplicates
-#' snap.distinct = pkern_snap(g, pts)
+#' snap.distinct = pkern_snap(g, pts, distinct=TRUE)
 #' pkern_snap_plot(snap.distinct, pts)
 #'
-#' # another example with and more jitter and too many points
-#' pts = expand.grid(g) + stats::rnorm(2*ng, sd=3)
+#' # another example with and more jitter
+#' pts = expand.grid(gyx) + stats::rnorm(2*ng, sd=3)
 #' pts = pts[sample(ng, 50),]
 #' pkern_snap_plot(g, pts)
-#' snap = pkern_snap(g, pts, sep=3, distinct=FALSE)
+#' snap = pkern_snap(g, pts, sep=3)
 #' pkern_snap_plot(snap, pts)
-#'
-#' # uncomment this line to demonstrate error handling
-#' #snap.distinct = pkern_snap(g, pts, sep=3)
 #'
 #' # call again with smaller sep
 #' snap.distinct = pkern_snap(g, pts, sep=2)
@@ -262,8 +339,7 @@ pkern_snap_plot = function(gyx, pts=NULL, ppars=list())
 #' # call again with sep determined automatically
 #' snap.distinct = pkern_snap(g, pts)
 #' pkern_snap_plot(snap.distinct, pts)
-#'
-pkern_snap = function(gyx, pts, sep=NULL, distinct=TRUE, quiet=FALSE)
+pkern_snap = function(gyx, pts, sep=NULL, distinct=FALSE, quiet=FALSE)
 {
   # initialize output list
   g = list(gres=c(1,1), sg=list())
@@ -298,7 +374,9 @@ pkern_snap = function(gyx, pts, sep=NULL, distinct=TRUE, quiet=FALSE)
   if( !all(yxnm %in% names(pts)) ) names(pts)[1:2] = yxnm
 
   # auto-detect sep or coerce as needed
-  if( is.null(sep) ) sep = Map(\(yx, p) pkern_estimate_sep(yx, p, distinct=F), gyx, pts)
+  if( is.null(sep) ) sep = pkern_estimate_sep(modifyList(g, list(gyx=gyx)), pts)
+
+  #if( is.null(sep) ) sep = Map(\(yx, p) pkern_estimate_sep(yx, p, distinct=F), gyx, pts)
   if( length(sep) == 1 ) sep = rep(sep, 2)
   if( !all( yxnm %in% names(sep) ) ) names(sep)[1:2] = yxnm
 
@@ -308,9 +386,18 @@ pkern_snap = function(gyx, pts, sep=NULL, distinct=TRUE, quiet=FALSE)
   if( length(npts) > 1 ) stop('y and x coordinate vectors not of equal length')
   if( ( npts > prod(g[['gdim']]) ) & distinct ) stop(msg.unbalanced)
 
-  # separately process x and y dimensions with 1d snapper, reshape the output as list
-  snap.yx = Map(\(yx, p, s) pkern_snap_1d(yx, p, s, distinct=F), yx=gyx, p=pts, s=sep)
-  snap = Map(\(y, x) stats::setNames(list(y, x), yxnm), snap.yx[['y']], snap.yx[['x']])
+  # separately process x and y dimensions with 1d snapper,
+  #snap.yx = Map(\(yx, p, s) pkern_snap_1d(yx, p, s, distinct=F), yx=gyx, p=pts, s=sep)
+  #snap = Map(\(y, x) stats::setNames(list(y, x), yxnm), snap.yx[['y']], snap.yx[['x']])
+  snap_yx = Map(\(yx, p, s) {
+
+    off = pkern_est_offset(yx, p, s)
+    pkern_snap_score_1d(yx, p, s, off, mapping=TRUE)
+
+    }, yx=gyx, p=pts, s=sep)
+
+  # reshape snapping output as list
+  snap = Map(\(y, x) stats::setNames(list(y, x), yxnm), snap_yx[['y']], snap_yx[['x']])
 
   # to identify duplicates: convert y-x mapping to vectorized index of subgrid (y flipped)
   pmap = snap[['pmap']]
@@ -369,7 +456,7 @@ pkern_snap = function(gyx, pts, sep=NULL, distinct=TRUE, quiet=FALSE)
   g[['sg']][['gres']] = g[['sep']] * g[['gres']]
 
   # Euclidean snapping distance
-  g[['sg']][['pdist']] = do.call(\(x,y) sqrt(x^2 + y^2), snap[['dist']])
+  g[['sg']][['pdist']] = do.call(\(x,y) sqrt(x + y), snap[['d2snap']])
 
   # subgrid dimensions and grid line coordinates
   g[['sg']][['gdim']] = sapply(g[['gli']], length)
@@ -388,40 +475,33 @@ pkern_snap = function(gyx, pts, sep=NULL, distinct=TRUE, quiet=FALSE)
 }
 
 
-#' Snap an irregular set of 1d points to nearest regular subgrid
+#' Compute squared snapping distances (and map) from 1d points to a 1d regular sub-grid
 #'
-#' This function finds a regular subgrid of the regular 1d grid `g` that is nearest
-#' to the (noisy) point locations in `pts`, where the subgrid spacing `sep` specifies
-#' that every `sep`th grid point in `g` belongs to the subgrid.
+#' This function constructs the sub-grid of `g` having spacing `sep` (ie `sep-1` grid
+#' points lie between adjacent sub-grid points) and computes the sum of the squared
+#' distances between elements of `pts` and their nearest (snapped) sub-grid point.
 #'
-#' The function returns a list containing:
-#'  `gyx` vector of grid line coordinates
-#'  `pmap` output mapping vector, of same length as `pts` but with values in `seq(g)`
-#'  `dist` vector of squared snapping distances (corresponding to `pts`)
+#' When `mapping=TRUE` the function returns the individual squared snapping distances
+#' for each point, along with information about the mapping from grid to points, in
+#' a named list containing:
 #'
-#' The output mapping (`map`) is selected by least total cost (sum over all input points),
-#' where the cost of a point is equal to the squared distance between the point and its
-#' snapped (on-grid) location.
+#' gyx: numeric, the input grid-line coordinates (1d)
+#' d2total: numeric, the total squared snapping distance
+#' pmap: numeric vector, the element of `g` mapped to each point in `pts`
+#' ngl: integer, the minimum dimension of the sub-grid containing all snapped points
+#' noc: integer, the number of occupied sub-grid lines (can be less than ngl)
 #'
-#' To align the subgrid, the function calculates the cost of each possible offset and
-#' selects the least cost option. eg. if `sep=2`, the least coordinate in the subgrid
-#' can be set to `g[1]` (offset 0) or `g[2]` (offset 1). In general there are `sep`
-#' possible offsets, which are all tested in a loop.
 #'
-#' When `distinct==TRUE`, the function calls an implementation of the Hungarian algorithm
-#' (from R package `RcppHungarian`) to find an optimal assignment. Note that this can be
-#' slow for large grids or large numbers of points.
+#' @param gl numeric vector, the grid line coordinate values in 1 dimension
+#' @param pts numeric vector, the point coordinates in 1 dimension
+#' @param sep integer vector of length 2, the sub-grid spacing indices
+#' @param off positive integer, the sub-grid offset index, an element of `seq(sep)`
+#' @param mapping logical, indicating to return extra information in a list
 #'
-#' @param g vector of grid line locations in ascending order
-#' @param pts vector of point locations in 1D
-#' @param sep integer, where `sep-1` is the number of grid lines between subgrid lines
-#' @param distinct logical, indicating to attempt a 1-to-1 mapping
-#'
-#' @return list with elements "g", "pmap", and "dist" (see below)
+#' @return numeric, the total squared snapping distance, or list (see DETAILS)
 #' @export
 #'
 #' @examples
-#' # define a grid and subgrid (every third grid line)
 #' sep = 3
 #' ng = 1e2
 #' g = seq(ng)
@@ -433,85 +513,129 @@ pkern_snap = function(gyx, pts, sep=NULL, distinct=TRUE, quiet=FALSE)
 #' pkern_snap_plot(g, pts)
 #'
 #' # snap to subgrid and plot result
-#' snap = pkern_snap_1d(sg, pts, sep, distinct=FALSE)
+#' snap = pkern_snap_score_1d(gl=sg, pts, sep=1, mapping=TRUE)
 #' pkern_snap_plot(snap, pts)
 #'
 #' # snap to outer grid and plot result
-#' snap = pkern_snap_1d(g, pts, sep, distinct=FALSE)
+#' snap = pkern_snap_1d(g, pts, 1)
 #' pkern_snap_plot(snap, pts)
 #'
-#' # repeat but avoid duplicate mappings (default `distinct=TRUE`)
-#' snap = pkern_snap_1d(g, pts, sep)
-#' pkern_snap_plot(snap, pts)
-#'
-pkern_snap_1d = function(g, pts, sep=1, distinct=TRUE)
+pkern_snap_score_1d = function(gl, pts, sep=1, off=NULL, mapping=FALSE)
 {
-  # coerce inputs to numeric and handle trivial case of single grid line
+  # coerce inputs to numeric
   pts = as.numeric(pts)
-  g = as.numeric(g)
-  ng = length(g)
-  npts = length(pts)
-  if( length(g) == 1 )  return(g=g, map=rep(1, npts), dist=g[[1]]-pts)
+  gl = as.numeric(gl)
 
-  # list of candidate subgrid lines, one for each possible origin (grid line numbers)
-  sg.list = lapply(seq(sep), function(x) seq(x, length(g), by=sep))
-  sg.n = sapply(sg.list, length)
+  # handle invalid sep cases
+  if( sep > length(gl) ) stop('sep cannot be larger than length(gl)')
+  if( sep < 1 ) stop('sep cannot be smaller than 1')
+
+  # auto-detect offset if not supplied
+  if( is.null(off) ) off = pkern_est_offset(gl, pts, sep)
 
   # find cross-distance matrices for pts vs subgrid lines
-  dmat.list = lapply(sg.list, \(i) abs(outer(pts, g[i], '-'))^2 )
+  dmat = abs(outer(pts, gl[seq.int(off, length(gl), by=sep)], '-'))^2
 
-  # allow duplication in mapping or not?
-  if( distinct )
-  {
-    # without duplication: Hungarian algorithm solves the unbalanced assignment problem
-    result.hungarian = lapply(dmat.list, RcppHungarian::HungarianSolver)
-    map.dmin = lapply(result.hungarian, \(m) m[['pairs']][, 2])
+  # max.col(-d) equivalent to but faster than: apply(d, 1, which.min)
+  map_dmin = max.col(-dmat)
 
-    # replace 0's (unassigned) with NA
-    for(i in seq_along(map.dmin) ) { map.dmin[[i]][ map.dmin[[i]] == 0 ] = NA }
+  # extract squared snapping distances for each point, total score
+  d2snap = sapply(seq_along(map_dmin), \(j) dmat[j, map_dmin[j]])
+  d2total = sum(d2snap, na.rm=TRUE)
+  if( !mapping ) return(d2total)
 
-  } else {
-
-    # with duplication: snap to nearest grid line
-    # note: max.col(-d) equivalent to but faster than: apply(d, 1, which.min)
-    map.dmin = lapply(dmat.list, \(d) max.col(-d) )
-  }
-
-  # extract squared snapping distances for each point, total score for each candidate
-  dsnap = Map(\(d, m) sapply(seq_along(m), \(j) d[j, m[j]]), d=dmat.list, m=map.dmin)
-  dtotal = sapply(dsnap, \(d) sum(d, na.rm=TRUE))
-
-  # find number of unassigned points and identify candidates having the fewest...
-  norphan = sapply(map.dmin, \(m) sum(is.na(m)))
-  is.fewest = norphan == min(norphan)
-
-  # ...other candidates are scored so they never get selected
-  if( distinct ) dtotal[ which(!is.fewest) ] = Inf
-
-  # identify the eligible candidate subgrid with minimum total distance
-  idx.best = which.min(dtotal)
-
-  # find its mapping to `g`
-  ptog = sg.list[[ idx.best ]][ map.dmin[[idx.best]] ]
+  # find the mapping to from `pts` to `gl` and compute some diagnostics
+  pmap = seq.int(off, length(gl), by=sep)[ map_dmin ]
+  gl_occupied = unique(pmap)
+  n_gl = 1 + diff(range(gl_occupied)/sep)
+  n_occupied = length(gl_occupied)
 
   # return in list
-  return( list(gyx=g, pmap=ptog, dist=sqrt(dsnap[[ idx.best ]])) )
-
+  return( list(gyx=gl, d2total=d2total, pmap=pmap, ngl=n_gl, noc=n_occupied, d2snap=d2snap) )
 }
 
 
+#' 2-d version of pkern_snap_score_1d (score function for optimizer in pkern_estimate_sep)
+#'
+#' Compute the total sum of squared snapping distances between the points in `pts` and
+#' the grid lines of the sub-grid of `gl` with spacing `sep` (ie `sep-1` grid points lie
+#' between adjacent sub-grid points) and offset `off` (ie the bottom left element of the
+#' sub-grid is the `off`th x grid-line).
+#'
+#' This function is minimized in order to select an appropriate sub-grid spacing when
+#' snapping points to a high-resolution grid.
+#'
+#' The tuning parameter `penalty>0` penalizes sparse grids with the aim of producing
+#' simpler mappings and sub-grids of smaller dimension by adding a penalty term to the
+#' squared distance sum equal to:
+#'
+#' `penalty` X (number of unoccupied sub-grid points) X (mean squared distance)
+#'
+#' set `penalty=0` to omit this term.
+#'
+#' `g_target` should be a list containing named elements 'gdim', the grid dimensions,
+#'  and 'gyx', the grid line coordinates (as in the return value of pkern_fromRaster).
+#'
+#' @param sep integer vector of length 2, the sub-grid spacing indices
+#' @param g_target list, the target grid configuration (see DETAILS)
+#' @param pts list with named numeric vectors 'x', 'y', the point coordinates
+#' @param penalty non-negative numeric, larger values penalize sparser grids
+#'
+#' @return numeric, the total squared snapping distance (plus penalty term)
+#' @export
+#'
+#' @examples
+#'
+#' # define a grid of coordinates and add jitter to a subgrid
+#' gdim = c(y=300, x=300)
+#' gres = c(y=2, x=2)
+#' sep = c(y=15, x=18)
+#' gyx = Map(\(p, r) seq(1, p, by=r), p=gdim, r=gres)
+#' ng = prod(sapply(gyx, length))
+#' pts = Map(\(p, r) seq(1, p, by=r), p=gdim, r=sep*gres) |>
+#'  expand.grid() + stats::rnorm(2*ng, 0 , 2)
+#'  # plot grid and the point set generated from it
+#'  pkern_snap_plot(gyx, pts)
+#'
+#'  # compute score for a range of x separation values
+#'  sep_test = seq_along(gyx[['y']][-1])
+#'  g = list(gyx=gyx, gdim=gdim, gres=gres)
+#'  pts_list = pts |> as.data.frame() |> as.list()
+#'  test_score = sapply(sep_test, \(y) pkern_snap_score_2d(sep=c(y=y, x=8), g, pts_list))
+#'  plot(sep_test, test_score, pch=16, cex=0.5)
+#'  lines(sep_test, test_score)
+pkern_snap_score_2d = function(sep, g_target, pts, penalty=1)
+{
+  # handle invalid sep with worst (highest) possible score
+  if( any(sep < 1) | !all( sep < g_target[['gdim']] ) ) return(Inf)
 
-#' Estimate separation distance between grid lines
+  # copy grid line locations,
+  gx = g_target[['gyx']][['x']]
+  gy = g_target[['gyx']][['y']]
+
+  # compute squared snapping distances separately along x and y axes
+  score_result = Map(\(g, p, s) pkern_snap_score_1d(g, p, s, mapping=TRUE),
+                     g=g_target[['gyx']],
+                     p=as.list(pts),
+                     s=sep)
+
+  # compute the squared distance sum total and total number of grid points
+  d = sum( score_result[['x']][['d2snap']] + score_result[['y']][['d2snap']] )
+  ngp = score_result[['x']][['ngl']] * score_result[['y']][['ngl']]
+
+  # compute penalty and return score
+  npts = length(pts[[1]])
+  penalty_toadd = penalty * ( ngp - npts ) * ( d / npts )
+  return(d + penalty_toadd)
+}
+
+
+#' Estimate separation distance between grid lines in 2-dimensional grids
 #'
 #' Estimates the subgrid resolution best matching an irregular set of points.
 #' Helper function for `pkern_snap_1d`
 #' TODO: flesh out documentation here and tidy inner loop in code
 #'
-#' @param g vector of grid line locations in ascending order
-#' @param pts vector of point locations in 1D
-#' @param distinct logical, indicating to look for 1-to-1 mappings
-#' @param bias nonegative numeric, a tuning parameter
-#' @param dlim length-2 positive numeric, lower/upper bounds for separation distance
 #'
 #' @return the estimated value of `sep`
 #' @export
@@ -544,92 +668,7 @@ pkern_snap_1d = function(g, pts, sep=1, distinct=TRUE)
 #' snap = pkern_snap_1d(g, pts, sep=sep, distinct=FALSE)
 #' pkern_snap_plot(snap, pts)
 #'
-pkern_estimate_sep = function(g, pts, distinct=TRUE, bias=10, dlim=NULL)
-{
-  # snap the points at finest detail level `(sep=1`) and sort the mapping
-  snap.result = pkern_snap_1d(g, pts, sep=1, distinct=FALSE)
-  pmap.order = order(snap.result[['pmap']])
-  pmap = snap.result[['pmap']][pmap.order]
-  dist = snap.result[['dist']][pmap.order]
-
-  # find differences between adjacent mappings
-  nmap = length(pmap)
-  dmap = diff(pmap)
-
-  # 2-means clustering
-  if( nmap > 3 )
-  {
-    # identify the cluster representing among-grid-line differences
-    gcl = stats::kmeans(dmap, 2, nstart=100)
-    idx.cl = gcl[['cluster']] == which.max(gcl[['centers']])
-    if(distinct) idx.cl = !idx.cl
-
-    # find grid resolution and set default bounds for distance as needed
-    gres = diff(g[1:2])
-    if(is.null(dlim))
-    {
-      # guess distance limits based on input points - these won't be appropriate in every situation
-      if(distinct) dlim = min(stats::dist(pts)) * c(1, 2)
-      if(!distinct) dlim = range(dmap[idx.cl]) * gres
-    }
-
-    # find grid resolution and convert dlim to (integer) separation range to test
-    seplim = pmax(round(dlim/gres), 1)
-    if(distinct) seplim[2] = min(seplim[2], ceiling(length(g)/nmap))
-    septest = seq(seplim[1], seplim[2])
-
-    # identify the best separation
-    idx.best = 1
-    if(length(septest) > 1)
-    {
-      # express pointwise differences mod sep, compute score allowing some noise around sep
-      pmapmod = lapply(septest, \(s) dmap[idx.cl] %% s )
-
-
-     # septest |> head()
-      #mapmod |> head()
-     # Map(\(m, s) pmin(m, abs(m-s)), m=mapmod, s=septest) |> head()
-
-
-      pmapmod2 = Map(\(m, s) pmin(m, abs(m-s)), m=pmapmod, s=septest)
-      pmapcost = sapply(pmapmod2, stats::mad)
-
-
-
-
-      #pmapcost = mapply(\(m, s)  stats::median( pmin(m, abs(m-s)) ), m=pmapmod, s=septest)
-
-      #pmapcost = lapply(pmapmod, stats::median)
-
-
-      # bias adjustment to favour sparser grids
-      if( bias > 0 ) pmapcost = pmapcost * ( (septest-1)^(-bias^2) )
-
-
-      #plot(septest, pmapcost, pch=NA)
-      #lines(septest, pmapcost)
-      #abline(v= septest[which.min(pmapcost)], col='red')
-
-
-
-      idx.best = which.min(pmapcost)
-    }
-
-    # select the minimum cost option
-    dsep = septest[idx.best]
-
-  } else {
-
-    # rounded median separation (used for nmap <= 3)
-    dsep = stats::median(dmap) |> round() |> max(1)
-
-  }
-
-  return(dsep)
-}
-
-# testing a replacement for above
-pkern_est_sep = function(pts, gres=c(1,1), nmax=Inf)
+pkern_estimate_sep = function(g, pts, nmax=1e2, local_search=TRUE, penalty=1, control=NULL)
 {
   # expected object classes and names
   sfnm = c('sf','sfc', 'sfg')
@@ -639,24 +678,24 @@ pkern_est_sep = function(pts, gres=c(1,1), nmax=Inf)
   # coerce various point input types and set expected column order
   if( any(sfnm %in% class(pts)) ) pts = sf::st_coordinates(pts)[,2:1]
   if( any(spnm %in% class(pts)) & requireNamespace('sp', quietly=TRUE)) pts = sp::coordinates(pts)[,2:1]
+  if( is.list(pts) ) pts = as.data.frame(pts)
   if( is.data.frame(pts) ) pts = as.matrix(pts)
-  if( !all(yxnm %in% names(pts)) ) colnames(pts)[1:2] = yxnm
-  npts = nrow(pts)
+  if( !all(yxnm %in% colnames(pts)) ) colnames(pts) = yxnm
 
   # take a sample as needed
-  pts_temp = pts
+  npts = nrow(pts)
   idx_sample = seq(npts)
   if(npts > nmax) idx_sample = sample.int(npts, size=nmax)
-  pts_temp = pts[idx_sample,]
-  npts_temp = length(idx_sample)
+  pts_sample = pts[idx_sample,]
+  npts_sample = length(idx_sample)
 
   # index for omitting 0's on diagonal of distance matrix
-  idx_diag = seq(1, npts_temp^2, by=npts_temp+1)
+  idx_diag = seq(1, npts_sample^2, by=npts_sample+1)
 
   # compute all inter-point distances in 2d, then along each dimension
-  dmat = stats::dist(pts_temp)
-  ydmat = stats::dist(pts_temp[,1])
-  xdmat = stats::dist(pts_temp[,2])
+  dmat = stats::dist(pts_sample)
+  ydmat = stats::dist(pts_sample[,'y'])
+  xdmat = stats::dist(pts_sample[,'x'])
 
   # compute a quantile representing the inter-point distance of adjacent points
   p_adjacent = 4 * (npts - sqrt(npts)) / ( npts * (npts-1) )
@@ -674,8 +713,112 @@ pkern_est_sep = function(pts, gres=c(1,1), nmax=Inf)
   d_x = sqrt( (d_adjacent^2) / (1 + yx_scale^2) )
   d_y = yx_scale * d_x
 
+  # set default resolution
+  gres = g[['gres']]
+  if( is.null(gres) ) gres = c(1,1)
+  if( !all(yxnm %in% names(gres) ) ) names(gres) = yxnm
+
   # transform to number of grid cells and return as named vector
-  sep_y = pmax(1, floor(d_x/gres[1]) )
-  sep_x = pmax(1, floor(d_y/gres[2]) )
-  return(c(y=sep_y, x=sep_x))
+  sep_y = pmax(1, floor(d_x/gres['y']) )
+  sep_x = pmax(1, floor(d_y/gres['x']) )
+  sep = c(y=sep_y, x=sep_x)
+  if( !local_search ) return(sep)
+
+  # run further optimization
+  if( is.null(control) ) control = list(maxit=5e2)
+  optim_result = optim(sep, pkern_snap_score_2d,
+                       g_target=g,
+                       pts=as.list(as.data.frame(pts_sample)),
+                       penalty=penalty,
+                       control=control)
+
+  # round to nearest valid integer
+  sep_local = optim_result[['par']] |> round()
+  idx_over = sep_local > g[['gdim']]
+  idx_under = sep_local < c(1, 1)
+  sep_local[idx_over] = g[['gdim']][idx_over]
+  sep_local[idx_under] = 1
+  return(sep_local)
+}
+
+
+
+#' Estimate the least-distance offset for 1D regular grid with respect to a set of points
+#'
+#' For a set of (possibly irregularly positioned) 1d points `pts` and a regular grid `g`,
+#' the function attempts to find the integer-valued offset `off` (an element of `seq(sep)`)
+#' that minimizes the snapping distance (sum) from `pts` to the subgrid of `g` with spacing
+#' `sep`. The resulting subgrid points are located at `g[seq(off, length(g), by=sep)]`
+#'
+#' Note that `sep-1` specifies the number of grid lines (in `g`) skipped between adjacent
+#' subgrid lines, ie it is an index, not a distance (which depends on the resolution of `g`).
+#' Similarly, the output `off` is an offset index. However, in the algorithm, `off` is
+#' treated like a continuous quantity lying in `c(1, sep)` for the purpose of sampling
+#' test values, as described next:
+#'
+#' The algorithm is a simple iterative parameter sweep. In each iteration, the parameter space
+#' (initialized to `c(1, sep)`) is sampled at `n_per_iter` uniformly spaced values, say off_i,
+#' for i = 1, ..., `n_per_iter`, rounded to the nearest integer, and with duplicates omitted.
+#' The best (least distance) option, off_j, is identified and a new reduced parameter space is
+#' defined around it with bounds (off_{j-2}, off_{j+2}). The process is repeated until a
+#' maximum `max_iter` iterations is reached, or until the set of test offsets (off_i) ceases
+#' to change
+#'
+#' @param g numeric vector of grid point positions
+#' @param pts numeric vector of point positions
+#' @param sep integer specifying the spacing of grid lines
+#' @param max_iter positive integer > 1, the maximum number of iterations
+#' @param n_per_iter positive integer > 1, the maximum number of iterations
+#'
+#' @return positive integer, the offset index (an element of `seq(sep)`)
+#' @export
+#'
+#' @examples
+#' g = 1:100
+#' off_test = 6
+#' sep = 7
+#' pts = seq(off_test, max(g), by=sep)
+#' pkern_est_offset(g, pts, sep)
+#'
+#' # noisy example
+#' pts_noisy = pts + rnorm(length(pts))
+#' pkern_est_offset(g, pts_noisy, sep)
+pkern_est_offset = function(g, pts, sep, max_iter=10L, n_per_iter=100L)
+{
+  # handle trivial requests (exhaustive search)
+  if( !(sep > n_per_iter) )
+  {
+    # sample all offset values and return the best one
+    test_out = sapply(seq(sep), \(off) pkern_snap_score_1d(g, pts, sep, off))
+    return( which.min(test_out) )
+  }
+
+  # initial interval for optimizer
+  min_z_new = 1
+  max_z_new = sep
+
+  # flags for exit condition
+  i = 1
+  is_finished = FALSE
+  while(i < max_iter + 1 & !is_finished)
+  {
+    min_z = min_z_new
+    max_z = max_z_new
+
+    # test values are rounded and pruned to unique set
+    off_test = seq(min_z, max_z, length.out=n_per_iter) |> round() |> unique()
+    off_n = length(off_test)
+
+    # evaluate scores
+    test_out = sapply(off_test, \(off) pkern_snap_score_1d(g, pts, sep, off))
+    idx_best = which.min(test_out)
+
+    min_z_new = ifelse(idx_best < 3, min_z, off_test[idx_best-2])
+    max_z_new = ifelse(idx_best > off_n - 2, max_z, off_test[idx_best+2])
+
+    is_finished = (min_z == min_z_new) & (max_z == max_z_new)
+    i = i + 1
+  }
+
+  return(off_test[idx_best])
 }
