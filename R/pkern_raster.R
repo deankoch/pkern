@@ -20,24 +20,29 @@ pkern_checkRaster = function()
 }
 
 
-#' Vectorize a RasterLayer in column-vectorized order
+#' Load/vectorize a RasterLayer or SpatRaster (in column-vectorized order)
 #'
 #' The `values` function from the raster and terra packages returns data in row-vectorized
 #' order. This function reorders them to column-vectorized order so they can be passed to
-#' other pkern_* functions
+#' other pkern_* functions.
+#'
+#' In addition to the raster data, the function retrieves information on the spatial
+#' configuration of the raster, in the y-x order expected by pkern_* functions
 #'
 #' The return value depends on argument `what`:
 #'
 #' "gdim": returns integer vector `c(ny, nx)`, the number of y and x grid lines
 #' "gres": returns `c(dy, dx)`, the x and y distances between grid lines (ie the resolution)
+#' "crs": returns the WKT string data on projections
 #' "gyx": returns `list(y, x)`, a list of vectors containing the y and x grid line positions
 #' "gval": returns a vector containing the raster data in column-vectorized order
-#' "all": returns a named list containing the above four objects
+#' "all": returns a named list containing the above five objects
+#' "g": returns a named list containing everything but 'gval'
 #'
 #' @param r a RasterLayer, RasterStack, or SpatRaster to vectorize
-#' @param what character, one of: 'gdim', 'gres', 'crs', 'gyx', 'gval' or 'all'
+#' @param what character, one of: 'gdim', 'gres', 'crs', 'gyx', 'gval', 'g', 'all'
 #'
-#' @return For default `what=='all'`, a named list containing 4 objects (see details)
+#' @return For default `what=='all'`, a named list containing 5 objects (see details)
 #' @export
 #'
 #' @examples
@@ -115,7 +120,7 @@ pkern_fromRaster = function(r, what='all')
     gcrs = terra::crs(r)
     if( what == 'crs' ) return(gcrs)
 
-    # extract grid line positions
+    # extract grid line positions only when needed
     if( what != 'gval' )
     {
       gy = sort(terra::yFromRow(r, seq(gdim['y'])))
@@ -125,6 +130,9 @@ pkern_fromRaster = function(r, what='all')
       # finish grid line mode
       if( what == 'gyx' ) return(gyx)
     }
+
+    # return from no-values requests
+    if( what == 'g' ) return( list(gdim=gdim, gres=gres, crs=gcrs, gyx=gyx) )
 
     # extract data in column-vectorized order and finish
     gval = terra::values(r)[ pkern_r2c(gdim) ]
