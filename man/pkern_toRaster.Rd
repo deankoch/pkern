@@ -2,7 +2,7 @@
 % Please edit documentation in R/pkern_raster.R
 \name{pkern_toRaster}
 \alias{pkern_toRaster}
-\title{Convert column-vectorized grid to RasterLayer}
+\title{Convert column-vectorized grid to SpatRaster}
 \usage{
 pkern_toRaster(g = NULL, gdim = NULL, template = NULL)
 }
@@ -13,8 +13,8 @@ pkern_toRaster(g = NULL, gdim = NULL, template = NULL)
 
 \item{template}{optional RasterLayer to use as template (for setting crs, resolution etc)
 
-Produces a RasterLayer from a vector or matrix. This essentially a wrapper for various
-\code{raster::raster} calls where the input data is in column-vectorized form.
+Converts a column-vectorized vector or matrix to a SpatRaster, or, if terra is unavailable,
+a RasterLayer.
 
 \code{g} can either be a matrix (in which case \code{gdim} can be omitted) or its vectorized
 equivalent, or a list containing elements returned by \code{pkern_fromRaster}. If the list
@@ -27,13 +27,13 @@ When template is supplied, it supercedes any properties (eg 'crs') supplied in \
 a RasterLayer containing the data from \code{rvec}
 }
 \description{
-Convert column-vectorized grid to RasterLayer
+Convert column-vectorized grid to SpatRaster
 }
 \examples{
 if( requireNamespace('raster') ) {
 r.in = system.file('external/rlogo.grd', package='raster') |> raster::raster(band=1)
 pkern.in = pkern_fromRaster(r.in)
-print(pkern_toRaster(pkern.in))
-print(r.in)
+r = pkern_toRaster(pkern.in)
+print(r)
 }
 }

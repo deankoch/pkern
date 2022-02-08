@@ -9,14 +9,14 @@ pkern_coords(g, out = "matrix", nosort = FALSE, quiet = FALSE)
 \arguments{
 \item{g}{a list of grid line coordinates, or an object containing them (see details)}
 
-\item{out}{character indicating return value type, either 'list' or 'matrix'}
+\item{out}{character indicating return value type, either 'list', 'matrix', or 'sf'}
 
 \item{nosort}{logical indicating to assume input \code{g} is sorted correctly}
 
 \item{quiet}{logical indicated to drop warnings}
 }
 \value{
-a matrix or list of grid coordinates in column vectorized order
+a matrix, list, or sf POINT collection, in column vectorized order (wrt grid)
 }
 \description{
 Expands a set of "y" and "x" grid line locations in column vectorized order,
@@ -30,12 +30,15 @@ but the coordinates in \code{g} must have "y" in decreasing order and "x" in inc
 order.
 
 \code{g} should either be a list of "y" and "x" coordinates, or an object from which they
-can be extracted (RasterLayer, or list output from functions like \code{pkern_snap},
-\code{pkern_fromRaster}). If \code{g} is a vector of length 2, it is assumed to be the
-dimensions (ni, nj) of the grid, and a sequence of integer grid line positions
+can be extracted (SpatRaster, RasterLayer, or list output from functions like
+\code{pkern_snap}, \code{pkern_fromRaster}). If \code{g} is a vector of length 2, it is assumed to
+be the dimensions (ni, nj) of the grid, and a sequence of integer grid line positions
 is generated.
 }
 \examples{
 pkern_coords(g=c(3,2))
 pkern_coords(g=list(y=1:5, x=2:3))
+if( requireNamespace('sf') ) {
+pkern_coords(g=list(y=1:5, x=2:3), out='sf')
+}
 }

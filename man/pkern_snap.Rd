@@ -4,7 +4,7 @@
 \alias{pkern_snap}
 \title{Snap an irregular set of 2d points to the nearest regular subgrid}
 \usage{
-pkern_snap(gyx, pts, sep = NULL, distinct = TRUE, quiet = FALSE)
+pkern_snap(gyx, pts, sep = NULL, distinct = FALSE, quiet = FALSE)
 }
 \arguments{
 \item{gyx}{list of two vectors, the y and x grid line coordinates (ascending order)}
@@ -63,31 +63,42 @@ with several indexing vectors for mapping between the input points and the grid 
 \examples{
 # define a grid of coordinates and add jitter to a subgrid
 gdim = c(y=100, x=100)
-nsep = c(y=5, x=8)
-g = Map(\(p, s) seq(1, p, by=s), p=gdim, s=nsep)
-ng = prod(sapply(g, length))
-pts = expand.grid(g) + stats::rnorm(2*ng)
+gres = c(y=2, x=2)
+sep = c(y=5, x=8)
+gyx = Map(\(p, r) seq(1, p, by=r), p=gdim, r=gres)
+ng = prod(sapply(gyx, length))
+pts = Map(\(p, r) seq(1, p, by=r), p=gdim, r=sep*gres) |>
+expand.grid() + stats::rnorm(2*ng, 0 , 3)
 
 # plot grid and the point set generated from it
-pkern_snap_plot(g, pts)
+pkern_snap_plot(gyx, pts)
 
-# snap to grid lines, allowing duplicates
-snap = pkern_snap(g, pts, distinct=FALSE)
+# compute score for a range of y separation values, given sep_x=18
+sep_test = seq_along(gyx[['y']])
+g = list(gyx=gyx, gdim=gdim, gres=gres)
+pts_list = pts |> as.data.frame() |> as.list()
+test_score = sapply(sep_test, \(y) pkern_snap_score_2d(sep=c(y=y, x=8), g, pts_list))
+plot(sep_test, test_score, pch=16, cex=0.5)
+lines(sep_test, test_score)
+
+# estimate sep based on this score and the distance distribution among points
+sep = pkern_estimate_sep(g, pts)
+print(sep)
+
+# plot resulting snapping map
+snap = pkern_snap(g, pts, sep)
 pkern_snap_plot(snap, pts)
 
 # snap to grid lines, eliminate duplicates
-snap.distinct = pkern_snap(g, pts)
+snap.distinct = pkern_snap(g, pts, distinct=TRUE)
 pkern_snap_plot(snap.distinct, pts)
 
-# another example with and more jitter and too many points
-pts = expand.grid(g) + stats::rnorm(2*ng, sd=3)
+# another example with and more jitter
+pts = expand.grid(gyx) + stats::rnorm(2*ng, sd=3)
 pts = pts[sample(ng, 50),]
 pkern_snap_plot(g, pts)
-snap = pkern_snap(g, pts, sep=3, distinct=FALSE)
+snap = pkern_snap(g, pts, sep=3)
 pkern_snap_plot(snap, pts)
-
-# uncomment this line to demonstrate error handling
-#snap.distinct = pkern_snap(g, pts, sep=3)
 
 # call again with smaller sep
 snap.distinct = pkern_snap(g, pts, sep=2)
@@ -96,5 +107,4 @@ pkern_snap_plot(snap.distinct, pts)
 # call again with sep determined automatically
 snap.distinct = pkern_snap(g, pts)
 pkern_snap_plot(snap.distinct, pts)
-
 }

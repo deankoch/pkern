@@ -22,9 +22,9 @@ coordinates snap to those of a larger array.
 \details{
 NAs are assigned to all output grid points not mapped to \code{z}.
 
-When \code{z} is an object containing the grid size (matrix, RasterLayer or list),
-\code{gdim} is ignored (with a warning) and can be omitted. When \code{z} is a vector, it
-should be in column-vectorized order and have length \code{prod(gdim)}.
+When \code{z} is an object containing the grid size (matrix, SpatRaster, RasterLayer, or
+list), \code{gdim} is ignored (with a warning) and can be omitted. When \code{z} is a vector,
+it should be in column-vectorized order and have length \code{prod(gdim)}.
 }
 \examples{
 

@@ -298,6 +298,7 @@ pkern_plot = function(z, gdim=NULL, gyx=NULL, gres=1, ppars=list())
 }
 
 
+# TODO: fix this for gxp with large range??
 #' Make a heatmap of covariances/correlations around a grid's central point
 #'
 #' This function displays a separable kernel by building a grid of size `gdim`,

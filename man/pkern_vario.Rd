@@ -7,7 +7,7 @@
 pkern_vario(
   gdim,
   vec,
-  lags = NA,
+  dmax = NA,
   fit.method = "rmedian",
   diagonal = TRUE,
   gres = NA,
@@ -21,7 +21,7 @@ pkern_vario(
 
 \item{vec}{numeric vector of data, in column vectorized order (length \code{prod(dims)})}
 
-\item{lags}{list c(dy, dx) of positive integer vectors, grid line lags to sample}
+\item{dmax}{numeric, the maximum lag distance (only shorter lags are sampled)}
 
 \item{fit.method}{character, one of "matheron", "rmean", "rmedian", passed to \code{pkern_xvario}}
 
@@ -50,15 +50,20 @@ in list elements "y", "x". If \code{diagonal=TRUE}, the function also returns "d
 input grid (see \code{pkern_r45}) assuming equal y and x resolution. For unequal resolution
 the rotation angle is \code{atan(gres[2]/gres[1])}.
 
-Note that input \code{lags} is specified in terms of grid line indices (integers), not
-distances (their product with the x or y resolution). However, non-integer separation
-distances can be specified by setting the resolution of the input grid (dy, dx) in
-argument \code{gres}. When \code{gres} is supplied, the output "lags" values are scaled accordingly
-and \code{dmax} is interpreted as a distance, rather than a number of grid lines.
+For convenience, \code{gdim} can be a list containing both the 'gdim' and 'gres' arguments.
+If the sub-list \code{gdim$sg} exists, the function copies these arguments from \code{gdim$sg$gdim}
+and \code{gdim$sg$gres}. Otherwise it looks for them in \code{gdim$gdim} and \code{gdim$gres}.
+For example, \code{gdim} can be the output of \code{pkern_snap} (to sample from snapped points) or
+\code{pkern_fromRaster} (to sample from raster values).
 
-When \code{gres} is not supplied, the function assumes that the x grid lines have the same
-spacing distance (1) as the y grid lines. In this case, diagonally adjacent
-grid points have separation distance \code{sqrt(2)}.
+You can (and, with large grids, probably should) set \code{dmax} to specify a maximum
+sampling distance. This both speeds computations, and omits pathological tail behavior
+from variogram fitting downstream. \code{dmax} should be given in the same units as \code{gres}.
+Output lags are also given in these units, as are the x-axis values drawn by
+\code{pkern_vario_plot}.
+
+When \code{gres} is not supplied (directly, or in \code{gdim}), the function assumes
+that the x and y grid lines have spacing 1.
 }
 \examples{
 gdim = c(1e2, 2e2)

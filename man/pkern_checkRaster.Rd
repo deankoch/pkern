@@ -2,15 +2,15 @@
 % Please edit documentation in R/pkern_raster.R
 \name{pkern_checkRaster}
 \alias{pkern_checkRaster}
-\title{Check if raster package is loaded and print error message otherwise}
+\title{Check if terra or raster package is loaded and print error message otherwise}
 \usage{
 pkern_checkRaster()
 }
 \value{
-nothing
+logical vector, indicating if the package is loaded
 }
 \description{
-Check if raster package is loaded and print error message otherwise
+Check if terra or raster package is loaded and print error message otherwise
 }
 \examples{
 pkern_checkRaster()

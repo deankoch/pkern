@@ -2,37 +2,34 @@
 % Please edit documentation in R/pkern_raster.R
 \name{pkern_fromRaster}
 \alias{pkern_fromRaster}
-\title{Vectorize a RasterLayer in column-vectorized order}
+\title{Load/vectorize a RasterLayer or SpatRaster (in column-vectorized order)}
 \usage{
-pkern_fromRaster(r, what = "all")
+pkern_fromRaster(r, what = "all", quiet = FALSE)
 }
 \arguments{
-\item{r}{a RasterLayer to vectorize}
+\item{r}{a RasterLayer, RasterStack, or SpatRaster to vectorize}
 
-\item{what}{character, one of: 'gdim', 'gres', 'crs', 'gyx', 'gval' or 'all'}
+\item{what}{character, one of: 'gdim', 'gres', 'crs', 'gyx', 'gval', 'g', 'all'}
 }
 \value{
-For default \code{what=='all'}, a named list containing 4 objects (see details)
+For default \code{what=='all'}, a named list containing 5 objects (see details)
 }
 \description{
-Calls to raster::values or raster::getValues produce the data in row-vectorized
-order. This function reorders them to column-vectorized order so they can be
-passed to other pkern_* functions
+The \code{values} function from the raster and terra packages returns data in row-vectorized
+order. This function reorders them to column-vectorized order so they can be passed to
+other pkern_* functions.
 }
 \details{
+In addition to the raster data, the function retrieves information on the spatial
+configuration of the raster, in the y-x order expected by pkern_* functions
+
 The return value depends on argument \code{what}:
 
 "gdim": returns integer vector \code{c(ny, nx)}, the number of y and x grid lines
 "gres": returns \code{c(dy, dx)}, the x and y distances between grid lines (ie the resolution)
+"crs": returns the WKT string data on projections
 "gyx": returns \code{list(y, x)}, a list of vectors containing the y and x grid line positions
 "gval": returns a vector containing the raster data in column-vectorized order
-"all": returns a named list containing the above four objects
-}
-\examples{
-if( requireNamespace('raster') ) {
-r.in = system.file('external/rlogo.grd', package='raster') |> raster::raster(band=1)
-pkern.in = pkern_fromRaster(r.in)
-pkern_plot(pkern.in)
-pkern.in$gval |> matrix(pkern.in$gdim) |> pkern_plot()
-}
+"all": returns a named list containing the above five objects
+"g": returns a named list containing everything but 'gval'
 }

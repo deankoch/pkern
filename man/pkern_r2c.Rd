@@ -35,8 +35,8 @@ for matrices where rows are numbered from top to bottom. Packages \code{raster} 
 have different conventions, so this function is useful for reordering vectorizations when
 switching between methods.
 
-\code{gdim} can be a length-2 vector or a RasterLayer object, from which the dimensions are
-extracted.
+\code{gdim} can be a length-2 vector or a SpatRaster/RasterLayer object, from which the
+dimensions are extracted.
 }
 \examples{
 

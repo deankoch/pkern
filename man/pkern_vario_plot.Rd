@@ -17,13 +17,15 @@ pkern_vario_plot(vario, pars = NULL, plotpars = NULL)
 prints a plot and returns nothing
 }
 \description{
-Plots the output of \code{pkern_vario} or \code{pkern_xvario}, optionally includind the theoretical
+Plots the output of \code{pkern_vario} or \code{pkern_xvario}, optionally including the theoretical
 semivariogram values for a model specified in \code{pars} (eg the return value of \code{pkern_vario_fit}).
+Note that the plot shows semivariance (gamma), whereas the "vg" elements returned by
+\code{pkern_vario} are variogram values (2*gamma).
 }
 \details{
 \code{pars} should be a list containing named elements: "y" and "x", lists of y and x kernel
-parameters in form recognized by \code{pkern_corr}; "v", the pointwise variance in the absence
-of a nugget effect and, optionally, "nug", the variance of the nugget effect.
+parameters in form recognized by \code{pkern_corr}; "psill", the partial sill and, optionally,
+"nug", the nugget variance.
 
 \code{plotpars} applies to all plots. It should be a list containing any of the following elements:
 

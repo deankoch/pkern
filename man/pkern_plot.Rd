@@ -7,7 +7,7 @@
 pkern_plot(z, gdim = NULL, gyx = NULL, gres = 1, ppars = list())
 }
 \arguments{
-\item{z}{numeric vector, matrix, RasterLayer, or list}
+\item{z}{numeric vector, matrix, SpatRaster, RasterLayer, or list}
 
 \item{gdim}{c(ni, nj), the number of rows and columns in the grid}
 

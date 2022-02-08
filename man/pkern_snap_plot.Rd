@@ -47,21 +47,21 @@ vectors (and no connecting lines are drawn).
 \code{ppars} is a list with any of the following (optional) named elements: "gcol", "mcol",
 "dcol", and "pcol". They are the colors of, respectively, the grid lines, the snapped grid
 lines connecting lines, and points (passed as parameter "col" to the appropriate \code{graphics}
-call); and "yaxis" is a logical that applies only in the 1d case, indicating to plot point
-locations along the y (instead of x) axis.
+call).
 }
 \examples{
 # 1d case
-g = seq(1, 100, by=2)
-ng = length(g)
-pts = g + stats::rnorm(ng)
-pkern_snap_plot(g, pts)
+gyx = seq(1, 100, by=2)
+pkern_snap_plot(gyx)
+ng = length(gyx)
+pts = gyx + stats::rnorm(ng)
+pkern_snap_plot(gyx, pts)
 
 # plot again with with points mapped to grid line that generated them
-pkern_snap_plot(gyx=list(gyx=g), pts)
+pkern_snap_plot(gyx=list(gyx=g, pmap=seq(gyx)), pts)
 
 # plot again with a random mapping
-pkern_snap_plot(list(gyx=g, pmap=sample(seq(ng), ng)), pts)
+pkern_snap_plot(list(gyx=gyx, pmap=sample(seq(ng), ng)), pts)
 
 # 2d case
 gdim = c(30, 25)
@@ -71,8 +71,9 @@ yx = expand.grid(gyx)
 pts = yx + stats::rnorm(prod(dim(yx)))
 pkern_snap_plot(gyx, pts)
 
-# plot again with a mapping from pts to gyx
-pkern_snap_plot(gyx=list(gyx=gyx), pts)
+# plot again with with points mapped to grid line that generated them
+pmap = Map(\(p, s) match(p, s), p=yx, s=gyx)
+pkern_snap_plot(gyx=list(gyx=gyx, pmap=pmap), pts)
 
 # TODO: examples with pkern_snap
 }

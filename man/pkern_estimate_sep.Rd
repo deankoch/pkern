@@ -2,20 +2,16 @@
 % Please edit documentation in R/pkern_snap.R
 \name{pkern_estimate_sep}
 \alias{pkern_estimate_sep}
-\title{Estimate separation distance between grid lines}
+\title{Estimate separation distance between grid lines in 2-dimensional grids}
 \usage{
-pkern_estimate_sep(g, pts, distinct = TRUE, bias = 10, dlim = NULL)
-}
-\arguments{
-\item{g}{vector of grid line locations in ascending order}
-
-\item{pts}{vector of point locations in 1D}
-
-\item{distinct}{logical, indicating to look for 1-to-1 mappings}
-
-\item{bias}{nonegative numeric, a tuning parameter}
-
-\item{dlim}{length-2 positive numeric, lower/upper bounds for separation distance}
+pkern_estimate_sep(
+  g,
+  pts,
+  nmax = 100,
+  local_search = TRUE,
+  penalty = 1,
+  control = NULL
+)
 }
 \value{
 the estimated value of \code{sep}

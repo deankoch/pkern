@@ -6,13 +6,13 @@
 \usage{
 pkern_vario_fit(
   vario,
-  ypars = "gau",
+  ypars = "mat",
   xpars = ypars,
   psill = NULL,
   nug = NULL,
   add = 0,
   dmax = Inf,
-  fit.method = "n/v"
+  fit.method = "n/d"
 )
 }
 \arguments{
@@ -64,9 +64,13 @@ to resolve issues of convergence to incorrect local optima.
 
 \code{fit.method} controls the type of weights assigned to the sum of squares from each
 spatial lag: '1' assigns unit weight to all lags (OLS); 'n' weights be sample size;
-'n/d' uses sample size divided by squared distance (the default in \code{gstat}); and
-'n/v' (the default) uses the robust estimator of Cressie (1993, Ch. 2.6.2), which
-divides sample size by squared theoretical semivariance.
+'n/d' uses sample size divided by squared distance (the default here, as in \code{gstat});
+and 'n/v uses the robust estimator of Cressie (1993, Ch. 2.6.2), which divides sample
+size by squared theoretical semivariance.
+
+when \code{xpars} is set to \code{NULL}, the function fits only the y parameters, and the x
+kernel is made identical to the y kernel. For example with the Gaussian kernel, this
+enforces isotropy.
 }
 \examples{
 gdim = c(1e2, 2e2)
