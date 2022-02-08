@@ -339,7 +339,7 @@ pkern_snap_plot_defaults = function(gyx, pmap, pts)
 #' # call again with sep determined automatically
 #' snap.distinct = pkern_snap(g, pts)
 #' pkern_snap_plot(snap.distinct, pts)
-pkern_snap = function(gyx, pts, sep=NULL, distinct=FALSE, quiet=FALSE)
+pkern_snap = function(gyx, pts, sep=NULL, distinct=FALSE, quiet=FALSE, penalty=1)
 {
   # initialize output list
   g = list(gres=c(1,1), sg=list())
@@ -374,9 +374,7 @@ pkern_snap = function(gyx, pts, sep=NULL, distinct=FALSE, quiet=FALSE)
   if( !all(yxnm %in% names(pts)) ) names(pts)[1:2] = yxnm
 
   # auto-detect sep or coerce as needed
-  if( is.null(sep) ) sep = pkern_estimate_sep(modifyList(g, list(gyx=gyx)), pts)
-
-  #if( is.null(sep) ) sep = Map(\(yx, p) pkern_estimate_sep(yx, p, distinct=F), gyx, pts)
+  if( is.null(sep) ) sep = pkern_estimate_sep(modifyList(g, list(gyx=gyx)), pts, penalty=penalty)
   if( length(sep) == 1 ) sep = rep(sep, 2)
   if( !all( yxnm %in% names(sep) ) ) names(sep)[1:2] = yxnm
 
@@ -387,8 +385,6 @@ pkern_snap = function(gyx, pts, sep=NULL, distinct=FALSE, quiet=FALSE)
   if( ( npts > prod(g[['gdim']]) ) & distinct ) stop(msg.unbalanced)
 
   # separately process x and y dimensions with 1d snapper,
-  #snap.yx = Map(\(yx, p, s) pkern_snap_1d(yx, p, s, distinct=F), yx=gyx, p=pts, s=sep)
-  #snap = Map(\(y, x) stats::setNames(list(y, x), yxnm), snap.yx[['y']], snap.yx[['x']])
   snap_yx = Map(\(yx, p, s) {
 
     off = pkern_est_offset(yx, p, s)
