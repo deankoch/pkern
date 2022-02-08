@@ -300,7 +300,8 @@ pkern_precompute = function(gdim, gli, pars, zobs=NULL, makev=FALSE)
 
   # find indices of grid lines on and off subgrid
   mapsg = Map(\(m, sep) seq(min(m), max(m), by=sep), m=mapu, sep=dsg)
-  mapsg.c = mapply(\(s, g) seq(g)[-s], g=gdim, s=mapsg)
+  #mapsg.c = mapply(\(s, g) seq(g)[-s], g=gdim, s=mapsg)
+  mapsg.c = Map(\(s, g) seq(g)[-s], g=gdim, s=mapsg)
 
   # index of subgrid points in full grid, and all points on one of its grid lines
   idx.s = pkern_idx_sg(gdim, mapsg)
@@ -449,7 +450,7 @@ pkern_cmean = function(zobs, gdim, pars, gli=NULL, pc=FALSE)
   # pointwise variances are equal to the eigenvalues plus the nugget variance
   pwv = pars[['nug']] + pc[['ed']][['values']]
 
-  # pad data vector with zeros (equivalent to subsetting cross-correlation matrices below)
+  # pad data vector with zeros (equivalent to subset cross-correlation matrices below)
   zd.mod = Matrix::Matrix(rep(0, nsg))
 
   # missing data case: not all points in subgrid are sampled
