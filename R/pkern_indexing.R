@@ -366,7 +366,7 @@ pkern_coords = function(g, out='matrix', nosort=FALSE, quiet=FALSE)
   # sf output requires a bit more work
   sf.loaded = requireNamespace('sf', quietly=TRUE)
   if( !sf.loaded ) stop('sf package not loaded. Try library(sf)')
-  cat(paste('processing', ng, 'grid points...'))
+  cat(paste('processing', ng, 'grid points...\n'))
 
 
   return( st_as_sf(as.data.frame(omat), coords=c('x', 'y'), crs=crs_out) )
