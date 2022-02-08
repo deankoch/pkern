@@ -4,7 +4,7 @@
 # Functions for converting gridded data to and from RasterLayer format
 #
 
-#' Check if raster package is loaded and print error message otherwise
+#' Check if terra or raster package is loaded and print error message otherwise
 #'
 #' @return logical vector, indicating if the package is loaded
 #' @export
@@ -64,9 +64,9 @@ pkern_checkRaster = function()
 #' if( requireNamespace('terra') ) {
 #' str(pkern_fromRaster(terra::rast(r.in)))
 #' }
-pkern_fromRaster = function(r, what='all')
+pkern_fromRaster = function(r, what='all', quiet=FALSE)
 {
-  # stop with an error message if raster package is unavailable
+  # stop with an error message if terra/raster packages unavailable
   pkern_checkRaster()
 
   # expected object classes and names
@@ -141,7 +141,9 @@ pkern_fromRaster = function(r, what='all')
 
   }
 
-
+  # unrecognized objects are returned unchanged with a warning
+  if( !quiet ) warning('input r was not a raster or terra class object')
+  return(r)
 }
 
 #' Convert column-vectorized grid to SpatRaster
@@ -246,6 +248,124 @@ pkern_toRaster = function(g=NULL, gdim=NULL, template=NULL)
     }
     return(r_out)
   }
+}
+
+# TODO: documentation for these
+
+# unpack a points dataset into a list understood by other pkern functions
+pkern_fromPoints = function(pts, what='all')
+{
+  # expected object classes and names
+  sf_classes = c('sf','sfc', 'sfg')
+  sp_classes = c('SpatialPoints', 'SpatialPointsDataFrame')
+  yx_names = stats::setNames(nm=c('y', 'x'))
+
+  # initialize outputs
+  crs_out = NULL
+  yx_out = NULL
+  ext_out = NULL
+  bbox_out = NULL
+  is_spatial = FALSE
+
+  # handle sf class objects
+  if( any( sf_classes %in% class(pts) ) )
+  {
+    # copy crs wkt and convert matrix to list
+    is_spatial = TRUE
+    crs_out = sf::st_crs(pts)
+    yx_out = sf::st_coordinates(pts)[,2:1] |> apply(2, identity, simplify=FALSE) |> setNames(yx_names)
+  }
+
+  # sp class objects are handled the same way, just with different function names
+  if( any( sp_classes %in% class(pts) ) & requireNamespace('sp', quietly=TRUE) )
+  {
+    # copy crs wkt and convert matrix to list
+    is_spatial = TRUE
+    crs_out = sp::wkt(pts)
+    yx_out = sp::coordinates(pts)[,2:1] |> apply(2, identity, simplify=FALSE) |> setNames(yx_names)
+  }
+
+  # convert matrices and dataframes to list (via matrix)
+  if( is.data.frame(pts) & !is_spatial ) pts = as.matrix(pts)
+  if( is.matrix(pts) )
+  {
+    yx_out = apply(pts, 2, identity, simplify=FALSE)
+    if( !all(yx_names %in% names(yx_out) ) ) names(yx_out)[1:2] = yx_names
+    yx_out = yx_out[1:2]
+  }
+
+  # read any user-supplied list-style inputs
+  extra_out = list()
+  if( is.list(pts) )
+  {
+    if( is.null(crs_out) ) crs_out = pts[['crs']]
+    if( is.null(yx_out) ) yx_out = pts[['yx']]
+
+    # copy any unrecognized list entries (to append to output)
+    idx_overwrite = names(pts) %in% c('crs', 'yx', 'ext', 'bbox')
+    if( sum(!idx_overwrite) > 0 ) extra_out = pts[!idx_overwrite]
+  }
+
+  # return coordinates or crs as requested
+  if( what == 'yx') return(yx_out)
+  if( what == 'crs') return(crs_out)
+
+  # skip if coordinates not supplied
+  if( !is.null(yx_out) )
+  {
+    # compute extent
+    ext_out = lapply(yx_out, range)
+    if( what == 'ext') return(ext_out)
+    bbox_names = c('ymin', 'ymax', 'xmin', 'xmax')
+
+    # build sf class bounding box polygon
+    bbox_out = unlist(ext_out) |> setNames(bbox_names) |> sf::st_bbox(crs=crs_out) |> sf::st_as_sfc()
+    if( what == 'bbox') return(bbox_out)
+  }
+
+  # warn about missing CRS as needed and finish
+  if( is_spatial & is.null(crs_out) ) warning('no coordinate reference system found')
+  return( c(list(yx=yx_out, crs=crs_out, ext=ext_out, bbox=bbox_out), extra_out) )
+}
+
+# defines a grid based number of grid lines and (optionally) an existing spatial extent
+pkern_grid = function(gdim, gext=NULL)
+{
+  # defaults
+  yx_names = stats::setNames(nm=c('y', 'x'))
+  crs_ext = NULL
+  gdim_ext = NULL
+
+  # handle raster input to gext
+  raster_classes = c('RasterLayer', 'RasterStack', 'SpatRaster')
+  if( any(c(raster_classes) %in% class(gext)) )
+  {
+    crs_ext = pkern_fromRaster(gext, 'crs')
+    gdim_ext = pkern_fromRaster(gext, 'gdim')
+    gext = pkern_fromRaster(gext, 'gyx') |> lapply(range)
+  }
+
+  # handle list input to gext
+  #if( is.list(gext) ) gext = as.data.frame(gext)
+
+  # handle dataframe, matrix, sf, sp input to gext
+  gext = pkern_fromPoints(gext)
+  if( is.list(gext) )
+  {
+    crs_ext = gext[['crs']]
+    gext = gext[['ext']]
+  }
+
+  # handle length-1 gdim argument
+  if( length(gdim) == 1 ) gdim = rep(gdim, 2) |> stats::setNames(yx_names)
+
+  # set default extent when no extent supplied (coordinates set to equal to grid line numbers)
+  if( is.null(gext) ) gext = lapply(gdim, \(x) c(1, x) ) |> stats::setNames(yx_names)
+
+  # compute new resolution and calculate equally spaced grid line positions
+  gres = mapply(\(ext, d) diff(ext) / (d-1), ext=gext, d=gdim) |> stats::setNames(yx_names)
+  gyx = Map(\(r, g) seq(r[1], r[2], by=diff(r)/g), r=gext, g=gdim-1) |> stats::setNames(yx_names)
+  return( list(gyx=gyx, crs=crs_ext, gres=gres, gdim=gdim) )
 }
 
 
