@@ -330,12 +330,12 @@ pkern_vario = function(gdim, vec, dmax=NA, fit.method='rmedian', diagonal=TRUE,
   #if( anyNA(lags) ) lags = lapply(gdim, \(d) seq(d-1))
   #if( !is.list(lags) ) lags = list(y=lags, x=lags)
 
-  # set default dmax to diagonal span of grid (this samples all lags)
+  # set default dmax to diagonal span of grid (samples all lags)
   diagstep = sqrt( sum( gres^2 ) )
   if( is.na(dmax) ) dmax = min( gdim ) * diagstep
 
   # set sample lags based on dmax (always include at least one)
-  lags = ceiling(dmax/gres) |> pmin(gdim) |> pmax(c(1,1)) |> as.list() |> lapply(seq)
+  lags = ceiling(dmax/gres) |> pmin(gdim-1) |> pmax(c(1,1)) |> as.list() |> lapply(seq)
 
   # compute x semivariances
   if( !quiet ) cat('\nidentifying horizontal lags...')
@@ -452,7 +452,7 @@ pkern_vario = function(gdim, vec, dmax=NA, fit.method='rmedian', diagonal=TRUE,
 #' pkern_plot(pars.fitted2)
 #'
 pkern_vario_fit = function(vario, ypars='mat', xpars=ypars, psill=NULL, nug=NULL, add=0, dmax=Inf,
-                           fit.method='n/d')
+                           fit.method='n/d', maxit=1e4)
 {
 
   # TODO: find better initials for nug and psill
@@ -498,7 +498,7 @@ pkern_vario_fit = function(vario, ypars='mat', xpars=ypars, psill=NULL, nug=NULL
   pupper = c(psill[3], nug[3], ypars[['upper']], xpars[['upper']])
 
   # check for dmax set too low
-  vario_valid = sapply(vario[c('x', 'y', 'd1', 'd2')], \(x) sum( x[['lags']] < dmax ) > 1 )
+  vario_valid = sapply(vario[c('x', 'y', 'd1', 'd2')], \(x) sum( x[['lags']] < dmax ) > 0 )
   if( !all(vario_valid) ) stop('Not enough lags sampled. Try increasing dmax')
 
   # define anonymous objective function for optimizer
@@ -558,7 +558,7 @@ pkern_vario_fit = function(vario, ypars='mat', xpars=ypars, psill=NULL, nug=NULL
                                                     gres=vario[['gres']],
                                                     fit.method=fit.method,
                                                     dmax=dmax,
-                                                    control=list(maxit=1e4,
+                                                    control=list(maxit=maxit,
                                                                  parscale=pupper-plower)))
 
   # select the best fit
