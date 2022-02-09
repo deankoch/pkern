@@ -499,7 +499,9 @@ pkern_vario_fit = function(vario, ypars='mat', xpars=ypars, psill=NULL, nug=NULL
 
   # check for dmax set too low
   vario_valid = sapply(vario[c('x', 'y', 'd1', 'd2')], \(x) sum( x[['lags']] < dmax ) > 0 )
+  vario_good = sapply(vario[c('x', 'y', 'd1', 'd2')], \(x) sum( x[['lags']] < dmax ) > 1 )
   if( !all(vario_valid) ) stop('Not enough lags sampled. Try increasing dmax')
+  if( !all(vario_good) ) warning('Not enough lags sampled. Try increasing dmax')
 
   # define anonymous objective function for optimizer
   fn = function(pv, p, vario_in, gres, fit.method, dmax)
