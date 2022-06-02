@@ -1,383 +1,810 @@
-#
-# pkern_raster.R
-# Dean Koch, Sep 2021
-# Functions for plotting objects created with pkern
-#
+# pkern_plot.R
+# Dean Koch, 2022
+# graphics
 
-#' Extract kernel parameters as plot-friendly strings
+#' Plot grid data
 #'
-#' Generates a list of useful strings based on the kernel names and parameter values
-#' in `pars` for plot labels and such. `pars` should either specify kernel(s) by name
-#' or else be a parameters list of the form accepted by `pkern_corr`.
+#' Plots a matrix or raster as a heatmap with an optional color bar legend. This is a wrapper
+#' for `graphics::image` similar to `terra::plot` but with tighter margins to increase the
+#' image area on screen; and with a different layout for heat-maps of matrices, which are
+#' plotted with i and j axes (row and column numbers) replacing y and x.
 #'
-#' When `pars` is a character string, the function parenthesizes it with square brackets
-#' and returns the resulting string. When `pars` is a vector of character strings, it
-#' collapses the two parenthesized strings into a single vector separated by an "x".
+#' `g` can be a vector, in which case `gdim` supplies the y, x dimensions (ie number
+#' of rows, number of columns), in that order. `g` can also can be a matrix, raster or any
+#' other object understood by `pkern_grid` (in which case `gdim` can be omitted).
 #'
-#' When `pars` is a list of kernel parameters for a single dimension, the function
-#' returns a named list of two character strings: the kernel name ("k") formatted as
-#' above, and the parameter(s) ("kp") (also square bracketed, in "name = value" format
-#' where "value" is rounded to `nsig` significant digits).
+#' The data in `g` can be of numeric, integer, logical, or factor class. The numeric class is
+#' plotted with a continuous color bar legend, while the others get a categorical legend.
 #'
-#' When `pars` is a list of two such kernel parameter lists (named "x" and "y"), the
-#' function again returns a list with elements "k" and "kp", containing the strings from
-#' each component collapsed with a " x " delimiter (indicating direct product). The third
-#' element, "main", is a language object containing the bolded kernel name, and (if "nug"
-#' is supplied) a fourth element supplies a string "nug" with the nugget effect in
-#' parentheses.
+#' Category names (ie tick labels) for the legend can be supplied in argument `breaks`, with
+#' one character string for each unique non-NA value in `g`, as integer, in ascending order.
+#' If the data are continuous, `breaks` can either be the desired number of bins for coloring,
+#' or a vector of break points delineating bins (passed to `graphics::image`). Note that a set
+#' of `n` bins has `n+1` break points.
 #'
-#' @param pars a kernel parameters list ("k", "kp"), or list of two of them ("x", "y")
-#' @param nsig number of signficant figures to use when printing model parameter values
+#' `pal` should be one of the palette names returned by `graphics::hcl.pals`, or else a
+#' vector of color names with length one fewer than the number of break points.
 #'
-#' @return a character string or list (depending on the contents of `pars`, see details)
+#' If the data are all `NA`, the function omits the heatmap and legend, and draws grid lines
+#' instead. `col_grid` can be specified to enable/disable grid lines more generally. These
+#' lines can sometimes appear misaligned due to anti-aliasing. If this is a problem, try
+#' switching to a different graphics device back-end (eg. in Windows Rstudio, try changing from
+#' the default to Cairo with `options(RStudioGD.backend = 'cairo')`).
+#'
+#' The function sets the graphical parameters 'oma' (to `c(0,0,0,0)`) and 'mar' (to values
+#' between 1.1 and 5.1, depending on whether titles, axes, and legend are plotted), then calls
+#' `graphics::image`, which sets other graphical parameters such as 'usr'. By default all
+#' graphical parameters are reset to their original values at the end of the function call.
+#' `reset=FALSE` prevents this, so that additional elements can be added to the plot later
+#' (such as by calling `sf::st_plot(.., add=TRUE)` or `graphics:lines`).
+#'
+#' @param g vector or any object understood by `pkern_grid`
+#' @param gdim numeric vector, (optional) grid dimensions of the data
+#' @param ... plotting parameters (see details)
+#'
+#' @return The function returns a vector of suggested plot height and width values in units of
+#'  inches wich minimize the unused margin space. For example to save a trim version of your
+#'  plot as png, call `pkern_plot` first to get the suggested height and width, say `y` and `x`,
+#'  then pass the result to `png(filename, height=m*y, width=m*x, pointsize=m*12, ...)`,
+#'  where `m` is any positive scaling factor.
+#'
+#' @section Plotting parameters:
+#'
+#' The following style parameters are optional:
+#'
+#' \describe{
+#'
+#' \item{adj, leg_just}{ numeric in [0,1]: respectively, the horizontal justification
+#' of the title and vertical justification of the color bar legend (default 0.5 for both) }
+#'
+#' \item{asp}{ numeric or NA: the aspect ratio parameter passed to graphics::image (default 1) }
+#'
+#' \item{axes, leg}{ logical: respectively indicates to draw axes (y and x, or i and j),
+#' the color bar legend (default TRUE)}
+#'
+#' \item{breaks}{numeric (vector) or character vector: the color break points (see details)}
+#'
+#' \item{col_box, col_grid}{character: respectively, the colors to use for drawing a box
+#' around the image border and for drawing grid cell boundaries (NA to omit)}
+#'
+#' \item{col_invert, col_rev}{logical: respectively, inverts (default FALSE), and reverses
+#' the color scale (default TRUE}
+#'
+#' \item{ij}{logical: enables/disables matrix style plot with j axis annotations on top
+#' (default TRUE for vector and matrix input, otherwise FALSE)}
+#'
+#' \item{lwd_axis, lwd_ticks}{numeric: respectively, line widths for the axis lines and
+#' ticks (0 to omit, default 1)}
+#'
+#' \item{main, zlab, ylab, xlab}{character: respectively, a title to put on top in bold,
+#' a legend title to put over the color bar, and axis titles for dimensions y and x.
+#' Setting to '' omits both the label and its margin space}
+#'
+#' \item{minimal}{logical: removes all annotation (except as otherwise specified by
+#' `axes` and/or `leg`)}
+#'
+#' \item{pal}{character (vector): one of `graphics::hcl.pals` (default 'Spectral') or a
+#'  vector of colors}
+#'
+#' \item{reset}{logical: indicates to restore original graphical parameters after plot is
+#'  finished (default TRUE)}
+#'
+#' \item{zlim}{numeric vector: range in the data to plot (ignored for discrete plots)}
+#'
+#' \item{x_ontop}{logical: toggles the placement of the horizontal dimension axis on
+#' top vs bottom }
+#'
+#' }
+#'
 #' @export
 #'
 #' @examples
-#' kname = 'mat'
-#' pkern_toString(kname)
-#' pkern_toString(rep(kname, 2))
-#' pkern_toString(list(k=kname))
+#' # example grid
+#' gdim = c(50, 100)
+#' n = prod(gdim)
+#' g = pkern_grid(gdim)
 #'
-#' pars = pkern_corr(kname)
-#' pkern_toString(pars)
+#' # plot the grid layout as raster then as matrix
+#' pkern_plot(g)
+#' pkern_plot(g, ij=TRUE)
 #'
-#' kname = c('mat', 'sph')
-#' pars = pkern_corr(kname)
-#' pkern_toString(pars)
-#' pkern_toString(utils::modifyList(pars, list(nug=0.5)))
+#' # example data: cosine of squared distance to top left corner
+#' z = apply(expand.grid(g$gyx), 1, \(z) cos( 2*sum(z^2) ) )
+#' g_example = modifyList(g, list(gval=z))
+#' pkern_plot(g_example)
 #'
-pkern_toString = function(pars, nsig=3)
+#' # plot as matrix (changes default palette)
+#' pkern_plot(g_example, ij=T)
+#'
+#' # alignment
+#' pkern_plot(g_example, ij=T, main='Centered title and legend by default')
+#' pkern_plot(g_example, ij=T, main='adj: left-right justification of title', adj=0)
+#' pkern_plot(g_example, ij=T, main='leg_just: top-bottom justification of color bar', leg_just=0)
+#'
+#' # set the palette - see hcl.pals() for valid names
+#' pal = 'Zissou 1'
+#' pkern_plot(g_example, pal=pal, main=pal)
+#' pkern_plot(g_example, pal=pal, main=pal, col_invert=TRUE)
+#' pkern_plot(g_example, pal=pal, main=pal, col_invert=TRUE, col_rev=TRUE)
+#'
+#' # example data: cosine of distance to top left corner
+#' z = apply(expand.grid(g$gyx), 1, \(z) cos( sqrt(sum(z^2))/50 ) )
+#' g_example = modifyList(g, list(gval=z))
+#' pkern_plot(g_example)
+#'
+#' # reduce number of color breaks or specify a factor for discrete value plots
+#' pkern_plot(g_example, breaks=50)
+#' pkern_plot(g_example, breaks=3) # not a great way to bin the data
+#' pkern_plot(g=modifyList(g, list(gval=cut(z, 3, dig.lab=1))))
+#'
+#' # pass color bar labels for discrete plots in breaks (in order low to high)
+#' pkern_plot(modifyList(g, list(gval=cut(z, 3))), breaks=c('a', 'b', 'c'), zlab='group')
+#'
+#' # make a covariance matrix
+#' gv = modifyList(g_example, list(gval=NA))
+#' idx_obs = sample.int(prod(gdim), 1e2)
+#' gv$gval[idx_obs] = z[idx_obs]
+#' v = pkern_var(gv)
+#'
+#' # matrix display mode is automatic when first argument is a matrix or vector
+#' pkern_plot(v, zlab=expression(V[ij]))
+#'
+#' # minimal versions
+#' pkern_plot(v, minimal=T)
+#' pkern_plot(v, minimal=T, leg=T)
+#' pkern_plot(v, minimal=T, col_grid='white', leg=TRUE)
+#'
+#' # logical matrix plots are grayscale by default
+#' pkern_plot(v > 1e-2, main='logical matrix')
+#'
+#' # logical, integer and factor class matrices get a discrete color-bar
+#' interval = 1e-2 # try also 1e-3 to see behaviour with large number of bins
+#' v_discrete = cut(v, seq(0, ceiling(max(v)), by=interval), dig.lab=2)
+#' pkern_plot(as.character(v_discrete), dim(v))
+#'
+#' # labels are preserved for character matrices
+#' z_char = rep(c('foo', 'bar'), n/2)
+#' z_char[sample.int(n, n/2)] = NA
+#' pkern_plot(g=z_char, gdim)
+#'
+pkern_plot = function(g, gdim=NULL, ...)
 {
-  # handle character input (kernel names)
-  if( is.character(pars) )
+  # upper limit on dimensions to pass to graphics::image
+  px_max = 2e3
+
+  # handle vector input
+  if( is.vector(g) & !is.list(g) )
   {
-    # convert to expected list format for recursive call and handle unexpected input
-    if( length(pars) == 1 ) return( paste0('[', pars, ']') )
-    if( length(pars) == 2 ) return( paste(sapply(pars, pkern_toString), collapse=' x ') )
-    stop('invalid argument to pars')
+    # convert vectors to matrix
+    if( is.null(gdim) ) stop('grid dimensions gdim must be supplied when g is a vector')
+    if( length(g) != prod(gdim) ) stop('length of grid vector g was not equal to prod(gdim)')
+    g = matrix(g, gdim)
   }
 
-  # single dimension case
-  if( 'k' %in% names(pars) )
+  # different defaults for ij and minimal modes
+  ij = ifelse( is.null( list(...)[['ij']] ), is.matrix(g), list(...)[['ij']])
+  minimal = ifelse( is.null( list(...)[['minimal']] ), FALSE, list(...)[['minimal']])
+  axes = leg = !minimal
+  ylab = ifelse(ij, 'row i', 'y')
+  xlab = ifelse(ij, 'column j', 'x')
+  zlab = ifelse(ij, expression(z[ij]), 'z(x,y)')
+  if(minimal) xlab = ylab = ''
+  col_box = ifelse(minimal, NA, 'black')
+  pal = ifelse(ij, 'Inferno', 'Spectral')
+  x_ontop = ij
+
+  # unpack the rest of the user-defined plot arguments and/or set defaults
+  zlim = list(...)[['zlim']]
+  breaks = list(...)[['breaks']]
+  main = ifelse( is.null( list(...)[['main']] ), '', list(...)[['main']])
+  asp = ifelse( is.null( list(...)[['asp']] ), 1, list(...)[['asp']])
+  axes = ifelse( is.null( list(...)[['axes']] ), axes, list(...)[['axes']])
+  ylab = ifelse( is.null( list(...)[['ylab']] ), ylab, list(...)[['ylab']])
+  xlab = ifelse( is.null( list(...)[['xlab']] ), xlab, list(...)[['xlab']])
+  lwd_axis = ifelse( is.null( list(...)[['lwd_axis']] ), 1, list(...)[['lwd_axis']])
+  lwd_ticks = ifelse( is.null( list(...)[['lwd_ticks']] ), 1, list(...)[['lwd_ticks']])
+  col_box = ifelse( is.null( list(...)[['col_box']] ), col_box, list(...)[['col_box']])
+  col_grid = ifelse( is.null( list(...)[['col_grid']] ), NA, list(...)[['col_grid']])
+  col_invert = ifelse( is.null( list(...)[['col_invert']] ), FALSE, list(...)[['col_invert']])
+  col_rev = ifelse( is.null( list(...)[['col_rev']] ), TRUE, list(...)[['col_rev']])
+  pal = ifelse( is.null( list(...)[['pal']] ), pal, list(...)[['pal']])
+  leg = ifelse( is.null( list(...)[['leg']] ), leg, list(...)[['leg']])
+  leg_just = ifelse( is.null( list(...)[['leg_just']] ), 0.5, list(...)[['leg_just']])
+  zlab = ifelse( is.null( list(...)[['zlab']] ), zlab, list(...)[['zlab']])
+  adj = ifelse( is.null( list(...)[['adj']] ), 0.5, list(...)[['adj']])
+  x_ontop = ifelse( is.null( list(...)[['x_ontop']] ), x_ontop, list(...)[['x_ontop']])
+  reset = ifelse( is.null( list(...)[['reset']] ), FALSE, list(...)[['reset']])
+
+  # convert matrix and raster to pkern list
+  g = pkern_grid(g)
+
+  # upscale as needed
+  up_fac = ceiling( g[['gdim']]/px_max )
+  if( any( up_fac > 1 ) ) g = pkern_rescale(g, up=up_fac)
+  gdim = g[['gdim']]
+
+  # coerce logical > character > factor
+  z = g[['gval']]
+  z_is_na = is.na(z)
+  na_image = all(z_is_na)
+  if( !na_image & is.logical(z) ) z = tolower(as.character(z))
+  if( is.character(z) ) z = as.factor(z)
+
+  # convert factor to integer
+  if( is.factor(z) )
   {
-    k = pkern_toString(pars[['k']])
-    kp = '[]'
-    if( 'kp' %in% names(pars) )
-    {
-      # single parameter case is always the range parameter rho
-      kp.nm = names( pkern_corr(pars[['k']])[['kp']] )
-      if( is.null(kp.nm) ) kp.nm = 'rho'
-
-      # collapse name value pairs and parenthesize result
-      kp.parts = mapply(\(nm, p) paste(nm, '=', format(p, digits=nsig)), nm=kp.nm, p=pars[['kp']])
-      kp = paste0('[', paste(kp.parts, collapse=', '), ']')
-    }
-
-    # return the vector
-    return( list(k=k, kp=kp) )
+    # convert factor to integer and preserve names in `breaks`
+    bins = unique(z) |> sort()
+    z = match(as.vector(z), bins)
+    if( is.null(breaks) ) breaks = as.character(bins)
   }
 
-  # handle 2-dimensional case by recursive call, concatenate results
-  xy.list = lapply(pars[c('y', 'x')], pkern_toString)
-  k = paste(sapply(xy.list, \(xy) xy[['k']]), collapse=' x ')
-  kp = paste(sapply(xy.list, \(xy) xy[['kp']]), collapse=' x ')
+  # vertical flip and row-first ordering expected by graphics/grDevices
+  idx_image = matrix(seq(prod(gdim)), gdim)[gdim['y']:1, ]
+  z_image = matrix(z[idx_image], rev(gdim), byrow=TRUE)
 
-  # make a title expression with bolding, adding nugget if supplied
-  main = bquote(bold(.(k)))
-  nug = pars[['nug']]
-  if( !is.null(nug) ) nug = paste0('(nugget = ', format(nug, digits=nsig), ')')
+  # find limits from data if they are not all NA
+  if( !na_image ) { if( is.null(zlim) ) zlim = range(z_image, na.rm=TRUE) } else {
 
-  # return as named vector
-  return( list(k=k, kp=kp, main=main, nug=nug) )
-}
-
-
-#' Plot gridded datasets
-#'
-#' A wrapper for graphics::filled.contour and graphics::image (work in progress). This
-#' essentially does the same thing as `raster::plot`, but specialized for the pkern package
-#'
-#' `gdim` and `gyx` can be omitted when their values can be derived from `z` (eg. when `z`
-#' is the output from `pkern_fromRaster` or when is a RasterLayer, but not when it is a vector).
-#'
-#' @param z numeric vector, matrix, SpatRaster, RasterLayer, or list
-#' @param gdim c(ni, nj), the number of rows and columns in the grid
-#' @param gyx list of numeric vectors, the y and x grid line coordinates
-#' @param gres positive numeric vector, distance scaling factors along y and x directions
-#' @param ppars list of optional plotting parameters (see details)
-#'
-#' @return TODO
-#' @export
-#'
-#' @examples
-#' # TODO
-pkern_plot = function(z, gdim=NULL, gyx=NULL, gres=1, ppars=list())
-{
-  # duplicate distance scaling factors as needed
-  if( length(gres) == 1 ) gres = rep(gres, 2)
-
-  # extract grid size from matrix/raster input
-  spatnms = c('SpatRaster', 'RasterLayer', 'RasterStack')
-  if( any( c('matrix', spatnms) %in% class(z) ) )
-  {
-    # we use order (ny, nx)
-    gdim = dim(z)[1:2]
-    if( any( spatnms %in% class(z) ) )
-    {
-      if( is.null(gyx) ) gyx = pkern_fromRaster(z, what='gyx')
-      if( is.null(gdim) ) gdim = pkern_fromRaster(z, what='gdim')
-      z = pkern_fromRaster(z, what='gval')
-    }
+    # turn off legend and show grid lines unless user specifies otherwise
+    zlim = c(0,1)
+    if( is.null( list(...)[['leg']] ) ) leg = FALSE
+    if( is.null( list(...)[['col_grid']] ) ) col_grid = 'black'
   }
 
-  # redirect list input
-  if( is.list(z) )
+  # handle plots with a single unique non-NA value
+  if( diff(zlim) == 0 )
   {
-    # output from pkern_fromRaster handled by recursive call
-    if( 'gval' %in% names(z) )
-    {
-      if( !is.null( z[['gdim']] ) ) gdim = z[['gdim']]
-      if( !is.null( z[['gyx']] ) ) gyx = z[['gyx']]
-      return(pkern_plot(z[['gval']], gdim, gyx, gres, ppars=ppars))
-    }
+    # assign the (single) break point label to the non-NA value
+    if( is.null(breaks) ) breaks = as.character(zlim[1])
 
-    # otherwise assume list is kernel parameters and pass them on to `pkern_kplot`
-    return(pkern_kplot(z, gdim=gdim, gres=gres, ppars=ppars))
+    # convert matrix to integer (1's indicating the non-NA value)
+    z_image = matrix(as.integer(z_image == zlim[1]), rev(gdim))
+    zlim = c(1, 1)
   }
 
-  # set up default grid line values when they are not supplied
-  yxnm = stats::setNames(nm=c('y', 'x'))
-  if( is.null(gyx) ) gyx = lapply(gdim, seq)
-  if( length(gyx) != 2 ) stop('could not determine grid size for input z. Try setting gdim')
-  if( is.null(names(gyx)) ) gyx = stats::setNames(gyx, yxnm)
-  if( is.null(gdim) ) gdim = sapply(gyx, length)
-
-  # unpack plotting parameters and/or set defaults
-  asp = ifelse( is.null(ppars[['asp']]), 1, ppars[['asp']])
-  leg = ifelse( is.null(ppars[['leg']]), 'z', ppars[['leg']])
-  xlab = ifelse( is.null(ppars[['xlab']]), 'x', ppars[['xlab']])
-  ylab = ifelse( is.null(ppars[['ylab']]), 'y', ppars[['ylab']])
-  glcol = ifelse( is.null(ppars[['glcol']]), NA, ppars[['glcol']])
-  pal = ifelse( is.null(ppars[['pal']]), 'Spectral', ppars[['pal']])
-  bcol = ifelse( is.null(ppars[['bcol']]), 'black', ppars[['bcol']])
-  fcol = ifelse( is.null(ppars[['fcol']]), 'black', ppars[['fcol']])
-  discrete = ifelse( is.null(ppars[['discrete']]), FALSE, ppars[['discrete']])
-  reset = ifelse( is.null(ppars[['reset']]), TRUE, ppars[['reset']])
-  aggpars = ifelse( is.null(ppars[['aggpars']]), NA, ppars[['aggpars']])
-  nmax = ifelse( is.null(ppars[['nmax']]), 1e5, ppars[['nmax']])
-  smoothed = ifelse( is.null(ppars[['smoothed']]), FALSE, ppars[['smoothed']])
-
-  # determine aggregation factors along x and y directions
-  afact = ceiling( gdim/sqrt(nmax) )
-  if( any( afact > 1 ) )
+  # integer data case (discrete)
+  discrete_image = !na_image & is.integer(z_image)
+  if( discrete_image )
   {
-    # aggregate the data as needed
-    z.agg = pkern_agg(z, gdim, pars=aggpars, afact=afact, discrete=discrete)
-    z = z.agg[['z']]
-    ij = z.agg[['ij']]
+    # a better default palette for small numbers of categories
+    if( is.null( list(...)[['pal']] ) ) pal = 'Zissou'
 
-    # update grid size and grid line locations
-    gdim = sapply(ij, length)
-    gyx = mapply(\(pos, idx) pos[idx], pos=gyx, idx=ij, SIMPLIFY=FALSE)
-  }
+    # find unique values in the data
+    z_range = range(z_image, na.rm=TRUE)
+    z_lvl = z_range[1]:z_range[2]
+    n_lvl = 1L + diff(z_range)
 
-  # convert vectorization order for compatibility with `graphics::image` and friends
-  zmat = matrix(z[pkern_r2c(gdim, in.byrow=FALSE, out.byrow=TRUE, flipx=TRUE)], rev(gdim))
+    # character input to `breaks` interpreted as labels (else use integers, and `breaks` ignored)
+    z_label = as.character(z_lvl)
+    if( is.character(breaks) ) z_label = breaks
 
-  # adjust gyx for supplied distance scaling and sort into ascending order
-  gyx = lapply(gyx, sort)
-  gyx = stats::setNames(mapply(\(d, g) g*d, g=gyx, d=gres, SIMPLIFY=FALSE), yxnm)
+    # discretize z limits, add padding so extremes are included
+    zlim = c( ceiling(zlim[1]), floor(zlim[2]) ) + c(-1, 1)/2
 
-  # find grid line spacing halves on plot and positions of grid lines
-  yxsp = sapply(gyx, \(g) diff(g[1:2]) / 2 )
-  yxgl = lapply(yxnm, \(d) c( min(gyx[[d]]) - yxsp[[d]], gyx[[d]] + yxsp[[d]] ) )
-  yxlim = lapply(yxgl, range)
+    # place breaks at and (midway) between each integer; midpoint breaks are passed to image
+    breaks_all = seq(zlim[1], zlim[2], length.out=1L+2*diff(zlim))
+    is_labeled = seq_along(breaks_all) %in% ( 2L * seq(n_lvl) )
+    breaks = breaks_all[!is_labeled]
 
-  # set up a default continuous color palette
-  zr = range(z, na.rm=TRUE, finite=TRUE)
-  lvls = pretty(z, 1e2)
-
-  # set up breakpoints in colorbar for discrete case
-  if( discrete )
-  {
-    # TODO: replace this slow operation
-    dlvls = sort(unique(z, na.rm=TRUE))
-
-    # make a new z range with padding so that colorbar ticks don't wind up on the edge
-    dpad = min(diff(dlvls))/2
-    zr = zr + ( dpad * c(-1, 1) )
-
-    # new levels are at midpoints between discrete values
-    lvls = c(dlvls[1] - dpad, dlvls + c(diff(dlvls)/2, dpad))
+    # set gray-scale for unary/binary cases
+    if( n_lvl == 1 ) pal = 'grey10'
+    if( n_lvl == 2 & !any(z_is_na) ) pal = c('grey90', 'grey10')
 
   } else {
 
-    # in continuous case we just pick a large number of breaks covering the range
-    zr = range(z, na.rm=TRUE, finite=TRUE)
-    lvls = pretty(z, 5e2)
+    # set default set number of breaks high enough to look continuous
+    if( is.null(breaks) ) breaks = 1e3
+    z_lvl = pretty(zlim)
+    z_label = as.character(z_lvl)
   }
 
   # set up a color palette
-  cols = grDevices::hcl.colors(length(lvls)-1, pal, rev=TRUE)
+  pal_known = any(startsWith(grDevices::hcl.pals(), pal[1]))
+  if( length(breaks) == 1 ) breaks = seq(zlim[1], zlim[2], length.out=1L+breaks)
+  if( pal_known ) pal = grDevices::hcl.colors(length(breaks)-1L, pal[1], rev=col_rev)
+  if( col_invert ) pal = rgb( ( 255 - t(col2rgb(pal)) ) / 255 )
 
-  # backing up current settings before we change anything
-  old.par = graphics::par(no.readonly=TRUE)
+  # define margins with space for color bar, axes, titles
+  has_main = nchar(main) > 0
+  x_nline = 2.1 + axes + ( nchar(xlab) > 0 ) + ( x_ontop & has_main )
+  y_nline = 2.1 + axes + ( nchar(ylab) > 0 )
+  mar_new = c(bottom = ifelse(x_ontop, 1.1, x_nline),
+              left = y_nline,
+              top = ifelse(x_ontop, x_nline, 1.1 + has_main),
+              right = ifelse(leg, 5.1, 1.1))
 
-  # below is based on `graphics::filled.contour`
+  # set new graphical parameters but keep a backup
+  if(reset) par_existing = par(no.readonly=TRUE)
+  par(mar=mar_new, oma=c(0,0,0,0))
 
-  # new plot window layout will use 2 lines to the right of the plot for color bar
-  w = ( 2 + old.par[['mar']][2] ) * ( 2.54 * graphics::par('csi') )
-  graphics::layout(matrix(c(2, 1), ncol=2), widths = c(1, graphics::lcm(w)))
+  # draw the raster plot without axes or annotations
+  graphics::image(g[['gyx']], z=z_image, axes=FALSE, ann=FALSE, xpd=NA,
+                   asp=asp, useRaster=TRUE, zlim=zlim, col=pal, breaks=breaks)
 
-  # set margins and horizontal text for the colorbar labels
-  graphics::par(las=1, mar=c(old.par[['mar']][1], 1, old.par[['mar']][c(3,2)]))
+  # compute bounding box of image
+  plot_bbox = list(min=sapply(g[['gyx']], min), max=sapply(g[['gyx']], max))
+  half_pixel = sapply(g[['gyx']], \(yx) diff(yx[1:2])) / 2
 
-  # draw the color bar then draw a box around it and add legend title
-  graphics::plot.new()
-  graphics::plot.window(xlim=0:1, ylim=zr, xaxs='i', yaxs='i')
-  graphics::rect(0, lvls[-length(lvls)], 1, lvls[-1], col=cols, border=NA)
-  graphics::abline(v=1)
-  graphics::axis(4, lwd=0, lwd.ticks=1)
-  graphics::abline( v = 0 )
-  graphics::abline( h = zr )
-  graphics::mtext(side=2, line=0, adj=0, padj=-1, at=zr[2], leg)
-
-  # prepare new plot window for data heatmap
-  graphics::par(las=0, mar=c(old.par[['mar']][1:3], 1))
-
-  # make the non-smoothed image plot
-  if( !smoothed )
+  # position and draw axes and tick marks
+  axis_s = c(y=2L, x=ifelse(x_ontop, 3L, 1L))
+  if(axes)
   {
-    # draw the image using base graphics
-    graphics::image(x=gyx[['x']], y=gyx[['y']], zmat, axes=FALSE, ann=FALSE, asp=asp, col=cols)
+    # axes are snapped to raster image edge
+    axis_xy = rev(plot_bbox[['min']] - half_pixel)
 
-    # add grid lines
-    graphics::abline( v = yxgl[['x']], col=glcol)
-    graphics::abline( h = yxgl[['y']], col=glcol)
+    # find row and column indices for tick mark locations, then y/x coordinates
+    tick_pos = tick_lab = lapply(g[['gyx']], \(yx) pretty(range(yx)))
+    if(ij)
+    {
+      # force labeling of first and last row/column in matrices and set new default labels
+      tick_ij = lapply(gdim, \(d) unique(round(c(1, seq(1,d, length.out=5), d))))
+      tick_lab = modifyList(tick_ij, list( y = gdim['y'] + 1 - tick_ij[['y']] ))
+      tick_pos = Map(\(yx, idx) yx[idx], yx=g[['gyx']], idx=tick_ij)
+
+      # reverse ordering of y axis for i labels, j labels go on top
+      axis_xy['y'] = plot_bbox[['max']]['y'] + half_pixel['y']
+
+      # different default aesthetics for matrix plot
+      draw_box = TRUE
+      lwd_axis = 0
+    }
+
+    # draw axes and tick marks, looping over c(y, x)
+    Map(\(s, a, lab, yx) graphics::axis(s, at=a, labels=lab, pos=yx, lwd=lwd_axis, lwd.ticks=1),
+        s = axis_s,
+        a = stats::setNames(tick_pos, c('y', 'x')),
+        lab = tick_lab,
+        yx = axis_xy)
   }
 
-  # make the smoothed (contour) plot
-  if( smoothed )
-  {
-    # create plot window and coordinate system for bare bones version of graphics::filled.contour
-    graphics::plot.new()
-    graphics::plot.window(yxlim[['x']], yxlim[['y']], xaxs='i', yaxs='i', asp=asp)
+  # print any titles
+  graphics::mtext(main, side=3L, line=ifelse(x_ontop, x_nline-1, 1), font=2, xpd=NA, adj=adj)
+  graphics::mtext(ylab, side=axis_s['y'], line=y_nline-1.5, xpd=NA)
+  graphics::mtext(xlab, side=axis_s['x'], line=x_nline-1.5-(ij & has_main), xpd=NA)
 
-    # call to draw contour plot
-    graphics::.filled.contour(x=gyx[['x']], y=gyx[['y']], zmat, lvls, cols)
+  # finding bounding box for the image
+  bmin = plot_bbox[['min']] - half_pixel
+  bmax = plot_bbox[['max']] + half_pixel
+
+  # find line height for horizontal text, in same units as user coordinates
+  y_inch = diff(graphics::grconvertY(0:1, 'inches', 'user'))
+  y_line = y_inch * par('cin')[2] * par('cex') * par('lheight')
+
+  # same for vertical text
+  x_inch = diff(graphics::grconvertX(0:1, 'inches', 'user'))
+  x_line = x_inch * par('cin')[2] * par('cex') * par('lheight')
+
+  # draw grid lines
+  if( !is.na(col_grid) )
+  {
+    gl_y = g[['gyx']][['y']] - half_pixel['y']
+    gl_x = g[['gyx']][['x']] - half_pixel['x']
+    graphics::segments(x0=gl_x, y0=bmin['y'], y1=bmax['y'], col=col_grid)
+    graphics::segments(y0=gl_y, x0=bmin['x'], x1=bmax['x'], col=col_grid)
   }
 
-  # draw x axis
-  if( !is.na(xlab) )
+  # draw a frame around the image
+  if( !is.na(col_box) ) graphics::rect(bmin['x'], bmin['y'], bmax['x'], bmax['y'], border=col_box)
+
+  # add a color bar legend
+  if(leg)
   {
-    xaxt = graphics::axTicks(1)
-    graphics::axis(1, lwd=0, lwd.ticks=1, at=xaxt)
-    graphics::title(xlab=xlab)
+    # set x coordinates with width equal to height of one line of text
+    bar_x = bmax['x'] + x_line * c(1,2)
+
+    # set y coordinates, attempting to match breaks to line height
+    n_bin = length(breaks) - 1
+    n_pad = 2L
+    n_y_line_max = floor( ( bmax['y'] - bmin['y'] ) / y_line ) - 2L * n_pad
+    n_y_line = pmax(pmin(n_bin, n_y_line_max), 2)
+    y_pad = ( bmax['y'] - bmin['y'] - y_line * n_y_line )
+    bar_y = c(bmin['y'], bmax['y']) + y_pad * c(leg_just, -(1-leg_just))
+
+    # map scale colors to y position
+    bar_z = stats::approxfun(range(breaks), bar_y)(breaks)
+
+    # draw the color bar strips then a black border around the whole thing
+    graphics::rect(bar_x[1], head(bar_z, -1), bar_x[2], bar_z[-1], col=pal, border=NA, xpd=NA)
+    graphics::rect(bar_x[1], bar_y[1], bar_x[2], bar_y[2], xpd=NA)
+
+    # draw annotations as another axis
+    bar_ticks_y = stats::approxfun(zlim, bar_y)(z_lvl)
+    graphics::axis(4L,
+                   lwd = 0,
+                   at = bar_ticks_y,
+                   labels = z_label,
+                   pos = bar_x[2],
+                   lwd.ticks = lwd_ticks,
+                   las = 1L)
+
+    # draw the legend title one half-line above the color bar
+    graphics::text(bar_x[1], bar_y[2] + y_line / 2, zlab, xpd=NA, adj=c(0,0))
   }
 
-  # draw y axis
-  if( !is.na(ylab) )
-  {
-    yaxt = graphics::axTicks(2)
-    graphics::axis(2, lwd=0, lwd.ticks=1, at=yaxt)
-    graphics::title(ylab=ylab)
-  }
+  # find minimal y, x lengths required for image plot plus margins in inches
+  y_graphics = ( ( bmax['y'] - bmin['y'] ) + sum( mar_new[c(1,3)] ) * y_line ) / y_inch
+  x_graphics = ( ( bmax['x'] - bmin['x'] ) + sum( mar_new[1+c(1,3)] ) * x_line ) / x_inch
 
-  # add main title and subtitle
-  tline = graphics::par('mgp')[1]-1
-  graphics::mtext(ppars[['main']], side=3, line=tline, adj=0, font=2)
-  graphics::mtext(ppars[['sub']], side=3, line=tline-1, adj=0)
-
-  # draw inner frame around grid and outer frame (flush with axes)
-  graphics::rect(min(yxgl[['x']]), min(yxgl[['y']]), max(yxgl[['x']]), max(yxgl[['y']]), border=bcol)
-  if( !is.na(fcol) ) graphics::box(col=fcol)
-
-  # restore old plot settings and finish
-  if(reset) graphics::par(old.par)
-  return( invisible() )
+  # restore old margin settings before the user's next plot call
+  if(reset) par(par_existing)
+  return(invisible(c(y=y_graphics, x=x_graphics)))
 }
 
 
-# TODO: fix this for gxp with large range??
-#' Make a heatmap of covariances/correlations around a grid's central point
+#' Plot the covariance structure of a pkern model
 #'
-#' This function displays a separable kernel by building a grid of size `gdim`,
-#' assigning to each cell the covariance (or correlation) with the central cell,
-#' then passing the result to `graphics::image` for visualization. Covariance
-#' parameters from both kernels are printed as a subtitle, with values rounded
-#' to 3 decimal places.
+#' Visualization of the footprint of a covariance kernel as a heatmap of size
+#' `g$gdim`, where each grid cell is colored according to its covariance with
+#' the central grid point.
 #'
-#' `pars` should be a list containing elements "y" and "x", which are lists of parameters
-#' for the y and x component kernels (recognized by `pkern_corr`). Optionally, `pars` can
-#' also include a (positive numeric) pointwise variance and nugget effect (numerics "v"
-#' and "nug"). If `pars` contains an element named "gres", it supercedes any argument to `gres`.
-#' If `v` and `nug` are supplied, the legend title is set to "covariance", otherwise it is
-#' set to "correlation".
+#' When `simple=FALSE` (the default), covariance parameters are printed in the
+#' title and axis labels with values rounded to 3 decimal places. This can be
+#' customized by passing arguments 'main', 'ylab', 'xlab' (and any others
+#' accepted `pkern_plot` apart from `gdim`).
 #'
-#' When `gdim` is omitted, it is set to the smallest size such that the plot shows the
-#' effective range of the kernel components in both the y and x directions. if either
-#' entry of `gdim` is an even number, it incremented by 1 so that "central point"
-#' is unambiguous.
+#' @param pars list of the form returned by `pkern_pars` with entries 'y', 'x', ('eps', 'psill')
+#' @param g any object understood by `pkern_grid`
+#' @param ... additional arguments passed to `pkern_plot`
 #'
-#' @param pars list of two parameter lists "y" and "x", and (optionally) "v", "nug"
-#' @param gdim c(ni, nj), the number of y and x lags to include
-#' @param gres c(dy, dx), the y and x distances between adjacent grid lines
-#' @param ppars list of plotting arguments (passed to `pkern_plot`)
+#' @return the same as `pkern_plot`
 #'
-#' @return returns nothing but prints a contour plot of the specified kernel
 #' @export
 #'
 #' @examples
-#' pars = pkern_bds(c('gxp', 'mat'))
-#' pkern_kplot(pars)
-#' gdim = c(30,50)
-#' pkern_kplot(pars, gdim)
-#' pkern_kplot(c(pars, list(psill=2, nug=0.5)), gdim)
-#' pkern_kplot(c(pars, list(psill=2, nug=0.5)), gdim, ppars=list(smoothed=TRUE))
-pkern_kplot = function(pars, gdim=NULL, gres=1, ppars=list())
+#' gdim = c(100, 100)
+#' pars = pkern_pars(gdim, 'mat')
+#' pkern_plot_pars(pars, gdim)
+#'
+#' # zoom in/out by passing a grid object with suitably modified resolution
+#' g = pkern_grid(gdim)
+#' pkern_plot_pars(pars, g)
+#' pkern_plot_pars(pars, modifyList(g, list(gres=2*g$gres)))
+#' pkern_plot_pars(pars, modifyList(g, list(gres=0.2*g$gres)))
+#'
+#' # change other plot style settings
+#' pkern_plot_pars(pars, modifyList(g, list(gres=0.5*g$gres)), simple=TRUE)
+#' pkern_plot_pars(pars, modifyList(g, list(gres=0.5*g$gres)), minimal=TRUE, col_invert=TRUE)
+#'
+pkern_plot_pars = function(pars, g, simple=FALSE, ...)
 {
-  # duplicate distance scaling factors as needed
-  if( 'gres' %in% names(pars) ) gres = pars[['gres']]
-  if( length(gres) == 1 ) gres = rep(gres, 2)
+  g = pkern_grid(g)
+  gdim = g[['gdim']]
+  gres = g[['gres']]
+  psill = pars[['psill']]
+  eps = pars[['eps']]
 
-  # determine if this is a correlation or covariance plot
-  is.nug = !is.null(pars[['nug']])
-  is.corr = is.null(pars[['psill']]) & !is.nug
+  # increment dimensions to get a central row and column
+  gdim = gdim + 1 - (g[['gdim']] %% 2)
+  ij_mid = floor(gdim/2)
 
-  # unpack v and nug, setting defaults as needed
-  nug = ifelse( is.null(pars[['nug']]), 0, pars[['nug']])
-  psill = ifelse( is.null(pars[['psill']]), 1, pars[['psill']])
-  ktype = ifelse(is.corr, 'correlation', 'covariance')
+  # construct the required rows of the correlation matrices
+  cy = pkern_corr_mat(pars[['y']], gdim[['y']], gres[['y']], i=ij_mid['y'])
+  cx = pkern_corr_mat(pars[['x']], gdim[['x']], gres[['x']], i=ij_mid['x'])
 
-  # set up a plot title and subtitle
+  # find the covariance values and create a grid list object for them
+  cov_values = eps + psill * as.vector(kronecker(cx, cy))
+  gyx = Map(\(ij, r) r * c( (-ij):ij ), ij=ij_mid, r=gres)
+  g_plot = modifyList(g, list(gdim=gdim, gval=cov_values, gyx=gyx))
+
+  # make a plot title
   titles = pkern_toString(pars)
+  ylab = paste('y distance', ifelse(simple, '', titles[['kp']][['y']]))
+  xlab = paste('x distance', ifelse(simple, '', titles[['kp']][['x']]))
+  main = ifelse(simple, paste(titles[['k']]), paste(titles[['main']]))
+  zlab = expression(V[ij])
 
-  # when grid size not indicated, set it to show the effective range
-  if( is.null(gdim) ) gdim = mapply( \(p, s) round(2*p[['kp']][1]/pkern_rho(0.05, p, s)),
-                                     p=pars[c('y', 'x')],
-                                     s=gres)
+  # user arguments override titles set above in call to pkern_plot
+  if( !is.null( list(...)[['main']] ) ) main = list(...)[['main']]
+  if( !is.null( list(...)[['zlab']] ) ) ylab = list(...)[['zlab']]
+  if( !is.null( list(...)[['ylab']] ) ) ylab = list(...)[['ylab']]
+  if( !is.null( list(...)[['xlab']] ) ) xlab = list(...)[['xlab']]
+  return( pkern_plot(g_plot, main=main, zlab=zlab, ylab=ylab, xlab=xlab, ...) )
+}
 
-  # increment gdim as needed and find the row, column, and index of central cell
-  gdim = gdim + 1 - (gdim %% 2)
-  ijc = 1 + ( ( stats::setNames(gdim, c('i', 'j')) - 1 ) / 2 )
-  idx.ijc = pkern_mat2vec(ijc, gdim)
 
-  # compute the required component kernel values and their kronecker product
-  ky = pkern_corrmat(pars[['y']], gdim[1], gres=gres[1], i=ijc[1])
-  kx = pkern_corrmat(pars[['x']], gdim[2], gres=gres[2], j=ijc[2])
-  z = nug + ( psill * as.vector( kronecker(kx, ky) ) )
+#' Plot a semi-variogram
+#'
+#' Plots a sample semi-variogram using the point pair difference data in `vg`.
+#' Binned summary statistics are drawn as circles with size scaled to the sample sizes.
+#' A covariance model (`pars`) is optionally drawn over the sample data as a ribbon plot.
+#'
+#' If `vg` is a data frame, it should contain absolute differences (numeric 'dabs'),
+#' inter-point distances (numeric 'd'), and an assignment into distance bins (integer 'bin')
+#' for a sample of point pairs. If 'bin' is missing, the function calls `pkern_add_bins` to
+#' assign them automatically.
+#'
+#' Function `fun` is the statistic to use for estimating the variogram (ie twice the
+#' semi-variogram) from the distance-binned absolute differences in `vg`. If `fun` is a
+#' function, it must accept sub-vectors of the numeric `vg$dabs` as its only argument,
+#' returning a non-negative numeric scalar. `fun` can also be set to one of the names
+#' 'root_median' (the default), 'root_mean', or 'classical', as shorthand for the robust
+#' fourth-root-based methods in section 2.4 of Cressie (1993), or the classical mean of
+#' squares method of Matheron.
+#'
+#' Optional list `pars` defines a theoretical semi-variogram to draw over the sample data.
+#' When `add=TRUE`, the function overlays it on an existing plot (without changing the
+#' legend, plot limits etc). Anisotropic models, which may assume a range of semi-variances
+#' for any given distance, are drawn as a ribbon plot.
+#'
+#' `add=TRUE` can only be used in combination with an earlier call to `pkern_plot_semi`
+#' where `reset=FALSE` (which allows the function to change R's graphical parameters)
+#'
+#' `vg` can be a grid object (anything understood by `pkern_grid`) rather than a
+#' variogram data frame. When `add=FALSE`, the function uses it to set the distance limits
+#' for an initial empty plot (the model semi-variance is then drawn if `pars` is supplied).
+#'
+#' @param vg data frame of sample absolute differences, with columns 'dabs', 'd' (and 'bin')
+#' @param pars list of the form returned by `pkern_pars` with entries 'y', 'x', 'eps', 'psill'
+#' @param add logical, indicates to draw on an existing plot rather than create a new one
+#' @param fun character or function, the aggregation function (see details)
+#' @param ... further plotting parameters (see below)
+#'
+#' @section Plotting parameters:
+#'
+#' The following style parameters are optional:
+#'
+#' \describe{
+#'
+#' \item{alpha_bin, alpha_model, alpha_bin_b, alpha_model_b}{numeric in [0,1]: respectively,
+#' the transparency of the fill color for circles and ribbons (default 0.3), and their borders
+#' (default 0.5 )}
+#'
+#' \item{bty}{character: plot frame border type, passed to base::plot (default 'n' for no border)}
+#'
+#' \item{col_bin, col_model}{character: respectively, the color to use for circles (default
+#' 'black') and ribbons (default 'blue')}
+#'
+#' \item{cex_bin}{numeric > 0: scaling factor for circles (default 1.5)}
+#'
+#' \item{d_max}{numeric > 0: x (distance) limit for plotting in input units}
+#'
+#' \item{leg_main}{character: title for the sample bin legend (default 'model')}
+#'
+#' \item{main}{character: a title}
+#'
+#' \item{n_bin, n_test}{integer: respectively, the number of distance bins for the sample
+#' (optional if `vg` has a 'bin' column, and ignored if `vg` is a grid object), and the
+#' number of distances at which to evaluate the semi-variogram for model `pars` (default 5e3,
+#' ignored if `pars` not supplied)}
+#'
+#' \item{reset}{logical: indicates to reset graphical parameters to their original values
+#' when finished (default TRUE)}
+#'
+#' \item{unit_in, unit_out}{character: udunits2 strings specifying input distance units and
+#' the desired units for distances in the plot (default for both is meters 'm')}
+#'
+#' \item{xlab, ylab}{character: titles for the y and x axes. The default for y is
+#' 'semi-variance (gamma)', and for x 'distance (<unit_out>)'}
+#'
+#' }
+#'
+#' @return nothing
+#' @export
+#'
+#' @examples
+#'
+#' # make example grid and reference covariance model
+#' gdim = c(10, 15)
+#' g_obs = pkern_grid(gdim)
+#' pars = pkern_pars(g_obs, 'mat')
+#'
+#' # plot a semivariance model
+#' pkern_plot_semi(g_obs)
+#' pkern_plot_semi(g_obs, pars)
+#'
+#' # change annotations, sharpen ribbon border
+#' pkern_plot_semi(g_obs, pars, main='title', xlab='x', ylab='y')
+#' pkern_plot_semi(g_obs, pars, alpha_model_b=1, main='example', xlab='x', ylab='y')
+#'
+#' # input and output units are 'm' by default
+#' pkern_plot_semi(g_obs, pars, unit_out='km')
+#' pkern_plot_semi(g_obs, pars, unit_in='km', unit_out='km')
+#'
+#' # generate sample data and sample semivariogram
+#' g_obs$gval = pkern_sim(g_obs, pars)
+#' vg = pkern_sample_vg(g_obs)
+#' pkern_plot_semi(vg)
+#'
+#' # different aggregation methods
+#' pkern_plot_semi(vg, fun='root_median') # default
+#' pkern_plot_semi(vg, fun='root_mean')
+#' pkern_plot_semi(vg, fun='classical')
+#' pkern_plot_semi(vg, fun=function(x) mean(x^2)) # same as classical
+#'
+#' # plot again with reference model and adjust distance limits, number of bins
+#' pkern_plot_semi(vg, pars)
+#' pkern_plot_semi(vg, pars, d_max=10)
+#' pkern_plot_semi(vg, pars, d_max=10, n_bin=1e2)
+#'
+#' # add dashed line for sample variance (this tends to underestimate the sill)
+#' pkern_plot_semi(vg, pars)
+#' sample_var = var(g_obs[['gval']], na.rm=TRUE)
+#' abline(h=sample_var, lty='dashed')
+#'
+#' # initial call with reset=FALSE, then use add=TRUE to overlay the same model with a green fill
+#' pkern_plot_semi(vg, pars, reset=FALSE)
+#' pkern_plot_semi(vg, pars, add=TRUE, col_model='green', alpha_model_b=0)
+#'
+#' # overlay several models with varying nugget effect
+#' pars_vary = pars
+#' for(i in seq(3))
+#' {
+#'   pars_vary$eps = 0.8 * pars_vary$eps
+#'   pkern_plot_semi(vg, pars_vary, add=TRUE, alpha_model_b=0)
+#' }
+#' dev.off()
+#'
+pkern_plot_semi = function(vg, pars=NULL, add=FALSE, fun='root_median', ...)
+{
+  # flags if plotting a sample semi-variogram, adding a model function
+  input_vg = is.data.frame(vg)
+  draw_model = !is.null(pars)
 
-  # set up axis labels and titles
-  gyx = Map( \(d, s, idx) s * ( seq(d) - idx ), d=gdim, s=gres, idx=ijc)
-  ppars.default = list(main=bquote(.( titles[['main']] )~'kernel'~.( titles[['nug']] )),
-                       sub=titles[['kp']],
-                       leg=ktype,
-                       xlab='dx',
-                       ylab='dy',
-                       glcol='black')
+  # assign defaults
+  n_test = ifelse( is.null( list(...)[['n_test']] ), 5e3, list(...)[['n_test']])
+  cex_bin = ifelse( is.null( list(...)[['cex_bin']] ), 1.5, list(...)[['cex_bin']])
+  col_bin = ifelse( is.null( list(...)[['col_bin']] ), 'black', list(...)[['col_bin']])
+  col_model = ifelse( is.null( list(...)[['col_model']] ), 'blue', list(...)[['col_model']])
+  alpha_bin = ifelse( is.null( list(...)[['alpha_bin']] ), 0.3, list(...)[['alpha_bin']])
+  alpha_model = ifelse( is.null( list(...)[['alpha_model']] ), 0.3, list(...)[['alpha_model']])
+  alpha_bin_b = ifelse( is.null( list(...)[['alpha_bin_b']] ), 0.5, list(...)[['alpha_bin_b']])
+  alpha_model_b = ifelse( is.null( list(...)[['alpha_model_b']] ), 0.5, list(...)[['alpha_model_b']])
+  unit_in = ifelse( is.null( list(...)[['unit_in']] ), 'm', list(...)[['unit_in']])
+  unit_out = ifelse( is.null( list(...)[['unit_out']] ), 'm', list(...)[['unit_out']])
+  ylab = ifelse( is.null( list(...)[['ylab']] ), 'semi-variance (gamma)', list(...)[['ylab']])
+  leg_main = ifelse( is.null( list(...)[['leg_main']] ), 'model', list(...)[['leg_main']])
+  n_bin = ifelse( is.null( list(...)[['n_bin']] ), NA, list(...)[['n_bin']])
+  reset = ifelse( is.null( list(...)[['reset']] ), TRUE, list(...)[['reset']])
+  bty = ifelse( is.null( list(...)[['bty']] ), 'n', list(...)[['bty']])
 
-  # draw the plot and finish
-  ppars.out = utils::modifyList(ppars.default, ppars)
-  pkern_plot(z, gdim, gyx=gyx, ppars=ppars.out)
-  return(invisible())
+  # set up the more complicated defaults
+  d_max = list(...)[['d_max']]
+  main_def = paste(ifelse(input_vg, 'sample', 'model'), 'semi-variogram')
+  xlab_def = paste0('distance (', unit_out, ')')
+  xlab = ifelse( is.null( list(...)[['xlab']] ), xlab_def, list(...)[['xlab']])
+  plot_max = 0
+
+  # handle named variogram aggregation functions
+  if(is.character(fun))
+  {
+    # list of named functions (see section 2.4 on variogram estimation in Cressie, 1993)
+    fun_lookup = list(root_mean = function(x) mean( sqrt(x) )^4 / ( 0.457 + 0.494/length(x) ),
+                      root_median = function(x) stats::median( sqrt(x) )^4 / 0.457,
+                      classical = function(x) mean(x^2) )
+
+    # catch unknown names
+    info_agg = paste(names(fun_lookup), collapse=', ')
+    msg_agg = 'unrecognized fun name. Try one of:' |> paste(info_agg)
+    if( is.null(fun) ) stop(msg_agg)
+    fun = fun_lookup[[fun]]
+  }
+
+  # set up new margins but keep a backup of existing graphical parameters
+  mar_new = mar_existing = par('mar')
+  mar_new[4] = ifelse(!add & input_vg, 6.1, mar_existing)
+  par(mar=mar_new, oma=c(0,0,0,0))
+
+  # input is a variogram data frame
+  if(input_vg)
+  {
+    # find distance range and take corresponding subset of data frame as needed
+    d_max = ifelse(is.null(d_max), max(vg[['d']]), d_max)
+    vg = vg[vg[['d']] < d_max, ]
+
+    # calculate new distance bins only if we need them
+    n_bin_new = ifelse(is.na(n_bin), 25L, n_bin)
+    if( !is.na(n_bin) | is.null(vg[['bin']]) ) vg = pkern_add_bins(vg, n_bin_new)
+
+    # compute summary stats by distance bin: sample size, distance mean, semivar stat
+    s_bin = sapply(split(rep(1, nrow(vg)), vg[['bin']]), sum)
+    d_bin = sapply(split(vg[['d']], vg[['bin']]), mean)
+    v_bin = sapply(split(vg[['dabs']], vg[['bin']]), fun)
+    plot_max = 1.1 * ( max(v_bin)/2 )
+
+    # convert size of circles to plot and distances in output units
+    size_plot = 1 + cex_bin * ( s_bin / max(s_bin) )
+    d_bin_src = units::set_units(d_bin, unit_in, mode='s')
+    d_bin_out = units::drop_units( units::set_units(d_bin_src, unit_out, mode='s') )
+
+  } else {
+
+    # get distance range from grid layout and initialize semi-variance range
+    g = pkern_grid(vg)
+    d_max = ifelse(is.null(d_max), sqrt( sum( ( g[['gdim']] * g[['gres']] )^2 ) ), d_max)
+
+    # do nothing if no model was supplied in add mode
+    if( add & !draw_model ) return( invisible() )
+  }
+
+  # compute model semi-variance values
+  if(draw_model)
+  {
+    # component distances to test along each axis
+    d_test = seq(0, d_max, length.out=n_test)
+
+    # compute model semi-variance range
+    vario_result = pkern_vario_fun(pars, d_test)
+    sv_min = vario_result[['min']]
+    sv_max = vario_result[['max']]
+    plot_max = max(c(plot_max, 1.1 * sv_max))
+  }
+
+  # initialize the plot
+  if(!add)
+  {
+    # set up axis limits, leaving space for bin size legend
+    ylim_out = c(0, plot_max)
+    xlim_src = units::set_units(c(0, d_max) * c(1, 1 + ifelse(input_vg, 1e-1, 0)), unit_in, mode='s')
+    xlim_src = units::set_units(c(0, d_max), unit_in, mode='s')
+    xlim_out = units::drop_units( units::set_units(xlim_src, unit_out, mode='s') )
+
+    # set up title
+    pars_out = ifelse(draw_model, paste(pkern_toString(pars)[['k']], 'kernel'), '')
+    main_def = ifelse(input_vg, paste(main_def, paste0('(n = ', nrow(vg), ')')), main_def)
+    if(draw_model) main_def = paste(c(main_def, pars_out), collapse=', ')
+
+    # initialize the plot area without points
+    main_out = ifelse( is.null( list(...)[['main']] ), main_def, list(...)[['main']])
+    plot(xlim_out, ylim_out, main=main_out, xlab=xlab, ylab=ylab, pch=NA, bty=bty)
+
+    # find line height in same units as user coordinates
+    y_inch = diff(graphics::grconvertY(0:1, 'lines', 'user'))
+    x_inch = diff(graphics::grconvertX(0:1, 'lines', 'user'))
+    y_line = y_inch * par('cin')[2] * par('cex') * par('lheight')
+    x_line = x_inch * par('cin')[2] * par('cex') * par('lheight')
+
+    # add points for sample semi-variance bins
+    if(input_vg)
+    {
+      # draw and color circles for sample semi-variance aggregated by distance
+      col_bin_fill = grDevices::adjustcolor(col_bin, alpha.f=alpha_bin)
+      col_bin_border = grDevices::adjustcolor(col_bin, alpha.f=alpha_bin_b)
+      points(d_bin_out, v_bin/2, pch=16, col=col_bin_fill, cex=size_plot)
+      points(d_bin_out, v_bin/2, col=col_bin_border, cex=size_plot)
+
+      # add legend for the circles
+      if(input_vg)
+      {
+        # compute legend ticks (bin sizes to show)
+        s_bin_plot = pretty(s_bin, n=3)
+        if( any(s_bin_plot == 0) ) s_bin_plot = s_bin_plot[s_bin_plot != 0]
+        s_bin_ticks = length(s_bin_plot)
+        if(s_bin_ticks > 3) s_bin_plot = s_bin_plot[c(1, s_bin_ticks)]
+        size_leg_plot = 1 + cex_bin * ( s_bin_plot / max(s_bin) )
+
+        # draw the legend
+        leg_plot = paste(' ', s_bin_plot)
+        legend(x=2*x_line + par('usr')[2], y=plot_max/2 + y_line, yjust=0, y.intersp=1,
+               title='sample size', legend=leg_plot, pch=1, pt.cex=size_leg_plot,
+               border=col_bin, bty='n', xpd=NA)
+      }
+    }
+  }
+
+  # add the theoretical variogram lines
+  if(draw_model)
+  {
+    # convert distances to output units before drawing lines
+    d_test_src = units::set_units(d_test, unit_in, mode='s')
+    d_test_out = units::drop_units( units::set_units(d_test_src, unit_out, mode='s') )
+
+    # draw upper and lower as polygon
+    x_out = c(d_test_out, rev(d_test_out))
+    y_out = c(sv_max, rev(sv_min))
+    col_model_fill = grDevices::adjustcolor(col_model, alpha.f=alpha_model)
+    col_model_border = grDevices::adjustcolor(col_model, alpha.f=alpha_model_b)
+    graphics::polygon(x_out, y_out, col=col_model_fill, border=col_model_border)
+
+    # add a legend
+    if(!add & input_vg) legend(x=2*x_line + par('usr')[2], y=plot_max/2 - y_line,
+                               yjust=1,
+                               title=leg_main,
+                               fill=col_model_fill,
+                               border=col_model,
+                               xpd=NA, legend='', bty='n')
+  }
+
+  # restore old margin settings before the user's next plot call
+  if(reset) par(mar=mar_existing)
 }
