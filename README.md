@@ -4,8 +4,8 @@ R package for modeling Gaussian processes on grids
 # Update June 2022
 
 After some months of testing new ideas for improving this package I've finally committed a new version.
-This is a major update since the last commit - code files are reorganized more sensibly, and almost every
-function has been rewritten and renamed.
+This is a major update since the last commit - code files are reorganized more sensibly, and most
+functions have been rewritten and renamed.
 
 Nearly all of the package's functions now include extensive test code and examples, and I will be working on
 a new set of vignettes until around mid-summer. 
@@ -18,9 +18,9 @@ users often need a tool for interpolation or down-scaling, but want to steer cle
 with Voronoi tiles (ie nearest neighbour) or inverse distance weighting.
 
 More generally, `pkern` offers an fast and simple back-end for modeling with spatially correlated errors.
-It works much faster than alternatives like `gstat`, at the expense of restricting the type of model
-users can select. However I think for most users, the default model in `pkern` (a Gaussian process with a
-Gaussian covariance kernel) is more than adequate in many situations.
+It works much faster than alternatives like `gstat`, at the expense of somewhat restricting the type of model
+users can select. I think for most users, the default model in `pkern` (a Gaussian process with a Gaussian
+covariance kernel) is more than adequate in many situations.
 
 `pkern` supports raster and geometry inputs from `sf` and `terra`, as well as simpler matrix and vector inputs.
 These packages are suggested, but not required. `pkern` is written using only base dependencies (included by
@@ -31,6 +31,7 @@ default in R) like `graphics` and `stats`.
 
 * models anisotropic Gaussian processes on 2-dimensional regular grids for a choice of covariance kernels
 * fast computation of the likelihood function, generalized least squares, and kriging predictor/variance
+* Support for missing data problems, and highly optimized code for complete data case 
 * automated maximum likelihood model fitting with sample semi-variogram diagnostic
 * user friendly helper functions for raster down-scaling and point interpolation
 
