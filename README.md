@@ -3,9 +3,9 @@
 an R package for modeling Gaussian processes on grids
 
 
-<img src="https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/ordinary_kriging-1.png" width="33%"></img>
-<img src="https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/predictor_plot-1.png" width="33%"></img>
-<img src="https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/variance_plot-1" width="33%"></img>
+<img src="https://raw.githubusercontent.com/deankoch/pkern/main/vignettes/meuse_vignette_files/figure-gfm/ordinary_kriging-1.png" width="33%"></img>
+<img src="https://raw.githubusercontent.com/deankoch/pkern/main/vignettes/meuse_vignette_files/figure-gfm/predictor_plot-1.png" width="33%"></img>
+<img src="https://raw.githubusercontent.com/deankoch/pkern/main/vignettes/meuse_vignette_files/figure-gfm/variance_plot-1" width="33%"></img>
 
 
 # Update June 2022
@@ -16,7 +16,7 @@ functions have been rewritten and renamed. Nearly all of the package's functions
 test code and examples, and I am working on new vignettes. 
 
 A CRAN release is forthcoming. For now you can install the package using devtools and try out
-the [Meuse River](https://github.com/deankoch/pkern/blob/main/vignettes/meuse_vignette.md) vignette.
+the [Meuse River vignette](https://github.com/deankoch/pkern/blob/main/vignettes/meuse_vignette.md).
 
 
 # Overview
