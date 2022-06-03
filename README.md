@@ -3,9 +3,9 @@
 an R package for modeling Gaussian processes on grids
 
 
-<img src="https://raw.githubusercontent.com/deankoch/pkern/main/vignettes/meuse_vignette_files/figure-gfm/ordinary_kriging-1.png" width="33%"></img>
-<img src="https://raw.githubusercontent.com/deankoch/pkern/main/vignettes/meuse_vignette_files/figure-gfm/predictor_plot-1.png" width="33%"></img>
-<img src="https://raw.githubusercontent.com/deankoch/pkern/main/vignettes/meuse_vignette_files/figure-gfm/variance_plot-1.png" width="33%"></img>
+<img src="https://raw.githubusercontent.com/deankoch/pkern/main/vignettes/meuse_vignette_files/figure-gfm/ordinary_kriging-1.png" width="30%"></img>
+<img src="https://raw.githubusercontent.com/deankoch/pkern/main/vignettes/meuse_vignette_files/figure-gfm/predictor_plot-1.png" width="30%"></img>
+<img src="https://raw.githubusercontent.com/deankoch/pkern/main/vignettes/meuse_vignette_files/figure-gfm/variance_plot-1.png" width="30%"></img>
 
 
 # Update June 2022
