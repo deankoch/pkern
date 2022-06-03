@@ -72,15 +72,15 @@ str(meuse)
     ##   ..$ landuse : Factor w/ 15 levels "Aa","Ab","Ag",..: 4 4 4 11 4 11 4 2 2 15 ...
     ##   ..$ dist.m  : num [1:155] 50 30 150 270 380 470 240 120 240 420 ...
     ##   ..$ geometry:sfc_POINT of length 155; first list element:  'XY' num [1:2] 181072 333611
-    ##   ..$ distance: num [1:155, 1] 86.6 102.2 201 322.4 452 ...
+    ##   ..$ distance: num [1:155, 1] 118 125 232 359 482 ...
     ##   ..$ log_zinc: num [1:155] 6.93 7.04 6.46 5.55 5.59 ...
     ##   ..- attr(*, "sf_column")= chr "geometry"
     ##   ..- attr(*, "agr")= Factor w/ 3 levels "constant","aggregate",..: NA NA NA NA NA NA NA NA NA NA ...
     ##   .. ..- attr(*, "names")= chr [1:14] "cadmium" "copper" "lead" "zinc" ...
     ##  $ river_poly:sfc_POLYGON of length 1; first list element: List of 1
-    ##   ..$ : num [1:121, 1:2] 181452 181325 181177 181030 180915 ...
+    ##   ..$ : num [1:413, 1:2] 181505 181478 181452 181420 181388 ...
     ##   ..- attr(*, "class")= chr [1:3] "XY" "POLYGON" "sfg"
-    ##  $ river_line:sfc_LINESTRING of length 1; first list element:  'XY' num [1:118, 1:2] 181466 181466 181330 181331 181227 ...
+    ##  $ river_line:sfc_LINESTRING of length 1; first list element:  'XY' num [1:409, 1:2] 181444 181425 181412 181398 181379 ...
 
 ``` r
 # plot using sf package
@@ -95,12 +95,12 @@ plot(meuse[['soils']]['zinc'], pch=16, add=TRUE)
 n_meuse = nrow(meuse[['soils']])
 ```
 
-We will interplate the log-transformed values (as in the `gstat`
+We will interpolate the log-transformed values (as in the `gstat`
 vignette). Start by defining a grid and snapping the points to it
 
 ``` r
 # desired resolution in units of metres
-gres = c(y=50, x=50)
+gres = c(y=5, x=5)
 
 # snap points, copying values of dependent variable
 g_meuse = pkern_snap(meuse[['soils']]['log_zinc'], g=list(gres=gres))
@@ -151,7 +151,7 @@ n_obs = sum(is_obs)
 g_meuse_sf = pkern_coords(g_meuse, out='sf')
 ```
 
-    ## processing 4368 grid points...
+    ## processing 435240 grid points...
 
 ``` r
 d2r_result = units::drop_units(st_distance(g_meuse_sf, meuse[['river_line']]))
@@ -179,7 +179,7 @@ pars_UK = fit_result_UK$pars
 pkern_GLS(g_meuse, pars_UK, X=X, out='b')
 ```
 
-    ## [1]  5.6539110  0.8668151 -1.5305501
+    ## [1]  5.681606  1.238569 -1.884427
 
 These fitted kernels can be visualized using `pkern_plot_pars`. This
 plots the footprint of correlations around any given central point on
@@ -200,19 +200,14 @@ str(pars_UK)
     ## List of 4
     ##  $ y    :List of 2
     ##   ..$ k : chr "gau"
-    ##   ..$ kp: Named num 306
+    ##   ..$ kp: Named num 233
     ##   .. ..- attr(*, "names")= chr "rho"
     ##  $ x    :List of 2
     ##   ..$ k : chr "gau"
-    ##   ..$ kp: Named num 306
+    ##   ..$ kp: Named num 233
     ##   .. ..- attr(*, "names")= chr "rho"
-    ##  $ eps  : num 0.109
-    ##  $ psill: num 0.0852
-
-Once you have a set of covariance parameters, interpolation becomes very
-easy with `pkern_cmean`. This computes the kriging predictor, an
-interpolator with nice properties like unbiasedness and minimal
-variance, under suitable assumptions.
+    ##  $ eps  : num 0.0856
+    ##  $ psill: num 0.0937
 
 ``` r
 # GLS to estimate the (spatially varying) trend
@@ -222,6 +217,11 @@ pkern_plot(g_meuse_gls, main='estimated trend component')
 ```
 
 ![](https://github.com/deankoch/pkern/blob/main/vignettes/meuse_vignette_files/figure-gfm/GLS_plot-1.png)<!-- -->
+
+Once you have a set of covariance parameters, interpolation becomes very
+easy with `pkern_cmean`. This computes the kriging predictor, an
+interpolator with nice properties like unbiasedness and minimal
+variance, under suitable assumptions.
 
 ``` r
 # compute spatial mean

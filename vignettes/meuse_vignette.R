@@ -53,7 +53,7 @@ library(terra)
 #+ meuse_hide, include=FALSE
 
 # load the Meuse data into a convenient format
-get_meuse = function(dfMaxLength = units::set_units(250, m))
+get_meuse = function(dfMaxLength = units::set_units(50, m))
 {
   # EPSG code for the coordinate system
   epsg_meuse = 28992
@@ -123,14 +123,14 @@ plot(meuse[['soils']]['zinc'], pch=16, add=TRUE)
 n_meuse = nrow(meuse[['soils']])
 
 #'
-#' We will interplate the log-transformed values (as in the `gstat` vignette). Start by
+#' We will interpolate the log-transformed values (as in the `gstat` vignette). Start by
 #' defining a grid and snapping the points to it
 #'
 
 #+ snap_grid
 
 # desired resolution in units of metres
-gres = c(y=50, x=50)
+gres = c(y=5, x=5)
 
 # snap points, copying values of dependent variable
 g_meuse = pkern_snap(meuse[['soils']]['log_zinc'], g=list(gres=gres))
@@ -209,18 +209,18 @@ pkern_plot_pars(pars_UK, g_meuse)
 str(pars_UK)
 
 
-#'
-#' Once you have a set of covariance parameters, interpolation becomes very easy
-#' with `pkern_cmean`. This computes the kriging predictor, an interpolator with nice
-#' properties like unbiasedness and minimal variance, under suitable assumptions.
-#'
-
 #+ GLS_plot
 
 # GLS to estimate the (spatially varying) trend
 z_gls = pkern_GLS(g_meuse, pars_UK, X=meuse_predictors, out='z')
 g_meuse_gls = modifyList(g_meuse, list(gval=z_gls))
 pkern_plot(g_meuse_gls, main='estimated trend component')
+
+#'
+#' Once you have a set of covariance parameters, interpolation becomes very easy
+#' with `pkern_cmean`. This computes the kriging predictor, an interpolator with nice
+#' properties like unbiasedness and minimal variance, under suitable assumptions.
+#'
 
 #+ spatial_plot
 
