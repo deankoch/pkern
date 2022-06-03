@@ -106,7 +106,7 @@ gres = c(y=5, x=5)
 g_meuse = pkern_snap(meuse[['soils']]['log_zinc'], g=list(gres=gres))
 
 # plot the grid only
-pkern_plot(modifyList(g_meuse, list(gval=NA)))
+pkern_plot(modifyList(g_meuse, list(gval=NA)), col_grid=NA)
 ```
 
 ![](https://github.com/deankoch/pkern/blob/main/vignettes/meuse_vignette_files/figure-gfm/snap_grid-1.png)<!-- -->

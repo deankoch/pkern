@@ -136,7 +136,7 @@ gres = c(y=5, x=5)
 g_meuse = pkern_snap(meuse[['soils']]['log_zinc'], g=list(gres=gres))
 
 # plot the grid only
-pkern_plot(modifyList(g_meuse, list(gval=NA)))
+pkern_plot(modifyList(g_meuse, list(gval=NA)), col_grid=NA)
 
 # plot with source points indicated over their snapped grid location
 pkern_plot(g_meuse, zlab='log(zinc)', reset=FALSE)
