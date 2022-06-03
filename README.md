@@ -1,26 +1,33 @@
 # pkern
-R package for modeling Gaussian processes on grids
+
+an R package for modeling Gaussian processes on grids
+
+
+<img src="https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/ordinary_kriging-1.png" width="33%"></img>
+<img src="https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/predictor_plot-1.png" width="33%"></img>
+<img src="https://github.com/deankoch/pkern/blob/main/vignettes/pkern_vignette_files/figure-gfm/variance_plot-1" width="33%"></img>
+
 
 # Update June 2022
 
-After some months of testing new ideas for improving this package I've finally committed a new version.
+After some months of testing new ideas for improving this package I've committed a new version.
 This is a major update since the last commit - code files are reorganized more sensibly, and most
-functions have been rewritten and renamed.
+functions have been rewritten and renamed. Nearly all of the package's functions now include
+test code and examples, and I am working on new vignettes. 
 
-Nearly all of the package's functions now include extensive test code and examples, and I will be working on
-a new set of vignettes until around mid-summer. 
+A CRAN release is forthcoming. For now you can install the package using devtools and try out
+the [Meuse River](https://github.com/deankoch/pkern/blob/main/vignettes/meuse_vignette.md) vignette.
+
 
 # Overview
 
 `pkern` provides a computationally lean implementation of a 2-dimensional spatial correlation model for
 gridded data. This can be useful when working with geo-referenced data, such as in earth sciences, where 
-users often need a tool for interpolation or down-scaling, but want to steer clear of bias problems introduced
-with Voronoi tiles (ie nearest neighbour) or inverse distance weighting.
+users often need a tool for interpolation or down-scaling
 
 More generally, `pkern` offers an fast and simple back-end for modeling with spatially correlated errors.
 It works much faster than alternatives like `gstat`, at the expense of somewhat restricting the type of model
-users can select. I think for most users, the default model in `pkern` (a Gaussian process with a Gaussian
-covariance kernel) is more than adequate in many situations.
+users can select.
 
 `pkern` supports raster and geometry inputs from `sf` and `terra`, as well as simpler matrix and vector inputs.
 These packages are suggested, but not required. `pkern` is written using only base dependencies (included by
