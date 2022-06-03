@@ -30,7 +30,7 @@ It works much faster than alternatives like `gstat`, at the expense of somewhat 
 users can select.
 
 `pkern` supports raster and geometry inputs from `sf` and `terra`, as well as simpler matrix and vector inputs.
-These packages are suggested, but not required. `pkern` is written using only base dependencies (included by
+These two packages are suggested, but not required. `pkern` is written using only base dependencies (included by
 default in R) like `graphics` and `stats`. 
 
 
