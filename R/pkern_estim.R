@@ -149,6 +149,8 @@ pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, method='chol', out='b')
 #'
 #' An automated model fitting procedure
 #'
+#' documentation unfinished
+#'
 #' @param g_obs
 #' @param pars
 #' @param X
@@ -318,6 +320,8 @@ pkern_fit = function(g_obs, pars=NULL, X=NA, iso=TRUE, initial=NULL, quiet=FALSE
 
 #' Fit covariance parameters to data by maximum (profile) likelihood using optim
 #'
+#' documentation unfinished
+#'
 #' @param g_obs list of form returned by `pkern_grid` (with entries 'gdim', 'gres', 'gval')
 #' @param pars_fix list of fixed kernel parameters, with NAs indicating parameters to fit
 #' @param X numeric, vector, matrix, or NA, the mean or its linear predictors, passed to `pkern_LL`
@@ -462,7 +466,8 @@ pkern_optim = function(g_obs, pars_fix='gau', X=0, iso=F, control=list(), quiet=
 #' prediction error under the covariance model specified by `pars`.
 #'
 #' Set `makev=TRUE` to return the pointwise kriging variance. This takes approximately
-#' n_obs times longer to evaluate than `makev=FALSE`.
+#' n_obs times longer to evaluate than `makev=FALSE`. A progress bar will be printed to
+#' console unless `quiet=TRUE`.
 #'
 #' The covariance factorization `fac` can be pre-computed using `pkern_var(..., scaled=TRUE)`
 #' to speed up repeated calls where only the observed data values change (ie same covariance

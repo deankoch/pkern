@@ -263,7 +263,6 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
   # predictor matrix case
   if( !is.null(X) )
   {
-    print('DEBUGGING: X predictor case')
     # # separable case (no missing data)
     # if( all(is_obs) ) g_obs[['gval']] = NULL
 
