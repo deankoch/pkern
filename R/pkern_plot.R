@@ -73,6 +73,8 @@
 #' \item{ij}{logical: enables/disables matrix style plot with j axis annotations on top
 #' (default TRUE for vector and matrix input, otherwise FALSE)}
 #'
+#' \item{layer}{integer: the layer (column) to plot (default 1)}
+#'
 #' \item{lwd_axis, lwd_ticks}{numeric: respectively, line widths for the axis lines and
 #' ticks (0 to omit, default 1)}
 #'
@@ -132,6 +134,11 @@
 #' g_example = modifyList(g, list(gval=z))
 #' pkern_plot(g_example)
 #'
+#' # specify the layer for multi-layer objects (default is first layer)
+#' g_example = modifyList(g, list(gval=cbind(z, z^2), idx_grid=seq(n)))
+#' pkern_plot(g_example)
+#' pkern_plot(g_example, layer=2)
+#'
 #' # reduce number of color breaks or specify a factor for discrete value plots
 #' pkern_plot(g_example, breaks=50)
 #' pkern_plot(g_example, breaks=3) # not a great way to bin the data
@@ -140,11 +147,10 @@
 #' # pass color bar labels for discrete plots in breaks (in order low to high)
 #' pkern_plot(modifyList(g, list(gval=cut(z, 3))), breaks=c('a', 'b', 'c'), zlab='group')
 #'
-#' # make a covariance matrix
-#' gv = modifyList(g_example, list(gval=NA))
-#' idx_obs = sample.int(prod(gdim), 1e2)
-#' gv$gval[idx_obs] = z[idx_obs]
-#' v = pkern_var(gv)
+#' # select some "observed" points and make a covariance matrix
+#' idx_obs = match(seq(n), sort(sample.int(prod(gdim), 1e2)))
+#' g_v_example = modifyList(g_example, list(gval=idx_obs))
+#' v = pkern_var(g_v_example)
 #'
 #' # matrix display mode is automatic when first argument is a matrix or vector
 #' pkern_plot(v, zlab=expression(V[ij]))
@@ -208,6 +214,7 @@ pkern_plot = function(g, gdim=NULL, ...)
   col_invert = ifelse( is.null( list(...)[['col_invert']] ), FALSE, list(...)[['col_invert']])
   col_rev = ifelse( is.null( list(...)[['col_rev']] ), TRUE, list(...)[['col_rev']])
   pal = ifelse( is.null( list(...)[['pal']] ), pal, list(...)[['pal']])
+  layer = ifelse( is.null( list(...)[['layer']] ), 1L, list(...)[['layer']])
   leg = ifelse( is.null( list(...)[['leg']] ), leg, list(...)[['leg']])
   leg_just = ifelse( is.null( list(...)[['leg_just']] ), 0.5, list(...)[['leg_just']])
   zlab = ifelse( is.null( list(...)[['zlab']] ), zlab, list(...)[['zlab']])
@@ -217,6 +224,14 @@ pkern_plot = function(g, gdim=NULL, ...)
 
   # convert matrix and raster to pkern list
   g = pkern_grid(g)
+
+  # slice multi-layer input
+  if( !is.null(g[['idx_grid']]) )
+  {
+    # keep only the specified layer
+    g[['gval']] = as.vector(g[['gval']][g[['idx_grid']], layer])
+    g[['idx_grid']] = NULL
+  }
 
   # upscale as needed
   up_fac = ceiling( g[['gdim']]/px_max )
@@ -485,7 +500,7 @@ pkern_plot_pars = function(pars, g, simple=FALSE, ...)
   # find the covariance values and create a grid list object for them
   cov_values = eps + psill * as.vector(kronecker(cx, cy))
   gyx = Map(\(ij, r) r * c( (-ij):ij ), ij=ij_mid, r=gres)
-  g_plot = modifyList(g, list(gdim=gdim, gval=cov_values, gyx=gyx))
+  g_plot = modifyList(g, list(gdim=gdim, gval=cov_values, gyx=gyx, idx_grid=NULL))
 
   # make a plot title
   titles = pkern_toString(pars)
@@ -510,15 +525,15 @@ pkern_plot_pars = function(pars, g, simple=FALSE, ...)
 #' A covariance model (`pars`) is optionally drawn over the sample data as a ribbon plot.
 #'
 #' If `vg` is a data frame, it should contain absolute differences (numeric 'dabs'),
-#' inter-point distances (numeric 'd'), and an assignment into distance bins (integer 'bin')
-#' for a sample of point pairs. If 'bin' is missing, the function calls `pkern_add_bins` to
-#' assign them automatically.
+#' inter-point distances (numeric 'd'), and, optionally, an assignment into distance bins
+#' (integer 'bin') for a sample of point pairs. If 'bin' is missing, the function calls
+#' `pkern_add_bins` to assign them automatically.
 #'
 #' Function `fun` is the statistic to use for estimating the variogram (ie twice the
 #' semi-variogram) from the distance-binned absolute differences in `vg`. If `fun` is a
 #' function, it must accept sub-vectors of the numeric `vg$dabs` as its only argument,
 #' returning a non-negative numeric scalar. `fun` can also be set to one of the names
-#' 'root_median' (the default), 'root_mean', or 'classical', as shorthand for the robust
+#' 'root_median', 'root_mean' (the default), or 'classical', as shorthand for the robust
 #' fourth-root-based methods in section 2.4 of Cressie (1993), or the classical mean of
 #' squares method of Matheron.
 #'
@@ -595,7 +610,7 @@ pkern_plot_pars = function(pars, g, simple=FALSE, ...)
 #'
 #' # change annotations, sharpen ribbon border
 #' pkern_plot_semi(g_obs, pars, main='title', xlab='x', ylab='y')
-#' pkern_plot_semi(g_obs, pars, alpha_model_b=1, main='example', xlab='x', ylab='y')
+#' pkern_plot_semi(g_obs, pars, alpha_model_b=1, main='example title', xlab='x', ylab='y')
 #'
 #' # input and output units are 'm' by default
 #' pkern_plot_semi(g_obs, pars, unit_out='km')
@@ -607,8 +622,8 @@ pkern_plot_pars = function(pars, g, simple=FALSE, ...)
 #' pkern_plot_semi(vg)
 #'
 #' # different aggregation methods
-#' pkern_plot_semi(vg, fun='root_median') # default
-#' pkern_plot_semi(vg, fun='root_mean')
+#' pkern_plot_semi(vg, fun='root_median')
+#' pkern_plot_semi(vg, fun='root_mean') # default
 #' pkern_plot_semi(vg, fun='classical')
 #' pkern_plot_semi(vg, fun=function(x) mean(x^2)) # same as classical
 #'
@@ -635,7 +650,7 @@ pkern_plot_pars = function(pars, g, simple=FALSE, ...)
 #' }
 #' dev.off()
 #'
-pkern_plot_semi = function(vg, pars=NULL, add=FALSE, fun='root_median', ...)
+pkern_plot_semi = function(vg, pars=NULL, add=FALSE, fun='root_mean', ...)
 {
   # flags if plotting a sample semi-variogram, adding a model function
   input_vg = is.data.frame(vg)
@@ -696,7 +711,7 @@ pkern_plot_semi = function(vg, pars=NULL, add=FALSE, fun='root_median', ...)
     n_bin_new = ifelse(is.na(n_bin), 25L, n_bin)
     if( !is.na(n_bin) | is.null(vg[['bin']]) ) vg = pkern_add_bins(vg, n_bin_new)
 
-    # compute summary stats by distance bin: sample size, distance mean, semivar stat
+    # compute summary stats by distance bin: sample size, distance mean, semi-var stat
     s_bin = sapply(split(rep(1, nrow(vg)), vg[['bin']]), sum)
     d_bin = sapply(split(vg[['d']], vg[['bin']]), mean)
     v_bin = sapply(split(vg[['dabs']], vg[['bin']]), fun)
@@ -725,8 +740,8 @@ pkern_plot_semi = function(vg, pars=NULL, add=FALSE, fun='root_median', ...)
 
     # compute model semi-variance range
     vario_result = pkern_vario_fun(pars, d_test)
-    sv_min = vario_result[['min']]
-    sv_max = vario_result[['max']]
+    sv_min = vario_result[['min']]/2
+    sv_max = vario_result[['max']]/2
     plot_max = max(c(plot_max, 1.1 * sv_max))
   }
 
