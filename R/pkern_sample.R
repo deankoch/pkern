@@ -1,33 +1,56 @@
 # pkern_vario.R
 # Dean Koch, 2022
-# sample semi-variograms
+# sample variograms
 
 #' Theoretical variogram function
 #'
-#' Computes the value of the semi-variogram function defined by covariance model `pars`
-#' at the component (y and x) lags in list `d`.
+#' Computes the value of the variogram function `v`, defined by covariance model `pars`
+#' at the component y and x lags supplied in `d`.
 #'
-#' If `d` is a list, its 'y' and 'x' components should be equal length nonnegative numeric
-#' vectors. The function returns the semi-variance in a vector of the same length.
+#' By definition `v` is Var( Z(s1) - Z(s2) ), where s1 and s2 are a pair of spatial
+#' locations, and Z is the spatial process value. `pkern` assumes that Z is second-order
+#' stationary, which means that `v` only depends on the relative displacement s1-s2.
+#' `v` in this case is equal to twice the covariance function. `pkern_vario_fun` computes
+#' the covariance function as the product of `eps`, `psill` and 1 minus the correlation
+#' function for the supplied distances.
 #'
-#' If `d` is a numeric vector, it is interpreted as a set of distances to at which to
-#' evaluate the range of the (anisotropic) semi-variogram function. The function returns
-#' a list with named numeric vectors 'min' and 'max'.
+#' NOTE: `v` is twice the semi-variogram, usually denoted by greek letter gamma. Variogram
+#' `v` is therefore often written 2*gamma. This can (and does) lead to confusion in the
+#' literature about whether to include a factor 2 in downstream calculations. To be clear,
+#' this function multiplies the covariance function by 2, returning the variogram `v`
+#' (ie 2*gamma), NOT the semi-variogram.
+#'
+#' If `d` is a list, its 'y' and 'x' components should supply the y and x component distances.
+#' These must be equal-length non-negative numeric vectors. The function returns the corresponding
+#' variogram values in a vector of the same length.
+#'
+#' If `d` is a numeric vector, it is interpreted as a set of distances at which to
+#' evaluate the range of the variogram function. Anisotropic variograms will exhibit a range
+#' of values for a given distance (depending on the relative sizes of the x and y components).
+#' The function returns this range in a data frame with columns 'min' and 'max'.
 #'
 #' @param pars list of the form returned by `pkern_pars` with entries 'y', 'x', 'eps', 'psill'
 #' @param d numeric vector or list with vector entries 'y' and 'x', the distances to evaluate
 #'
-#' @return vector (for list `d`) or data.frame (for vector `d`)
+#' @return data frame (for list `d`) or numeric vector (for vector `d`) of variogram values
 #' @export
 #'
 #' @examples
+#' # set up example grid and parameters
 #' gdim = c(10, 15)
 #' d_max = sqrt(sum(gdim^2))
 #' pars = pkern_pars(gdim, 'mat')
 #'
+#' # set up test distances
 #' d_test = seq(0, d_max, length.out=1e2)
-#' vario = pkern_vario_fun(pars, d=list(y=0, x=d_test))
-#' plot(d_test, vario)
+#'
+#' # evaluate and plot the variogram values for equal displacements along x and y
+#' d_equal = stats::setNames(rep(list(sqrt(1/2)*d_test), 2), c('y', 'x'))
+#' vario = pkern_vario_fun(pars, d=d_equal)
+#' plot(d_test, vario, pch=NA)
+#' lines(d_test, vario, col='blue')
+#'
+#' # evaluate and plot the range of variogram values (for all possible x and y displacements)
 #' vario_lims = pkern_vario_fun(pars, d=d_test)
 #' lines(d_test, vario_lims[,1])
 #' lines(d_test, vario_lims[,2])
@@ -53,10 +76,11 @@ pkern_vario_fun = function(pars, d=NULL)
 
   # take product of correlation functions
   nm_yx = c('y', 'x')
-  corrvals = do.call('*', Map(\(p, dyx) pkern_corr(p, dyx), p=pars[nm_yx], dyx=d[nm_yx]))
+  if( !all(nm_yx %in% names(d)) ) stop('list elements y and x (in d) must be named')
+  corrvals = do.call('*', Map(function(p, dyx) pkern_corr(p, dyx), p=pars[nm_yx], dyx=d[nm_yx]))
 
-  # return the variogram
-  return( pars[['eps']] + pars[['psill']] * ( 1 - corrvals ) )
+  # return the variogram (twice the semi-variogram)
+  return( 2 * pars[['eps']] + pars[['psill']] * ( 1 - corrvals ) )
 }
 
 
@@ -79,7 +103,7 @@ pkern_vario_fun = function(pars, d=NULL)
 #' non-overlapping sub-grids. When `over=FALSE` (the default), the function apportions
 #' its `n` point samples as evenly as possible among these disjoint subsets. This ensures
 #' that if `n` is less than or equal to `interval^2`, and there are no NAs, there can be
-#' no repetition (or "over"lap) of points in the returned sub-grids.
+#' no repetition (overlap) of points in the returned sub-grids.
 #'
 #' @param g any grid object accepted or returned by `pkern_grid`
 #' @param n integer > 0, the maximum number of center points to sample
@@ -123,7 +147,7 @@ pkern_vario_fun = function(pars, d=NULL)
 #' n = interval^2 # to get disjoint results n must be less than or equal to interval^2
 #' lag_max = 10 * interval # vary to get larger/smaller subsets. max allowable: min(gdim)/2
 #' idx_sample = pkern_sample_pt(gdim, n=n, interval=interval, lag_max=lag_max)
-#' idx_overlap = rowSums( sapply(idx_sample[-1], \(i) seq(ng) %in% i) )
+#' idx_overlap = rowSums( sapply(idx_sample[-1], function(i) seq(ng) %in% i) )
 #' pkern_plot(as.integer(idx_overlap), gdim, zlab='times sampled')
 #'
 #' # plot each list element a different color
@@ -133,7 +157,7 @@ pkern_vario_fun = function(pars, d=NULL)
 #'
 #' # compare with over=TRUE (usually results in overlap - try running a few times)
 #' idx_sample_compare = pkern_sample_pt(gdim, n=n, interval=interval, lag_max=lag_max, over=TRUE)
-#' idx_overlap_compare = rowSums( sapply(idx_sample_compare[-1], \(i) seq(ng) %in% i) )
+#' idx_overlap_compare = rowSums( sapply(idx_sample_compare[-1], function(i) seq(ng) %in% i) )
 #' pkern_plot(as.integer(idx_overlap_compare), gdim, zlab='times sampled')
 #'
 #' # only non-NA points are eligible in initial sample of center points
@@ -154,7 +178,9 @@ pkern_sample_pt = function(g, n=1e2, lag_max=0, interval=1L, over=FALSE)
   # unpack the grid object
   g = pkern_grid(g)
   gdim = g[['gdim']]
-  z = g[['gval']]
+
+  # extract only the first layer from multi-layer objects
+  if( !is.null(g[['idx_grid']]) ) { z = g[['gval']][g[['idx_grid']], 1L] } else { z = g[['gval']] }
 
   # identify non-missing points in grid
   if( is.null(z) ) z = rep(0L, prod(gdim))
@@ -168,7 +194,7 @@ pkern_sample_pt = function(g, n=1e2, lag_max=0, interval=1L, over=FALSE)
   if( !( all(gdim_inner > 0 ) ) ) stop('lag_max cannot exceed min(gdim)/2')
 
   # find subset for which Moore neighbourhood is completely inside grid
-  ij_inner = lapply(setNames(gdim, c('i', 'j')), \(d) seq(1+lag_max, d-lag_max) )
+  ij_inner = lapply(stats::setNames(gdim, c('i', 'j')), function(d) seq(1+lag_max, d-lag_max) )
   is_inner = pkern_sub_idx(gdim, ij=ij_inner)
 
   # compute their vector index and grid positions
@@ -190,11 +216,11 @@ pkern_sample_pt = function(g, n=1e2, lag_max=0, interval=1L, over=FALSE)
 
       # identify all disjoint sub-grid origins within inner sub-grid,
       ij_origin = apply(expand.grid(seq(interval)-1, seq(interval)-1), 1, identity, simplify=FALSE)
-      ij_all = lapply(ij_origin, \(ij) Map(\(d, r) seq(1L+r, d, by=interval), d=gdim_inner, r=ij))
-      idx_disjoint = lapply(ij_all, \(ij) pkern_sub_idx(gdim_inner, unname(ij), idx=TRUE))
+      ij_all = lapply(ij_origin, function(ij) Map(function(d, r) seq(1L+r, d, by=interval), d=gdim_inner, r=ij))
+      idx_disjoint = lapply(ij_all, function(ij) pkern_sub_idx(gdim_inner, unname(ij), idx=TRUE))
 
       # omit NA points
-      idx_disjoint = lapply(idx_disjoint, \(ij) ij[ is_obs[idx_inner][ij] ] )
+      idx_disjoint = lapply(idx_disjoint, function(ij) ij[ is_obs[idx_inner][ij] ] )
 
       # the number of non-NA points in each disjoint sub-grid
       n_obs_disjoint = sapply(idx_disjoint, length)
@@ -227,7 +253,7 @@ pkern_sample_pt = function(g, n=1e2, lag_max=0, interval=1L, over=FALSE)
       }
 
       # sample n_per[i] sub-grid origins from ith disjoint set
-      idx_center_inner = unlist( Map(\(n, idx) sample(idx, n), n=n_per, idx=idx_disjoint) )
+      idx_center_inner = unlist( Map(function(n, idx) sample(idx, n), n=n_per, idx=idx_disjoint) )
 
       # remap to original (not inner) grid
       idx_center_all = idx_inner[idx_center_inner]
@@ -239,10 +265,10 @@ pkern_sample_pt = function(g, n=1e2, lag_max=0, interval=1L, over=FALSE)
     box_offset = seq(-lag_max, lag_max, by=as.integer(interval))
 
     # loop over center points, compute index of all points in Moore neighbourhood
-    idx_list = lapply(idx_center_all, \(idx) {
+    idx_list = lapply(idx_center_all, function(idx) {
 
       # find grid (i,j) indices for box template centered at center point
-      ij_center = lapply(pkern_vec2mat(idx, gdim, out='list'), \(idx) idx + box_offset)
+      ij_center = lapply(pkern_vec2mat(idx, gdim, out='list'), function(idx) idx + box_offset)
 
       # find vectorized index corresponding to this sample
       pkern_sub_idx(gdim, ij_center, idx=TRUE)
@@ -261,13 +287,17 @@ pkern_sample_pt = function(g, n=1e2, lag_max=0, interval=1L, over=FALSE)
 
 #' Sample point pair absolute differences for use in semi-variogram estimation
 #'
-#' Computes the absolute differences for point pairs in `g`, along with their separation
+#' Compute the absolute differences for point pairs in `g`, along with their separation
 #' distances. If no sample point index is supplied (in `idx`), the function samples points
 #' at random using `pkern_sample_pt`.
 #'
-#' If `idx` has length n, there are n_pp(n) = (n^2 - n) / 2 possible point pairs. The inverse
-#' n(n_pp), is used to determine the maximum number of sample points in `g` to use in order to
-#' satisfy the argument to `n_pp` (a random sub-sample of `idx` is taken as needed).
+#' In a set of n points there are n_pp(n) = (n^2 - n) / 2 possible point pairs. This
+#' expression is inverted to determine the maximum number of sample points in `g` to use
+#' in order to satisfy the user-supplied argument `n_pp`. A random sub-sample of `idx` is
+#' taken as needed.
+#'
+#' The mean of the point pair absolute values ('dabs') is the classical estimator of the
+#' variogram. This and two other robust methods are implemented in `pkern_plot_vg`.
 #'
 #' @param g any grid object accepted or returned by `pkern_grid`, containing non-NA data
 #' @param idx optional integer vector indexing the points to sample
@@ -288,14 +318,14 @@ pkern_sample_pt = function(g, n=1e2, lag_max=0, interval=1L, over=FALSE)
 #' pars = pkern_pars(g_obs, 'mat')
 #'
 #' # generate sample data and sample semi-variogram
-#' g_obs$gval = pkern_sim(g=g_obs, pars)
+#' g_obs[['gval']] = pkern_sim(g=g_obs, pars)
 #' vg = pkern_sample_vg(g_obs)
 #' str(vg)
 #'
 #' # pass to plotter and overlay the model that generated the data
 #' pkern_plot_semi(vg, pars)
 #'
-#' # repeat with smaller sample size
+#' # repeat with smaller sample sizes
 #' pkern_plot_semi(pkern_sample_vg(g_obs, 1e2), pars)
 #' pkern_plot_semi(pkern_sample_vg(g_obs, 1e3), pars)
 #'
@@ -310,14 +340,32 @@ pkern_sample_pt = function(g, n=1e2, lag_max=0, interval=1L, over=FALSE)
 #' pkern_plot_semi(vg, pars)
 #' ( n^2 - n ) / 2 # the number of point pairs
 #'
-pkern_sample_vg = function(g, n_pp=1e4, idx=NULL, n_bin=25)
+#' ## example with multiple layers
+#'
+#' # generate five layers
+#' z_multi = sapply(seq(5), function(x) pkern_sim(g=g_obs, pars))
+#' g_obs_multi = modifyList(g_obs, list(gval=z_multi, idx_grid=seq(n)))
+#'
+#' # by default, a sub-sample of sqrt(n_layers) is selected
+#' vg = pkern_sample_vg(g_obs_multi)
+#' pkern_plot_semi(vg, pars)
+#'
+#' # change this behaviour with n_layer_max
+#' vg = pkern_sample_vg(g_obs_multi, n_layer_max=5)
+#' pkern_plot_semi(vg, pars)
+#'
+pkern_sample_vg = function(g, n_pp=1e4, idx=NULL, n_bin=25, n_layer_max=NA, quiet=FALSE)
 {
   # unpack expected inputs
   g = pkern_grid(g)
   gdim = g[['gdim']]
   gres = g[['gres']]
-  z = g[['gval']]
+
+  # multi-layer support
+  is_multi = !is.null(g[['idx_grid']])
+  if(is_multi) { z = g[['gval']][g[['idx_grid']], 1L] } else { z = g[['gval']] }
   if( is.null(z) ) stop('g must have element "gval" (the data vector)')
+  n = sum(!is.na(z))
 
   # the number of sample points required to get n point pairs, the inverse of f(n)=(n^2-n)/2
   n_obs = min(floor( (1 + sqrt(1 + 8*n_pp)) / 2 ), sum(!is.na(z)))
@@ -329,12 +377,17 @@ pkern_sample_vg = function(g, n_pp=1e4, idx=NULL, n_bin=25)
   idx = idx[ !is.na(z[idx]) ]
   if( length(idx) > n_obs ) idx = sample(idx, n_obs)
   n_obs = length(idx)
+  n_pp = (n_obs^2-n_obs)/2
+
+  # console output
+  msg_n = paste0('sampling ', n_obs, ' of ', n, ' non-NA points (', n_pp, ' point pairs)\n')
+  if(!quiet) cat(msg_n)
 
   # compute grid indices (i, j) for the sample points
   ij_obs = pkern_vec2mat(idx, gdim)
 
   # anonymous function to compute lower triangular part of a 1d distance matrix
-  vec_dist = \(x) c(stats::dist(x, method='manhattan', diag=T))
+  vec_dist = function(x) c(stats::dist(x, method='manhattan', diag=T))
 
   # compute dimension-wise grid line (i,j) distances between all point pairs
   dmat = stats::setNames(apply(ij_obs, 2, vec_dist, simplify=F), c('di', 'dj'))
@@ -348,13 +401,39 @@ pkern_sample_vg = function(g, n_pp=1e4, idx=NULL, n_bin=25)
 
   # i,j indices for each point pair, and their vectorized indices
   ij_pp = list(p1=ij_obs[idx_i_lower,], p2=ij_obs[idx_j_lower,])
-  idx_pp = lapply(ij_pp, \(ij) pkern_mat2vec(ij, gdim))
+  idx_pp = lapply(ij_pp, function(ij) pkern_mat2vec(ij, gdim))
 
   # compute absolute differences in data for each point pair, then separation distance
-  dabs_all = abs( apply( sapply(idx_pp, \(i) z[i]), 1, diff ) )
+  if( is_multi )
+  {
+    # speed things up by directly indexing matrix of non-NAs
+    idx_pp_sparse = lapply(idx_pp, function(i) g[['idx_grid']][i])
+
+    # sub-sample among layers
+    n_layer = ncol(g[['gval']])
+    if( is.na(n_layer_max) ) n_layer_max = max(1L, floor(sqrt(n_layer)))
+    n_layer_max = min(n_layer, n_layer_max)
+    idx_sample_layer = sample.int(n_layer, n_layer_max)
+
+    # console output
+    msg_n = paste('sampling', n_layer_max, 'of', n_layer, 'layers\n')
+    if(!quiet) cat(msg_n)
+
+    # loop over selected sample layers, drawing the same point pairs in each layer
+    dabs_all = sapply(idx_sample_layer, function(idx_layer) {
+
+      # compute absolute differences for selected point pairs in this layer
+      abs(apply(sapply(idx_pp_sparse, function(i) as.vector(g[['gval']][i, idx_layer])), 1, diff))
+    })
+
+  } else {
+
+    # same as above but for a single layer only
+    dabs_all = abs( apply( sapply(idx_pp, function(i) z[i]), 1, diff ) )
+  }
 
   # compile everything in a data frame then append distance info
-  vg = data.frame(dabs=dabs_all, idx_pp, ij_pp, dmat)
+  vg = data.frame(dabs=c(dabs_all), idx_pp, ij_pp, dmat)
   vg[c('dy', 'dx')] = rep(gres, each=nrow(vg)) * vg[c('di', 'dj')]
   vg[['d']] = sqrt( rowSums( vg[c('dy', 'dx')]^2 ) )
 
