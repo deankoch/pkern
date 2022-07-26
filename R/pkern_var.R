@@ -4,27 +4,31 @@
 
 #' Stationary 1D correlation kernels
 #'
-#' Computes stationary correlation function values for the n (nonegative) 1-dimensional
+#' Computes stationary correlation function values for the n (non-negative) 1-dimensional
 #' distances in `d`. Parameter list entry `pars$kp` supplies the kernel parameter(s).
 #'
 #' `pars$k` must be one of the following kernel names:
 #'
-#' "exp": exponential (special case of "gex" with shape "p"=1)
-#' "gau": gaussian/stable (special case of "gex" with shape "p"=2)
-#' "sph": spherical (AKA stable/Gaussian for p=2)
+#' * 'exp': exponential (special case of 'gex' with shape p=1)
+#' * 'gau': gaussian/stable (special case of 'gex' with shape p=2)
+#' * 'sph': spherical (AKA stable/Gaussian for p=2)
 #'
-#' "gex": gamma-exponential (with shape "p")
-#' "mat": Whittle-Matern (Handcock and Wallis parameterization, with shape "kap")
+#' * 'gex': gamma-exponential (with shape p)
+#' * 'mat': Whittle-Matern (Handcock and Wallis parameterization, with shape kap)
 #'
-#' where the first three have 1 single range parameter, and the last two have both a
+#' where the first three kernels have only a range parameters, and the last two have both a
 #' range and shape parameter.
 #'
-#' For the 1-parameter kernels, `pars$kp` is the range parameter value ("rho" ); For the
-#' 2-parameter kernels, `pars$kp` is a vector whose first element is "rho", and second
-#' element is the shape parameter ("p" or "kap"). Note that names in `pars$kp` are ignored
-#' and only the order matters - the range parameter always comes first.
+#' For the 1-parameter kernels, `pars$kp` is the range parameter value ('rho'); For the
+#' 2-parameter kernels, `pars$kp` is a vector whose first element is 'rho', and second
+#' element is the shape parameter ('p' or 'kap'). The names in `pars$kp` are ignored and
+#' only the order matters - the range parameter always comes first.
 #'
-#' @param pars list with elements "k", the kernel name, and "kp" the parameter vector
+#' Note that this function will not accept parameter lists `pars` of the form returned by
+#' `pkern_pars(...)` etc, as these include a pair of 1d kernels (however the sub-lists
+#' `pars$y` and `pars$x` are accepted).
+#'
+#' @param pars list with elements 'k', the kernel name, and 'kp' the parameter vector
 #' @param d numeric vector of length n, the distances to evaluate
 #'
 #' @return length-n vector or a list of parameters and bounds (see details)
@@ -32,17 +36,49 @@
 #'
 #' @examples
 #'
-#' # define a 1D kernel and grab values
-#' pars = pkern_pars(10)[['x']]
-#' pkern_corr(pars, d=1:10)
+#' # define test distances, grid, and example kernel
+#' n_test = 100
+#' d_test = seq(n_test)-1
+#' g_example = pkern_grid(n_test)
+#' pars = pkern_pars(g_example, c('mat', 'gau'))
+#' pars_x = pars[['x']]
+#'
+#' # compute and plot the x component of the correlogram function
+#' corr_x_example = pkern_corr(pars_x, d=d_test)
+#' plot(d_test, corr_x_example, pch=NA)
+#' lines(d_test, corr_x_example)
+#'
+#' ## show how this function gets used to build more complicated objects
+#'
+#' # get the other component correlation, take product
+#' pars_y = pars[['y']]
+#' corr_y_example = pkern_corr(pars_y, d=d_test)
+#' corr_example = corr_y_example * corr_x_example
+#'
+#' # variogram
+#' variogram_example = pkern_vario_fun(pars, d=list(y=d_test, x=d_test))
+#' variogram_compare = 2 * pars$eps + pars$psill * (1 - corr_example)
+#' max(abs( variogram_example - variogram_compare ))
+#'
+#' # Toeplitz component matrices built entirely from these correlation vectors
+#' variance_matrix_example = pkern_var(g_example, pars)
+#' max(abs( variance_matrix_example[['y']][,1L] - corr_y_example ))
+#' max(abs( variance_matrix_example[['x']][,1L] - corr_x_example ))
+#'
 #'
 pkern_corr = function(pars, d=NA)
 {
   # handle invalid pars
   if( !all( c('k', 'kp') %in% names(pars) ) ) stop('pars must be list with elements "k" and "kp"')
+  k_name = pars[['k']]
+
+  # handle five known values for kernel name
+  nm_expected = c('exp', 'gau', 'sph', 'gxp', 'mat')
+  msg_unrecognized = paste('unrecognized kernel name:', k_name)
+  if( !(k_name %in% nm_expected) ) stop(msg_unrecognized)
 
   # exponential
-  if(pars[['k']] == 'exp')
+  if(k_name == 'exp')
   {
     # new parameter list for recursive call
     pars = list(k='gxp', kp=c(rho=pars[['kp']][1], p=1L))
@@ -50,7 +86,7 @@ pkern_corr = function(pars, d=NA)
   }
 
   # gaussian/stable
-  if(pars[['k']] == 'gau')
+  if(k_name == 'gau')
   {
     # new parameter list for recursive call
     pars = list(k='gxp', kp=c(rho=pars[['kp']][1], p=2L))
@@ -58,7 +94,7 @@ pkern_corr = function(pars, d=NA)
   }
 
   # spherical
-  if(pars[['k']] == 'sph')
+  if(k_name == 'sph')
   {
     # assign parameter and process truncation distance
     ds = d / pars[['kp']][1]
@@ -71,7 +107,7 @@ pkern_corr = function(pars, d=NA)
   }
 
   # gamma-exponential
-  if(pars[['k']] == 'gxp')
+  if(k_name == 'gxp')
   {
     # return suggested bounds and initial value if requested
     if( length( pars[['kp']] ) != 2 ) stop(paste('pars$kp must be a vector of form c(rho, p)'))
@@ -81,7 +117,7 @@ pkern_corr = function(pars, d=NA)
   }
 
   # Whittle-Matern
-  if(pars[['k']] == 'mat')
+  if(k_name == 'mat')
   {
     # assign parameters and compute scaling constant
     kap = pars[['kp']][2]
@@ -109,12 +145,22 @@ pkern_corr = function(pars, d=NA)
 
 #' Construct 1D stationary correlation matrices for regularly spaced data
 #'
-#' An effient implementation that uses symmetry and Toeplitz structure arising
-#' from assumption of stationarity of the random field and regularity of the grid.
+#' The i,jth value of the returned correlation matrix is the marginal correlation between
+#' the ith and jth points in a regularly spaced sequence of `n` (1D) points, given the
+#' correlation model with parameters defined in list `pars`.
 #'
-#' `gres` scales the distance between adjacent points
+#' This matrix is symmetric and Toeplitz as a result of the assumption of stationarity
+#' of the random field and regularity of the grid.
 #'
-#' @param pars list of kernel parameters "k" and "kp" (see `pkern_corr`)
+#' The distance between adjacent points is specified by `gres`. Subsets of
+#' the correlation matrix can be requested by specifying `i` and/or `j` (default
+#' behaviour is to include all).
+#'
+#' Like `pkern_corr`, this function is for computing 1D components of a 2D process.
+#' The product of two matrices returned by `pkern_corr_mat` is the correlation
+#' matrix for a spatially separable process (see examples).
+#'
+#' @param pars list of kernel parameters 'k' and 'kp' (see `pkern_corr`)
 #' @param n positive integer, the number of points on the 1D line
 #' @param gres positive numeric, the distance between adjacent grid lines
 #' @param i vector, a subset of `seq(n)` indicating rows to return
@@ -124,11 +170,34 @@ pkern_corr = function(pars, d=NA)
 #' @export
 #'
 #' @examples
-#' pars_x = pkern_pars(10, 'gxp')[['x']]
-#' pkern_corr_mat(pars_x, n=10)
-#' pkern_corr_mat(pars_x, n=10, i=2:4, j=2:4)
-#' pkern_corr_mat(pars_x, n=3)
-#' pkern_corr_mat(pars_x, n=3, gres=2)
+#'
+#' # define test distances, grid, and example kernel
+#' n_test = 10
+#' g_example = pkern_grid(n_test)
+#' pars = pkern_pars(g_example, c('mat', 'gau'))
+#'
+#' # compute the correlation matrices and their kronecker product
+#' cx = pkern_corr_mat(pars[['x']], n=n_test)
+#' cy = pkern_corr_mat(pars[['y']], n=n_test)
+#' cxy = kronecker(cx, cy)
+#'
+#' # pkern_var returns these two matrices in a list...
+#' max(abs( pkern_var(g_example, pars)[['y']] - cy ))
+#' max(abs( pkern_var(g_example, pars)[['x']] - cx ))
+#'
+#' # ... or it can compute the full covariance matrix for model pars
+#' var_matrix = pkern_var(g_example, pars, sep=FALSE)
+#' var_matrix_compare = (pars$psill*cxy) + diag(pars$eps, n_test^2)
+#' max(abs( var_matrix - var_matrix_compare ))
+#'
+#' # extract a subgrid without computing the whole thing
+#' cx_sub = pkern_corr_mat(pars_x, n=n_test, i=2:4, j=2:4)
+#' cx_sub - cx[2:4, 2:4]
+#'
+#' # gres scales distances. Increasing gres causes correlations to decrease
+#' cx_long = pkern_corr_mat(pars_x, n=n_test, gres=2*g_example$gres)
+#' cx_long < cx
+#'
 pkern_corr_mat = function(pars, n, gres=1, i=seq(n), j=seq(n))
 {
   # compute the set of distances over which we need to evaluate kernel
@@ -145,35 +214,41 @@ pkern_corr_mat = function(pars, n, gres=1, i=seq(n), j=seq(n))
 }
 
 
-#' Compute covariance matrix for a (sub)sample of gridded data
+#' Generate covariance matrix for a grid sample, or its factorization
 #'
-#' Computes the covariance matrix `V` for observed grid data `g_obs` and covariance model
-#' `pars` (default `method=='none'`) or the quadratic form `t(X) %*% V_inv %*% X` where
-#' `X` is a covariates matrix and `V_inv` is the inverse of `V`.
+#' Computes the covariance matrix `V` for the non-NA points in grid `g_obs`, given the model
+#' parameters list `pars`; Or, if `X` is supplied, the quadratic form `t(X) %*% V_inv %*% X`,
+#' where `V_inv` is the inverse of `V`.
 #'
-#' When `method=='eigen'` the function instead returns the eigen-decomposition of this
-#' matrix; and when `method=='chol'` it returns the lower triangular Cholesky factor.
+#' By default, `method='none'`, and the function returns the above matrix. When
+#' `method=='eigen'` the function instead returns its eigen-decomposition, and when
+#' `method=='chol'` its lower triangular Cholesky factor is returned.
 #'
-#' NAs in the data vector `g_obs$gval` indicate to return the marginal covariance, ie
-#' the sub-matrix of V where the rows and columns corresponding to the NA grid points
-#' are omitted. If `g_obs$gval` is a matrix, it is assumed to be an array of data vectors
-#' (in the columns), all having NA structure identical to the first column.
+#' `scaled=TRUE` computes the result scaled by `1/pars$psill` (before factorization). This can
+#' be helpful for resolving issues of numerical stability. Note that when `X` is supplied and
+#' `scaled=TRUE`, the output matrix is scaled by `pars$psill` but the inverse of `V` is not.
 #'
-#' The data vector(s) can be absent from `g_obs` (ie `is.null(g_obs$gval) == TRUE`),
-#' in which case the function computes the full component correlation matrices (or their
-#' factorization), for dimensions x and y, and returns them in a list (except when `X`
-#' is supplied, since the output matrix is not generally separable in this case).
+#' If none of the grid points are NA, then `V` becomes separable. In this case (if `X` is not
+#' supplied) the function returns the x and y component correlation matrices - or their
+#' factorizations according to `method` - separately in a list. This behaviour can be toggled
+#' off using `sep=FALSE`, which causes the full matrix to be returned instead. Note that `sep`
+#' has no effect when `X` is supplied as the quadratic form is not generally separable.
 #'
-#' When `scaled=TRUE` and the data vector is supplied in `g_obs`, the function returns
-#' `V/pars$psill` (or the appropriate sub-matrix, or factorization). If `X` is also supplied,
-#' then the product `t(X) %*% V_inv %*% X` is scaled by this factor (but `V_inv` is computed
-#' without the scaling).
+#' Missing data are identified by looking for NAs in the data vector `g_obs$gval`. If all
+#' are NA (or if 'gval' is missing from `g_obs`), the function behaves as though all grid
+#' points are observed. For multi-layer input, NAs are instead determined from `g_obs$idx_grid`
+#' and 'gval' is ignored (see `?pkern_grid`).
+#'
+#' Note that when the component correlation matrices are requested, `scaled` has no effect and
+#' the output is depends only on `pars$x` and `pars$y` (independent of the values of `pars$eps`
+#' and `pars$psill`).
 #'
 #' @param g_obs list of form returned by `pkern_grid` (with entries 'gdim', 'gres', 'gval')
 #' @param pars list of form returned by `pkern_pars` (with entries 'y', 'x', 'eps', 'psill')
-#' @param scaled logical, if `TRUE` sets `pars$psill = 1` and `eps = pars$eps / pars$psill`
+#' @param scaled logical, whether to scale by `1/pars$psill`
 #' @param method character, the factorization to return, one of 'none', 'chol', 'eigen'
 #' @param X numeric matrix, the `X` in `t(X) %*% V %*% X` (default is identity)
+#' @param sep logical, indicating to return correlation components instead of full covariance matrix
 #'
 #' @return either matrix `V`, or `t(X) %*% V_inv %*% X`, or a factorization ('chol' or 'eigen')
 #' @export
@@ -184,60 +259,71 @@ pkern_corr_mat = function(pars, n, gres=1, i=seq(n), j=seq(n))
 #' n = prod(gdim)
 #' n_obs = floor(n/3)
 #' idx_obs = sort(sample.int(n, n_obs))
-#' g_obs = pkern_grid(gdim)
+#' g = g_obs = pkern_grid(gdim)
 #' g_obs$gval[idx_obs] = rnorm(n_obs)
-#' nX = 3
-#' X_all = rnorm(nX * n) |> matrix(ncol=nX)
 #'
 #' # example kernel
 #' psill = 0.3
 #' pars = pkern_pars(g_obs) |> modifyList(list(psill=psill))
 #'
-#' # plot the full covariance matrix, its cholesky factor and eigen-decomposition
-#' V = pkern_var(g_obs, pars)
-#' V_chol = pkern_var(g_obs, pars, method='chol')
-#' V_eigen = pkern_var(g_obs, pars, method='eigen')
-#' pkern_plot(V)
-#' pkern_plot(V_chol)
-#' pkern_plot(V_eigen$vectors)
+#' # plot the covariance matrix for observed data, its cholesky factor and eigen-decomposition
+#' V_obs = pkern_var(g_obs, pars)
+#' V_obs_chol = pkern_var(g_obs, pars, method='chol')
+#' V_obs_eigen = pkern_var(g_obs, pars, method='eigen')
+#' pkern_plot(V_obs)
+#' pkern_plot(V_obs_chol)
+#' pkern_plot(V_obs_eigen$vectors)
 #'
 #' # with no NAs (or no data at all) the function returns the correlation matrix components
 #' g_nodata = modifyList(g_obs, list(gval=NULL))
-#' str(pkern_var(g_nodata, pars))
+#'
+#' # 1d correlation matrices
+#' c_components = pkern_var(g_nodata, pars)
+#' str(c_components)
+#'
+#' # ... their Cholesky decompositions and eigendecompositions
 #' str(pkern_var(g_nodata, pars, method='chol'))
 #' str(pkern_var(g_nodata, pars, method='eigen'))
 #'
 #' # get the full covariance matrix with sep=FALSE...
-#' V2 = pkern_var(g_nodata, pars, sep=FALSE)[idx_obs, idx_obs]
-#' max(abs( V - V2 ))
+#' V_full = pkern_var(g_nodata, pars, sep=FALSE)
+#' max(abs( V_obs - V_full[idx_obs, idx_obs] ))
 #'
 #' # ... or compute it yourself from the components
 #' corr_components = pkern_var(g_nodata, pars)
 #' corr_mat = kronecker(corr_components[['x']], corr_components[['y']])
-#' nugget_effect = diag(pars$eps, n)
-#' V3 = pars$psill * corr_mat + nugget_effect
-#' max(abs(V - V3[idx_obs, idx_obs]))
+#' V_full_compare = pars$psill * corr_mat + diag(pars$eps, n)
+#' max(abs(V_full - V_full_compare))
 #'
 #' # test quadratic form with X
-#' X = cbind(1, X_all)[idx_obs, ]
-#' cprod = crossprod(X, chol2inv(chol(V))) %*% X
-#' abs(max(pkern_var(g_obs, pars, X=X) - cprod ))
+#' nX = 3
+#' X_all = cbind(1, matrix(rnorm(nX * n), ncol=nX))
+#' cprod_all = crossprod(X_all, chol2inv(chol(V_full))) %*% X_all
+#' abs(max(pkern_var(g, pars, X=X_all) - cprod_all ))
 #'
 #' # test products with inverse of quadratic form with X
-#' z = rnorm(nX + 1)
-#' cprod_inv = chol2inv(chol(cprod))
-#' pars0 = pars |> modifyList(list(psill=1, eps=0))
-#' cprod_inv_chol = pkern_var(g_obs, pars, X=X, method='chol')
-#' pkern_var_mult(z, pars0, fac=cprod_inv_chol) - (cprod_inv %*% z)
+#' mult_test = rnorm(nX+1)
+#' cprod_all_inv = chol2inv(chol(cprod_all))
+#' cprod_all_inv_chol = pkern_var(g, pars, X=X_all, scaled=TRUE, method='eigen')
+#' pkern_var_mult(mult_test, pars, fac=cprod_all_inv_chol) - cprod_all_inv %*% mult_test
+#'
+#' # repeat with missing data
+#' X_obs = X_all[idx_obs,]
+#' cprod_obs = crossprod(X_obs, chol2inv(chol(V_obs))) %*% X_obs
+#' abs(max(pkern_var(g_obs, pars, X=X_obs) - cprod_obs ))
+#' cprod_obs_inv = chol2inv(chol(cprod_obs))
+#' cprod_obs_inv_chol = pkern_var(g_obs, pars, X=X_obs, scaled=T, method='eigen')
+#' pkern_var_mult(mult_test, pars, fac=cprod_obs_inv_chol) - cprod_obs_inv %*% mult_test
 #'
 #' # `scaled` indicates to divide matrix by psill
 #' print( pars[['eps']]/pars[['psill']] )
 #' diag(pkern_var(g_obs, pars, scaled=TRUE)) # diagonal elements equal to 1 + eps/psill
 #' ( pkern_var(g_obs, pars) - psill * pkern_var(g_obs, pars, scaled=TRUE) ) |> abs() |> max()
-#' ( pkern_var(g_obs, pars, X=X, scaled=TRUE) - ( cprod/psill ) ) |> abs() |> max()
+#' ( pkern_var(g_obs, pars, X=X_obs, scaled=TRUE) - ( cprod_obs/psill ) ) |> abs() |> max()
 #'
 #' # in cholesky factor this produces a scaling by square root of psill
-#' max(abs( V_chol - sqrt(psill) * pkern_var(g_obs, pars, method='chol', scaled=TRUE) ))
+#' max(abs( V_obs_chol - sqrt(psill) * pkern_var(g_obs, pars, method='chol', scaled=TRUE) ))
+#'
 #' # and in the eigendecomposition, a scaling of the eigenvalues
 #' vals_scaled = pkern_var(g_obs, pars, method='eigen', scaled=TRUE)$values
 #' max(abs( pkern_var(g_obs, pars, method='eigen')$values - psill*vals_scaled ))
@@ -253,9 +339,18 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
   msg_method = paste('method must be one of: NA,', paste(nm_method, collapse=', '))
   if( !(method %in% nm_method) ) stop(msg_method)
 
+  # pkern_grid converts 1-layer matrix input to vector
+  if(is.matrix(g_obs[['gval']])) g_obs = pkern_grid(g_obs)
+
+  # copy the indexing vector in the multi-layer case
+  if(is.matrix(g_obs[['gval']]))
+  {
+    # only the NA structure matters here
+    g_obs = modifyList(g_obs, list(gval=g_obs[['idx_grid']], idx_grid=NULL))
+  }
+
   # identify NA grid-points and handle separable case (no missing data, or all missing)
   n = prod(g_obs[['gdim']])
-  if(is.matrix(g_obs[['gval']])) g_obs[['gval']] = as.vector(g_obs[['gval']][,1])
   is_obs = !is.na(g_obs[['gval']])
   if( !any(is_obs) | all(is_obs) ) g_obs[['gval']] = NULL
   if( is.null(g_obs[['gval']]) ) is_obs = rep(TRUE, n)
@@ -263,11 +358,12 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
   # predictor matrix case
   if( !is.null(X) )
   {
-    # # separable case (no missing data)
-    # if( all(is_obs) ) g_obs[['gval']] = NULL
+    # only eigen-decomposition supported in separable case
+    #if( all(is_obs) & method == 'chol')
 
     # call without X to get eigen-decomposition of variance
-    X_method = ifelse(method=='none', 'eigen', method)
+    X_method = ifelse(method=='none', 'eigen', ifelse(method, 'eigen'))
+    X_method =  'eigen'
     if( is.null(fac) ) fac = pkern_var(g_obs, pars, scaled=TRUE, method=X_method)
 
     # check for invalid input
@@ -293,7 +389,7 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
   eps = ifelse(scaled, pars[['eps']]/pars[['psill']], pars[['eps']])
   psill = ifelse(scaled, 1, pars[['psill']])
 
-  # case of no data vector in arguments
+  # complete data case
   if( n == n_obs )
   {
     # return the full component correlation matrices (or their factorizations)
@@ -304,7 +400,7 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
     if(method == 'none')
     {
       if(sep) return( list(y=cy, x=cx) )
-      return( eps * diag(1, n_obs) + psill * kronecker(cx, cy) )
+      return( ( eps * diag(1, n_obs) ) + psill * kronecker(cx, cy) )
     }
   }
 
@@ -327,28 +423,28 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
   return(eigen_result)
 }
 
-#' Multiply a vector by the inverse covariance matrix
+#' Multiply a vector by a power of the covariance matrix
 #'
-#' The function computes `W %*% z` where W=V^p, V is the covariance matrix for data `z`, and,
-#' by default, `p`  is -1 (matrix inverse). In 'eigen' mode, the argument `p` can be set any
-#' integer or fractional power. In 'chol' mode, argument `p` is ignored and W is the inverse
-#' of V.
+#' Computes `W %*% z`, where `z` is the vector of non-NA data in `g_obs`,
+#' and `W` is the `p`th power of `V`, the covariance matrix for `z`. By default,
+#' `p=-1`, so the function computes products with the inverse covariance matrix.
 #'
 #' Alternatively, `out='quad'` computes the quadratic form `t(z) %*% W %*% z`.
 #'
-#' `method` specifies the covariance matrix factorization to use for computations, either
-#' 'chol' (Cholesky factorization), which is fastest, or 'eigen' (eigen-decomposition),
-#' which supports matrix powers other than `p=-1`.
+#' `method` specifies the covariance matrix factorization to use: either 'chol'
+#' (Cholesky factorization), which only supports `p=-1`; or 'eigen' (eigen-decomposition),
+#' which supports any integer or numeric power for `p`. By default, the 'chol' method
+#' is used, unless an eigen-decomposition is passed in `fac`.
 #'
-#' Factorization is the slow part of the computation. It can be pre-computed
+#' As factorization is the slow part of the computation, it can be pre-computed
 #' using `pkern_var(..., scaled=TRUE)` and passed to `pkern_var_mult` in argument `fac`.
-#' This is the factorization of the covariance matrix after scaling by the partial sill
-#' (see `?pkern_var`); it must either be the lower Cholesky factor (the transposed output
-#' of chol), or a list of eigen-vectors and eigen-values (the output of eigen).
+#' This must be the factorization of the covariance matrix after scaling by the partial sill
+#' (see `?pkern_var`); either the lower Cholesky factor (eg the transposed output of
+#' `base::chol`), or a list of eigen-vectors and eigen-values (eg. the output of `base::eigen`).
 #'
-#' Note that when `fac` is supplied, all entries in `pars` are ignored except for `psill`,
-#' as they are baked into the eigen-decomposition already. `g_obs` can in this case be a
-#' numeric vector, the vector of observed data (with NAs omitted).
+#' When when a factorization is supplied, all entries in `pars`, except for `psill`, are ignored,
+#' as they are baked into the factorization already. `g_obs` can in this case be a numeric vector
+#' or matrix, containing one or more layers of observed data (with NAs omitted).
 #'
 #' @param g_obs list of form returned by `pkern_grid` or numeric vector or matrix of non-NA data
 #' @param pars list of form returned by `pkern_pars` (with entries 'y', 'x', 'eps', 'psill')
@@ -370,7 +466,7 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
 #' g_obs = modifyList(pkern_grid(gdim), list(gval = z_all))
 #'
 #' # define covariance parameters
-#' pars = pkern_pars(g_obs, 'gau') |> modifyList(list(psill=2, eps=0.5))
+#' pars = modifyList(pkern_pars(g_obs, 'gau'), list(psill=2, eps=0.5))
 #'
 #' # COMPLETE CASE
 #'
@@ -378,18 +474,18 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
 #' V_inv = chol2inv(chol(V))
 #' out_reference = V_inv %*% z_all
 #' out_reference_quad = t(z_all) %*% out_reference
-#' pkern_var_mult(g_obs, pars) |> rel_err(out_reference) |> max()
-#' pkern_var_mult(g_obs, pars, quad=TRUE) |> rel_err(out_reference_quad)
+#' max( rel_err(pkern_var_mult(g_obs, pars), out_reference) )
+#' rel_err(pkern_var_mult(g_obs, pars, quad=TRUE), out_reference_quad)
 #'
 #' # pre-computed factorization on separable components of correlation matrix
 #' fac_corr = pkern_var(modifyList(g_obs, list(gval=NULL)), pars, method='eigen')
-#' pkern_var_mult(g_obs, pars, fac=fac_corr) |> rel_err(out_reference) |> max()
-#' pkern_var_mult(g_obs, pars, fac=fac_corr, quad=TRUE) |> rel_err(out_reference_quad)
+#' max( rel_err(pkern_var_mult(g_obs, pars, fac=fac_corr), out_reference) )
+#' rel_err(pkern_var_mult(g_obs, pars, fac=fac_corr, quad=TRUE), out_reference_quad)
 #'
 #' # matrix powers
 #' out_reference = V %*% z_all
-#' pkern_var_mult(g_obs, pars, method='eigen', p=1) |> rel_err(out_reference) |> max()
-#' pkern_var_mult(g_obs, pars, method='eigen', p=1, quad=TRUE) |> rel_err(t(z_all) %*% out_reference)
+#' max( rel_err(pkern_var_mult(g_obs, pars, method='eigen', p=1), out_reference) )
+#' rel_err(pkern_var_mult(g_obs, pars, method='eigen', p=1, quad=TRUE), t(z_all) %*% out_reference)
 #'
 #' # INCOMPLETE CASE
 #'
@@ -408,31 +504,31 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
 #' out_reference_quad = t(z) %*% out_reference
 #'
 #' # check error for two output types by Cholesky method
-#' pkern_var_mult(g_obs, pars) |> rel_err(out_reference) |> max()
-#' pkern_var_mult(g_obs, pars, quad=TRUE) |> rel_err(out_reference_quad)
+#' max(rel_err(pkern_var_mult(g_obs, pars), out_reference))
+#' rel_err(pkern_var_mult(g_obs, pars, quad=TRUE), out_reference_quad)
 #'
 #' # check eigen-decomposition method
-#' pkern_var_mult(g_obs, pars, method='eigen') |> rel_err(out_reference) |> max()
-#' pkern_var_mult(g_obs, pars, quad=TRUE, method='eigen') |> rel_err(out_reference_quad)
+#' max( rel_err(pkern_var_mult(g_obs, pars, method='eigen'), out_reference) )
+#' rel_err(pkern_var_mult(g_obs, pars, quad=TRUE, method='eigen'), out_reference_quad)
 #'
 #' # supply data as a vector instead of list by pre-computing factorization
 #' fac_chol = pkern_var(g_obs, pars, scaled=TRUE, method='chol')
 #' fac_eigen = pkern_var(g_obs, pars, scaled=TRUE, method='eigen')
-#' pkern_var_mult(z, pars, fac=fac_chol) |> rel_err(out_reference) |> max()
-#' pkern_var_mult(g_obs, pars, fac=fac_eigen) |> rel_err(out_reference) |> max()
-#' pkern_var_mult(z, pars, fac=fac_chol, quad=TRUE) |> rel_err(out_reference_quad)
-#' pkern_var_mult(g_obs, pars, fac=fac_eigen, quad=TRUE) |> rel_err(out_reference_quad)
+#' max(rel_err(pkern_var_mult(z, pars, fac=fac_chol), out_reference))
+#' max(rel_err(pkern_var_mult(g_obs, pars, fac=fac_eigen), out_reference))
+#' rel_err(pkern_var_mult(z, pars, fac=fac_chol, quad=TRUE), out_reference_quad)
+#' rel_err(pkern_var_mult(g_obs, pars, fac=fac_eigen, quad=TRUE), out_reference_quad)
 #'
 #' # matrix powers in eigen mode
 #' out_reference = V %*% z
-#' pkern_var_mult(g_obs, pars, method='eigen', p=1) |> rel_err(out_reference) |> max()
-#' pkern_var_mult(g_obs, pars, method='eigen', p=1, quad=TRUE) |> rel_err(t(z) %*% out_reference)
-#' pkern_var_mult(g_obs, pars, method='eigen', p=2) |> rel_err(V %*% out_reference) |> max()
+#' max(rel_err(pkern_var_mult(g_obs, pars, method='eigen', p=1), out_reference))
+#' rel_err(pkern_var_mult(g_obs, pars, method='eigen', p=1, quad=TRUE), t(z) %*% out_reference)
+#' max(rel_err(pkern_var_mult(g_obs, pars, method='eigen', p=2), V %*% out_reference))
 #'
 #' # multiply g_obs twice by a square root of V
 #' g_obs_sqrt = g_obs
 #' g_obs_sqrt$gval[!is.na(g_obs$gval)] = pkern_var_mult(g_obs, pars, method='eigen', p=1/2)
-#' pkern_var_mult(g_obs_sqrt, pars, method='eigen', p=1/2) |> rel_err(out_reference) |> max()
+#' max( rel_err(pkern_var_mult(g_obs_sqrt, pars, method='eigen', p=1/2), out_reference) )
 #'
 pkern_var_mult = function(g_obs, pars, method=NULL, fac=NULL, quad=FALSE, p=-1)
 {
@@ -442,9 +538,12 @@ pkern_var_mult = function(g_obs, pars, method=NULL, fac=NULL, quad=FALSE, p=-1)
   # unpack list g_obs as needed
   if( is.list(g_obs) )
   {
+    g_obs = pkern_grid(g_obs)
+    n_layer = ifelse(is.matrix(g_obs[['idx_grid']]), ncol(g_obs[['idx_grid']]), 1L)
+
     # when there are missing data, omit from copy z
     is_obs = !is.na(g_obs[['gval']])
-    z = matrix(g_obs[['gval']][is_obs], ncol=1)
+    z = matrix(g_obs[['gval']][is_obs], ncol=n_layer)
 
     # complete and empty cases trigger separability option below
     is_all_obs = all(is_obs) | !any(is_obs)
@@ -561,32 +660,32 @@ pkern_var_mult = function(g_obs, pars, method=NULL, fac=NULL, quad=FALSE, p=-1)
 #' n = 10
 #' y = exp(1-seq(n))
 #' y_mat = pkern_toep_mult(y)
-#' ( y_mat - stats::toeplitz(y) ) |> abs() |> max()
+#' max( abs(y_mat - stats::toeplitz(y))  )
 #'
 #' # multiply by random matrix and compare with default matrix multiply
-#' z = rnorm(n^2) |> matrix(n)
+#' z = matrix(rnorm(n^2), n)
 #' result_default = y_mat %*% z
-#' abs( result_default - pkern_toep_mult(y_mat, z) ) |> max()
+#' max( abs( result_default - pkern_toep_mult(y_mat, z) ) )
 #'
 #' # save memory by passing only the first row of the Toeplitz matrix
-#' abs( result_default - pkern_toep_mult(y, z) ) |> max()
+#' max( abs( result_default - pkern_toep_mult(y, z) ) )
 #'
 #' # sparsify z and repeat
 #' idx_sparse = sample.int(n^2, n^2 - n)
 #' z[idx_sparse] = 0
 #' result_default = y_mat %*% z
-#' abs( result_default - pkern_toep_mult(y, z) ) |> max()
+#' max( abs( result_default - pkern_toep_mult(y, z) ) )
 #'
 #' # right-multiply with another kernel
 #' x = exp( 2 *( 1-seq(n) ) )
 #' x_mat = pkern_toep_mult(x)
 #' result_default = result_default %*% x_mat
-#' abs( result_default - pkern_toep_mult(y, z, x) ) |> max()
+#' max( abs( result_default - pkern_toep_mult(y, z, x) ) )
 #'
 #' # z can also be supplied as vector of nonzero grid values
 #' idx_obs = which(z != 0)
 #' gdim = c(y=n, x=n)
-#' abs( result_default - pkern_toep_mult(y, z=z[idx_obs], x, idx_obs, gdim) ) |> max()
+#' max( abs( result_default - pkern_toep_mult(y, z=z[idx_obs], x, idx_obs, gdim) ) )
 #'
 pkern_toep_mult = function(y, z=NULL, x=NULL, idx_obs=NULL, gdim=NULL)
 {
