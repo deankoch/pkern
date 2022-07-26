@@ -177,7 +177,7 @@ pkern_LL = function(pars, g_obs, X=0, method='chol', fac=NULL, quiet=TRUE, more=
   if( is.null(fac) ) fac = pkern_var(g_obs, pars=pars, scaled=TRUE, method=method)
 
   # GLS estimate of mean based on predictors in X
-  if( use_GLS ) X = pkern_GLS(g_obs, pars, X=X, fac=fac, method=method, out='z')
+  if( use_GLS ) X = pkern_GLS(g_obs, pars, X=X, fac=fac, method='auto', out='z')
 
   # matricize scalar and vector input to X
   if( !is.matrix(X) ) X = matrix(X, ncol=1L)
@@ -339,7 +339,7 @@ pkern_sim = function(g_obs, pars=pkern_pars(g_obs), fac=NULL, add_frac=1e-16, qu
 
   # eigen-decompositions of separable components of full grid correlation matrix
   g_empty = modifyList(g_obs, list(gval=NULL))
-  if(is.null(fac)) fac = pkern_var(g_empty, pars, method='eigen')
+  if(is.null(fac)) fac = pkern_var(g_empty, pars, fac_method='eigen')
   is_ev_negative = lapply(fac, function(eig) !( eig[['values']] > 0 ) )
 
   # warn of any non-positive eigenvalues and fix them
@@ -351,6 +351,6 @@ pkern_sim = function(g_obs, pars=pkern_pars(g_obs), fac=NULL, add_frac=1e-16, qu
     fac[[nm_dim]][['values']][ is_ev_negative[[nm_dim]] ] = nz_constant
   }
 
-  return( as.vector(pkern_var_mult(rnorm(n), pars, fac=fac, method='eigen', p=1/2)) )
+  return( as.vector(pkern_var_mult(rnorm(n), pars, fac=fac, fac_method='eigen', p=1/2)) )
 }
 

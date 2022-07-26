@@ -97,7 +97,7 @@
 #' pkern_GLS(g_sparse, pars, NA)
 #' mean(g_sparse$gval, na.rm=TRUE)
 #'
-pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, method='auto', out='b')
+pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, fac_method='eigen', out='b')
 {
   # multi-layer support
   n_layer = 1L
@@ -122,10 +122,12 @@ pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, method='auto', out='b')
     z = matrix(g_obs[['gval']][is_obs], ncol=n_layer)
   }
 
+  # set default factorization method
+  is_separable = all(is_obs)
+  if( all(is_obs) & (fac_method=='chol') ) stop('eigen method is required for complete grids')
+
   # compute variance factorization (scaled=TRUE -> partial sill is factored out)
-  if(method=='auto') method = ifelse(all(is_obs), 'eigen', 'chol')
-  if( all(is_obs) & (method=='chol') ) warning('eigen method is preferred for complete grids')
-  if( is.null(fac) )  fac = pkern_var(g_obs, pars=pars, scaled=TRUE, method=method)
+  if( is.null(fac) ) fac = pkern_var(g_obs, pars=pars, scaled=TRUE, fac_method=fac_method)
 
   # build matrix of covariate values from intercept column and (optionally) X
   n = length(is_obs)
@@ -155,11 +157,11 @@ pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, method='auto', out='b')
   if(startsWith(out, 'x')) return(X_obs)
 
   # find the factorization of quadratic form with X (scaling by V inverse)
-  fac_X = pkern_var(g_obs, pars, X=X_obs, method=method, scaled=TRUE, fac=fac)
+  fac_X = pkern_var(g_obs, pars, X=X_obs, scaled=TRUE, fac=fac, fac_method='eigen')
 
   # compute GLS coefficients using whitened observation data
-  z_trans = pkern_var_mult(z, pars, fac=fac, method=method)
-  betas_gls = pkern_var_mult(t(crossprod(z_trans, X_obs)), pars, fac=fac_X, method=method)
+  z_trans = pkern_var_mult(z, pars, fac=fac)
+  betas_gls = pkern_var_mult(t(crossprod(z_trans, X_obs)), pars, fac=fac_X)
   if(is_multi) betas_gls = rowMeans(betas_gls)
 
   # return betas if requested
@@ -417,7 +419,7 @@ pkern_optim = function(g_obs, pars='gau', X=0, iso=FALSE, control=list(), quiet=
   pars_fix_vec = pkern_pars_update(pars_fix, iso=iso)
   nm_fit = names(pars_fix_vec)[ is.na(pars_fix_vec) ]
 
-  # TODO: when values are specified for all parameters in `pars`, use as initial values
+  # TODO: when values are specified for all parameters in `pars`, use them as initial values
   if( length(nm_fit) == 0 )
   {
     # set initial value automatically here?

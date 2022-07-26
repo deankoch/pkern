@@ -220,34 +220,37 @@ pkern_corr_mat = function(pars, n, gres=1, i=seq(n), j=seq(n))
 #' parameters list `pars`; Or, if `X` is supplied, the quadratic form `t(X) %*% V_inv %*% X`,
 #' where `V_inv` is the inverse of `V`.
 #'
-#' By default, `method='none'`, and the function returns the above matrix. When
-#' `method=='eigen'` the function instead returns its eigen-decomposition, and when
-#' `method=='chol'` its lower triangular Cholesky factor is returned.
+#' By default, `fac_method='none'`, and the function returns the above matrix. When
+#' `fac_method=='eigen'` the function instead returns its eigen-decomposition, and when
+#' `fac_method=='chol'` its lower triangular Cholesky factor is returned. The returned
+#' factorization (from a call without `X`) can be supplied in argument `fac` in a subsequent
+#' call with `X`, to speed up calculations (`fac` is ignored when `X` is not supplied).
 #'
 #' `scaled=TRUE` computes the result scaled by `1/pars$psill` (before factorization). This can
 #' be helpful for resolving issues of numerical stability. Note that when `X` is supplied and
 #' `scaled=TRUE`, the output matrix is scaled by `pars$psill` but the inverse of `V` is not.
 #'
-#' If none of the grid points are NA, then `V` becomes separable. In this case (if `X` is not
-#' supplied) the function returns the x and y component correlation matrices - or their
-#' factorizations according to `method` - separately in a list. This behaviour can be toggled
-#' off using `sep=FALSE`, which causes the full matrix to be returned instead. Note that `sep`
+#' If none of the grid points are NA, then `V` becomes separable. In this case, if `X` is not
+#' supplied, the function returns the x and y component correlation matrices (or their
+#' factorizations according to `fac_method`) separately in a list. In the special case of
+#' `fac_method='none'`, the full matrix is returned instead when `sep=FALSE`. Note that `sep`
 #' has no effect when `X` is supplied as the quadratic form is not generally separable.
+#' Note also that When the component correlation matrices are requested, `scaled` has no effect
+#' and the output is depends only on `pars$x` and `pars$y` (independent of the values of
+#' `pars$eps` and `pars$psill`).
 #'
 #' Missing data are identified by looking for NAs in the data vector `g_obs$gval`. If all
 #' are NA (or if 'gval' is missing from `g_obs`), the function behaves as though all grid
 #' points are observed. For multi-layer input, NAs are instead determined from `g_obs$idx_grid`
 #' and 'gval' is ignored (see `?pkern_grid`).
 #'
-#' Note that when the component correlation matrices are requested, `scaled` has no effect and
-#' the output is depends only on `pars$x` and `pars$y` (independent of the values of `pars$eps`
-#' and `pars$psill`).
 #'
 #' @param g_obs list of form returned by `pkern_grid` (with entries 'gdim', 'gres', 'gval')
 #' @param pars list of form returned by `pkern_pars` (with entries 'y', 'x', 'eps', 'psill')
 #' @param scaled logical, whether to scale by `1/pars$psill`
-#' @param method character, the factorization to return, one of 'none', 'chol', 'eigen'
+#' @param fac_method character, the factorization to return, one of 'none', 'chol', 'eigen'
 #' @param X numeric matrix, the `X` in `t(X) %*% V %*% X` (default is identity)
+#' @param fac matrix or list of matrices, the variance factorization (only used with X)
 #' @param sep logical, indicating to return correlation components instead of full covariance matrix
 #'
 #' @return either matrix `V`, or `t(X) %*% V_inv %*% X`, or a factorization ('chol' or 'eigen')
@@ -268,8 +271,8 @@ pkern_corr_mat = function(pars, n, gres=1, i=seq(n), j=seq(n))
 #'
 #' # plot the covariance matrix for observed data, its cholesky factor and eigen-decomposition
 #' V_obs = pkern_var(g_obs, pars)
-#' V_obs_chol = pkern_var(g_obs, pars, method='chol')
-#' V_obs_eigen = pkern_var(g_obs, pars, method='eigen')
+#' V_obs_chol = pkern_var(g_obs, pars, fac_method='chol')
+#' V_obs_eigen = pkern_var(g_obs, pars, fac_method='eigen')
 #' pkern_plot(V_obs)
 #' pkern_plot(V_obs_chol)
 #' pkern_plot(V_obs_eigen$vectors)
@@ -282,8 +285,8 @@ pkern_corr_mat = function(pars, n, gres=1, i=seq(n), j=seq(n))
 #' str(c_components)
 #'
 #' # ... their Cholesky decompositions and eigendecompositions
-#' str(pkern_var(g_nodata, pars, method='chol'))
-#' str(pkern_var(g_nodata, pars, method='eigen'))
+#' str(pkern_var(g_nodata, pars, fac_method='chol'))
+#' str(pkern_var(g_nodata, pars, fac_method='eigen'))
 #'
 #' # get the full covariance matrix with sep=FALSE...
 #' V_full = pkern_var(g_nodata, pars, sep=FALSE)
@@ -304,7 +307,7 @@ pkern_corr_mat = function(pars, n, gres=1, i=seq(n), j=seq(n))
 #' # test products with inverse of quadratic form with X
 #' mult_test = rnorm(nX+1)
 #' cprod_all_inv = chol2inv(chol(cprod_all))
-#' cprod_all_inv_chol = pkern_var(g, pars, X=X_all, scaled=TRUE, method='eigen')
+#' cprod_all_inv_chol = pkern_var(g, pars, X=X_all, scaled=TRUE, fac_method='eigen')
 #' pkern_var_mult(mult_test, pars, fac=cprod_all_inv_chol) - cprod_all_inv %*% mult_test
 #'
 #' # repeat with missing data
@@ -312,7 +315,7 @@ pkern_corr_mat = function(pars, n, gres=1, i=seq(n), j=seq(n))
 #' cprod_obs = crossprod(X_obs, chol2inv(chol(V_obs))) %*% X_obs
 #' abs(max(pkern_var(g_obs, pars, X=X_obs) - cprod_obs ))
 #' cprod_obs_inv = chol2inv(chol(cprod_obs))
-#' cprod_obs_inv_chol = pkern_var(g_obs, pars, X=X_obs, scaled=T, method='eigen')
+#' cprod_obs_inv_chol = pkern_var(g_obs, pars, X=X_obs, scaled=T, fac_method='eigen')
 #' pkern_var_mult(mult_test, pars, fac=cprod_obs_inv_chol) - cprod_obs_inv %*% mult_test
 #'
 #' # `scaled` indicates to divide matrix by psill
@@ -322,22 +325,21 @@ pkern_corr_mat = function(pars, n, gres=1, i=seq(n), j=seq(n))
 #' ( pkern_var(g_obs, pars, X=X_obs, scaled=TRUE) - ( cprod_obs/psill ) ) |> abs() |> max()
 #'
 #' # in cholesky factor this produces a scaling by square root of psill
-#' max(abs( V_obs_chol - sqrt(psill) * pkern_var(g_obs, pars, method='chol', scaled=TRUE) ))
+#' max(abs( V_obs_chol - sqrt(psill) * pkern_var(g_obs, pars, fac_method='chol', scaled=TRUE) ))
 #'
 #' # and in the eigendecomposition, a scaling of the eigenvalues
-#' vals_scaled = pkern_var(g_obs, pars, method='eigen', scaled=TRUE)$values
-#' max(abs( pkern_var(g_obs, pars, method='eigen')$values - psill*vals_scaled ))
+#' vals_scaled = pkern_var(g_obs, pars, fac_method='eigen', scaled=TRUE)$values
+#' max(abs( pkern_var(g_obs, pars, fac_method='eigen')$values - psill*vals_scaled ))
 #'
-pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=NULL, sep=TRUE)
+pkern_var = function(g_obs, pars=NULL, scaled=FALSE, fac_method='none', X=NULL, fac=NULL, sep=TRUE)
 {
   # default Gaussian kernel
   if(is.null(pars)) pars = pkern_pars(g_obs, 'gau')
 
-  # check for invalid method
-  nm_method = c('none', 'eigen', 'chol')
-  if( is.null(method) ) method = 'chol'
-  msg_method = paste('method must be one of: NA,', paste(nm_method, collapse=', '))
-  if( !(method %in% nm_method) ) stop(msg_method)
+  # check for unknown fac_method
+  nm_fac_method = c('none', 'eigen', 'chol')
+  msg_fac_method = paste('fac_method must be one of: NA,', paste(nm_fac_method, collapse=', '))
+  if( !(fac_method %in% nm_fac_method) ) stop(msg_fac_method)
 
   # pkern_grid converts 1-layer matrix input to vector
   if(is.matrix(g_obs[['gval']])) g_obs = pkern_grid(g_obs)
@@ -358,13 +360,8 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
   # predictor matrix case
   if( !is.null(X) )
   {
-    # only eigen-decomposition supported in separable case
-    #if( all(is_obs) & method == 'chol')
-
     # call without X to get eigen-decomposition of variance
-    X_method = ifelse(method=='none', 'eigen', ifelse(method, 'eigen'))
-    X_method =  'eigen'
-    if( is.null(fac) ) fac = pkern_var(g_obs, pars, scaled=TRUE, method=X_method)
+    if( is.null(fac) ) fac = pkern_var(g_obs, pars, scaled=TRUE, fac_method='eigen')
 
     # check for invalid input
     msg_class = 'mu must be a matrix predictor columns'
@@ -374,12 +371,12 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
 
     # quadratic form of whitened data matrix (not the inverse)
     p_scale = ifelse(scaled, pars[['psill']], 1)
-    X_quad = pkern_var_mult(X, pars, fac=fac, method=X_method, quad=TRUE) / p_scale
+    X_quad = pkern_var_mult(X, pars, fac=fac, quad=TRUE) / p_scale
 
     # return requested decomposition
-    if(method == 'none') return(X_quad)
-    if(method == 'chol' ) return(t(chol(X_quad)))
-    if(method == 'eigen' ) return(eigen(X_quad, symmetric=TRUE))
+    if(fac_method == 'none') return(X_quad)
+    if(fac_method == 'chol' ) return(t(chol(X_quad)))
+    if(fac_method == 'eigen' ) return(eigen(X_quad, symmetric=TRUE))
   }
 
   # unpack grid config and covariance parameters
@@ -388,16 +385,17 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
   gdim = g_obs[['gdim']]
   eps = ifelse(scaled, pars[['eps']]/pars[['psill']], pars[['eps']])
   psill = ifelse(scaled, 1, pars[['psill']])
+  is_separable = n == n_obs
 
   # complete data case
-  if( n == n_obs )
+  if(is_separable)
   {
     # return the full component correlation matrices (or their factorizations)
     cy = pkern_corr_mat(pars[['y']], gdim[['y']], gres[['y']])
     cx = pkern_corr_mat(pars[['x']], gdim[['x']], gres[['x']])
-    if(method == 'chol') return( list( y=t(chol(cy)), x=t(chol(cx)) ) )
-    if(method == 'eigen') return( list( y=eigen(cy), x=eigen(cx) ) )
-    if(method == 'none')
+    if(fac_method == 'chol') return( list( y=t(chol(cy)), x=t(chol(cx)) ) )
+    if(fac_method == 'eigen') return( list( y=eigen(cy), x=eigen(cx) ) )
+    if(fac_method == 'none')
     {
       if(sep) return( list(y=cy, x=cx) )
       return( ( eps * diag(1, n_obs) ) + psill * kronecker(cx, cy) )
@@ -412,12 +410,12 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
   cx_obs = pkern_corr_mat(pars[['x']], gdim[['x']], gres[['x']], i=yx_idx[['j']], j=yx_idx[['j']])
 
   # Hadamard product produces the correlation matrix for observed grid points
-  if(method == 'none') return( ( psill * cy_obs * cx_obs ) + diag( rep(eps, n_obs) ) )
+  if(fac_method == 'none') return( ( psill * cy_obs * cx_obs ) + diag( rep(eps, n_obs) ) )
 
   # compute Cholesky factor (lower triangular) of correlation matrix
-  if(method == 'chol') return( t( chol( psill * cy_obs * cx_obs + eps * diag(rep(1, n_obs)) ) ) )
+  if(fac_method == 'chol') return( t( chol( psill * cy_obs * cx_obs + eps * diag(rep(1, n_obs)) ) ) )
 
-  # method='eigen': compute eigen-decomposition of correlation matrix
+  # fac_method='eigen': compute eigen-decomposition of correlation matrix
   eigen_result = eigen(cy_obs*cx_obs, symmetric=TRUE)
   eigen_result[['values']] = ( psill * eigen_result[['values']] ) + eps
   return(eigen_result)
@@ -431,20 +429,29 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
 #'
 #' Alternatively, `out='quad'` computes the quadratic form `t(z) %*% W %*% z`.
 #'
-#' `method` specifies the covariance matrix factorization to use: either 'chol'
+#' `fac_method` specifies the covariance matrix factorization to use: either 'chol'
 #' (Cholesky factorization), which only supports `p=-1`; or 'eigen' (eigen-decomposition),
-#' which supports any integer or numeric power for `p`. By default, the 'chol' method
-#' is used, unless an eigen-decomposition is passed in `fac`.
+#' which supports any integer or numeric power for `p`. By default, the 'eigen' method
+#' is used, unless a Cholesky decomposition (matrix) is passed in `fac`.
 #'
-#' As factorization is the slow part of the computation, it can be pre-computed
+#' The 'eigen' method is required when `g_obs` has complete data (ie no NA values). Note
+#' that the structure of any supplied `fac` overrules the `fac_method` argument, so if your
+#' `g_obs` is complete and you supply the Cholesky decomposition, the function will throw
+#' an error.
+#'
+#' As factorization is the slow part of the computations, it can be pre-computed
 #' using `pkern_var(..., scaled=TRUE)` and passed to `pkern_var_mult` in argument `fac`.
-#' This must be the factorization of the covariance matrix after scaling by the partial sill
+#' This must be the factorization of the covariance matrix after dividing by the partial sill
 #' (see `?pkern_var`); either the lower Cholesky factor (eg the transposed output of
 #' `base::chol`), or a list of eigen-vectors and eigen-values (eg. the output of `base::eigen`).
+#' In the separable case, the eigen-decomposition is done on each of the x and y components
+#' separately, and `fac` should be a list with elements 'x' and 'y', each one a list of
+#' eigen-vectors and eigen-values.
 #'
-#' When when a factorization is supplied, all entries in `pars`, except for `psill`, are ignored,
+#' When a factorization is supplied, all entries in `pars`, except for `psill`, are ignored,
 #' as they are baked into the factorization already. `g_obs` can in this case be a numeric vector
 #' or matrix, containing one or more layers of observed data (with NAs omitted).
+#'
 #'
 #' @param g_obs list of form returned by `pkern_grid` or numeric vector or matrix of non-NA data
 #' @param pars list of form returned by `pkern_pars` (with entries 'y', 'x', 'eps', 'psill')
@@ -470,7 +477,8 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
 #'
 #' # COMPLETE CASE
 #'
-#' V = pkern_var(g_obs, pars, method='none', sep=FALSE)
+#' # compute the full covariance matrix
+#' V = pkern_var(g_obs, pars, sep=FALSE)
 #' V_inv = chol2inv(chol(V))
 #' out_reference = V_inv %*% z_all
 #' out_reference_quad = t(z_all) %*% out_reference
@@ -478,14 +486,14 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
 #' rel_err(pkern_var_mult(g_obs, pars, quad=TRUE), out_reference_quad)
 #'
 #' # pre-computed factorization on separable components of correlation matrix
-#' fac_corr = pkern_var(modifyList(g_obs, list(gval=NULL)), pars, method='eigen')
+#' fac_corr = pkern_var(modifyList(g_obs, list(gval=NULL)), pars, fac_method='eigen')
 #' max( rel_err(pkern_var_mult(g_obs, pars, fac=fac_corr), out_reference) )
 #' rel_err(pkern_var_mult(g_obs, pars, fac=fac_corr, quad=TRUE), out_reference_quad)
 #'
 #' # matrix powers
 #' out_reference = V %*% z_all
-#' max( rel_err(pkern_var_mult(g_obs, pars, method='eigen', p=1), out_reference) )
-#' rel_err(pkern_var_mult(g_obs, pars, method='eigen', p=1, quad=TRUE), t(z_all) %*% out_reference)
+#' max( rel_err(pkern_var_mult(g_obs, pars, fac_method='eigen', p=1), out_reference) )
+#' rel_err(pkern_var_mult(g_obs, pars, fac_method='eigen', p=1, quad=T), t(z_all) %*% out_reference)
 #'
 #' # INCOMPLETE CASE
 #'
@@ -494,26 +502,24 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
 #' z_obs = rep(NA, n)
 #' z_obs[idx_sampled] = z_all[idx_sampled]
 #' g_obs = modifyList(g_obs, list(gval = z_obs))
-#' V = pkern_var(g_obs, pars, method='none')
+#' V = pkern_var(g_obs, pars)
 #' pkern_plot(V)
 #'
-#' # correctness check
+#' # correctness check (eigen used by default)
 #' z = matrix(z_obs[idx_sampled], ncol=1)
 #' V_inv = chol2inv(chol(V))
 #' out_reference = (V_inv %*% z)
 #' out_reference_quad = t(z) %*% out_reference
-#'
-#' # check error for two output types by Cholesky method
 #' max(rel_err(pkern_var_mult(g_obs, pars), out_reference))
 #' rel_err(pkern_var_mult(g_obs, pars, quad=TRUE), out_reference_quad)
 #'
-#' # check eigen-decomposition method
-#' max( rel_err(pkern_var_mult(g_obs, pars, method='eigen'), out_reference) )
-#' rel_err(pkern_var_mult(g_obs, pars, quad=TRUE, method='eigen'), out_reference_quad)
+#' # check non-default Cholesky method
+#' max( rel_err(pkern_var_mult(g_obs, pars, fac_method='chol'), out_reference) )
+#' rel_err(pkern_var_mult(g_obs, pars, quad=TRUE, fac_method='chol'), out_reference_quad)
 #'
 #' # supply data as a vector instead of list by pre-computing factorization
-#' fac_chol = pkern_var(g_obs, pars, scaled=TRUE, method='chol')
-#' fac_eigen = pkern_var(g_obs, pars, scaled=TRUE, method='eigen')
+#' fac_chol = pkern_var(g_obs, pars, scaled=TRUE, fac_method='chol')
+#' fac_eigen = pkern_var(g_obs, pars, scaled=TRUE, fac_method='eigen')
 #' max(rel_err(pkern_var_mult(z, pars, fac=fac_chol), out_reference))
 #' max(rel_err(pkern_var_mult(g_obs, pars, fac=fac_eigen), out_reference))
 #' rel_err(pkern_var_mult(z, pars, fac=fac_chol, quad=TRUE), out_reference_quad)
@@ -521,23 +527,24 @@ pkern_var = function(g_obs, pars=NULL, scaled=FALSE, method='none', X=NULL, fac=
 #'
 #' # matrix powers in eigen mode
 #' out_reference = V %*% z
-#' max(rel_err(pkern_var_mult(g_obs, pars, method='eigen', p=1), out_reference))
-#' rel_err(pkern_var_mult(g_obs, pars, method='eigen', p=1, quad=TRUE), t(z) %*% out_reference)
-#' max(rel_err(pkern_var_mult(g_obs, pars, method='eigen', p=2), V %*% out_reference))
+#' max(rel_err(pkern_var_mult(g_obs, pars, p=1), out_reference))
+#' rel_err(pkern_var_mult(g_obs, pars, p=1, quad=TRUE), t(z) %*% out_reference)
+#' max(rel_err(pkern_var_mult(g_obs, pars, p=2), V %*% out_reference))
 #'
 #' # multiply g_obs twice by a square root of V
 #' g_obs_sqrt = g_obs
-#' g_obs_sqrt$gval[!is.na(g_obs$gval)] = pkern_var_mult(g_obs, pars, method='eigen', p=1/2)
-#' max( rel_err(pkern_var_mult(g_obs_sqrt, pars, method='eigen', p=1/2), out_reference) )
+#' g_obs_sqrt$gval[!is.na(g_obs$gval)] = pkern_var_mult(g_obs, pars, p=1/2)
+#' max( rel_err(pkern_var_mult(g_obs_sqrt, pars, p=1/2), out_reference) )
 #'
-pkern_var_mult = function(g_obs, pars, method=NULL, fac=NULL, quad=FALSE, p=-1)
+pkern_var_mult = function(g_obs, pars, fac_method='eigen', fac=NULL, quad=FALSE, p=-1)
 {
-  # detect method from class of factorization fac (matrix=chol, list=eigen)
-  if(is.null(method)) method = c('chol', 'eigen')[ 1 + as.integer( is.list(fac) ) ]
+  # check for invalid factorization method name
+  if( !(fac_method %in% c('chol', 'eigen')) ) stop('fac_method unrecognized')
 
-  # unpack list g_obs as needed
+  # reshape input as matrix
   if( is.list(g_obs) )
   {
+    # unpack list g_obs as needed
     g_obs = pkern_grid(g_obs)
     n_layer = ifelse(is.matrix(g_obs[['idx_grid']]), ncol(g_obs[['idx_grid']]), 1L)
 
@@ -546,30 +553,32 @@ pkern_var_mult = function(g_obs, pars, method=NULL, fac=NULL, quad=FALSE, p=-1)
     z = matrix(g_obs[['gval']][is_obs], ncol=n_layer)
 
     # complete and empty cases trigger separability option below
-    is_all_obs = all(is_obs) | !any(is_obs)
+    is_separable = all(is_obs) | !any(is_obs)
 
   } else {
 
     # coerce g_obs to matrix
-    #z = g_obs
-    #if( !is.matrix(g_obs) ) z = matrix(g_obs, 1)
     z = matrix(g_obs, ncol=ifelse(is.vector(g_obs), 1, ncol(g_obs)))
 
     # check if the supplied factorization is a Kronecker product
     if( is.null(fac) ) stop('factorization fac must be supplied if g_obs is not a list')
-    is_all_obs = is.list(fac) & all(c('y', 'x') %in% names(fac))
+    is_separable = is.list(fac) & all(c('y', 'x') %in% names(fac))
   }
 
   # separability property and eigen-decomposition used in no-missing case
-  if( is_all_obs )
+  if(is_separable)
   {
-    # eigen method is forced in this case
-    if( is.null(fac) ) fac = pkern_var(g_obs[c('gres', 'gdim')], pars=pars, method='eigen')
-    if( !all(c('y', 'x') %in% names(fac) ) ) stop('components "x" and "y" not found in fac')
-    ny = length(fac[['y']][['values']])
-    nx = length(fac[['x']][['values']])
+    # factorize the variance matrix - eigen method is forced in this case
+    if( is.null(fac) ) fac = pkern_var(g_obs[c('gres', 'gdim')], pars=pars, fac_method='eigen')
+
+    # check for problems with supplied factorization type
+    msg_fac = 'expected separable eigen-decomposition in fac (but got Cholesky)'
+    if( !is.list(fac) ) stop(msg_fac)
+    if( !all(c('y', 'x') %in% names(fac) ) ) stop('named entries "x" and "y" not found in fac')
+    if( !all(sapply(fac, function(f) is.list(f)) ) ) stop(msg_fac)
 
     # eigenvalues of full correlation and covariance matrices
+    ny = length(fac[['y']][['values']])
     ev_corr = kronecker(fac[['x']][['values']], fac[['y']][['values']])
     ev_p = ( pars[['eps']] + pars[['psill']] * as.numeric(ev_corr) )^p
     if( any( is.infinite(ev_p) ) ) stop('ill-conditioned covariance matrix (0 eigenvalue)')
@@ -591,19 +600,25 @@ pkern_var_mult = function(g_obs, pars, method=NULL, fac=NULL, quad=FALSE, p=-1)
     return( g_prod )
   }
 
-  # check for expected class in fac, or compute it
-  if( !is.null(fac) )
+  # set default factorization method and switch to eigen when needed, with a warning
+  if( is.null(fac_method) ) fac_method = ifelse(p==-1, 'chol', 'eigen')
+  if( (p != -1) & (fac_method == 'chol') )
   {
-    if( method == 'chol' & !is.matrix(fac) ) stop('Cholesky factor not found in fac')
-    if( method == 'eigen' & !is.list(fac) ) stop('eigendecomposition (list) not found in fac')
+    warning('switching to fac_method="eigen" (p=-1 required for Cholesky)')
+    fac_method = 'eigen'
+  }
 
-  } else { fac = pkern_var(g_obs, pars=pars, scaled=TRUE, method=method) }
+  # factorize the variance matrix using the specified method
+  if( is.null(fac) ) fac = pkern_var(g_obs, pars=pars, scaled=TRUE, fac_method=fac_method)
+
+  # detect supplied factorization type
+  fac_method = ifelse(is.matrix(fac), 'chol', 'eigen')
 
   # code below handles non-separable case
   if( is.null(z) ) stop('data vector not found g_obs')
 
   # computation via Cholesky factor (p=-1)
-  if( method == 'chol' )
+  if( fac_method == 'chol' )
   {
     # solve for (t(C))(V_inv)(z) whose inner product is the quadratic form
     g_chol = forwardsolve(fac, z/pars[['psill']] )
@@ -612,7 +627,7 @@ pkern_var_mult = function(g_obs, pars, method=NULL, fac=NULL, quad=FALSE, p=-1)
   }
 
   # computation via eigen-decomposition
-  if( method == 'eigen' )
+  if( fac_method == 'eigen' )
   {
     ev_sqrt = ( pars[['psill']] * fac[['values']] )^(p/2)
     if( any( is.infinite(ev_sqrt) ) ) stop('ill-conditioned covariance matrix (0 eigenvalue)')
@@ -630,8 +645,8 @@ pkern_var_mult = function(g_obs, pars, method=NULL, fac=NULL, quad=FALSE, p=-1)
 
 #' Efficiently compute yzx for symmetric Toeplitz matrices y and x
 #'
-#' This computes the product y %*% z (and, optionally, right-multiplies the result
-#' by x) for symmetric Toeplitz matrices y (and x). It uses fast Fourier transforms to
+#' Computes the product y %*% z and (optionally) right-multiplies the result
+#' by x, for symmetric Toeplitz matrices y (and x). This uses fast Fourier transforms to
 #' reduce the memory footprint of computations, particularly when z is sparse.
 #'
 #' By default z is set to the identity matrix, so that pkern_toep_mult(y) returns the
