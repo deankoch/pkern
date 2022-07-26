@@ -47,11 +47,12 @@ pkern_pars = function(g, pars='gau', fill='initial')
 #' `g$gres * g$gdim`. Ranges are initialized to the geometric mean of the upper
 #' and lower bounds.
 #'
-#' `eps` (measurement variance) and `psill` (partial sill) are both initialized to
-#' one half the sample variance, `v`, and bounded above by `var_obs * wid`. The lower
-#' bound for `eps` is set to a small positive number (`1e-6`) for numerical stability,
-#' and the lower bound for `psill` is set to `var_obs / wid`. The user must supply either
-#' `var_obs` or `g$gval` so that sample variance can be computed.
+#' Variance bounds centered around `var_obs`, which by default is set to the sample
+#' variance of the data in `g$gval`. `eps` (measurement variance) and `psill` (partial
+#' sill) are both initialized to one half of `var_obs`, bounded above by `var_obs`
+#' times `var_mult`, and bounded below by a small positive number (`1e-6`). Note that
+#' while `eps=0` produces valid models in theory, in practice `eps>0` is often
+#' necessary for numerical stability.
 #'
 #' Shape parameter bounds are hard-coded, and are set conservatively to avoid problems
 #' with numerical precision in functions like `exp` and `gamma` when evaluating very
@@ -71,7 +72,7 @@ pkern_pars = function(g, pars='gau', fill='initial')
 #' pkern_bds('mat', g)
 #' pkern_bds('mat', g, lower=0)
 #' pkern_bds('mat', g, rows=c('eps', 'psill'), lower=c(0, 0.5))
-pkern_bds = function(pars, g, var_obs=NULL, wid=2, rows=NULL, initial=NULL, lower=NULL, upper=NULL)
+pkern_bds = function(pars, g, var_obs=NULL, var_mult=2, rows=NULL, initial=NULL, lower=NULL, upper=NULL)
 {
   # set up hard-coded shape parameter bounds
   kap_bds = list(gxp=list(lower=0.5, initial=1, upper=2),
@@ -93,8 +94,8 @@ pkern_bds = function(pars, g, var_obs=NULL, wid=2, rows=NULL, initial=NULL, lowe
 
   # set up bounds for variance components
   bds = as.list(p_vec)
-  bds[['psill']] = list(lower=1e-6, initial=var_obs/2, upper=var_obs*wid)
-  bds[['eps']] = list(lower=1e-6, initial=var_obs/2, upper=var_obs*wid)
+  bds[['psill']] = list(lower=1e-6, initial=var_obs/2, upper=var_obs*var_mult)
+  bds[['eps']] = list(lower=1e-6, initial=var_obs/2, upper=var_obs*var_mult)
 
   # set up bounds for kernel ranges - initial is geometric mean of upper and lower
   bds_kp = Map(function(r,d) list(lower=r, initial=NA, upper=r*d), r=g[['gres']], d=g[['gdim']])
