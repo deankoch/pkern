@@ -11,13 +11,13 @@
 #' locations, and Z is the spatial process value. `pkern` assumes that Z is second-order
 #' stationary, which means that `v` only depends on the relative displacement s1-s2.
 #' `v` in this case is equal to twice the covariance function. `pkern_vario_fun` computes
-#' the covariance function as the product of `eps`, `psill` and 1 minus the correlation
+#' the covariance function as the sum of `eps` and `psill` times 1 minus the correlation
 #' function for the supplied distances.
 #'
 #' NOTE: `v` is twice the semi-variogram, usually denoted by greek letter gamma. Variogram
 #' `v` is therefore often written 2*gamma. This can (and does) lead to confusion in the
-#' literature about whether to include a factor 2 in downstream calculations. To be clear,
-#' this function multiplies the covariance function by 2, returning the variogram `v`
+#' literature about whether to include a factor 2 in downstream calculations.
+#' This function multiplies the covariance function by 2, returning the variogram `v`
 #' (ie 2*gamma), NOT the semi-variogram.
 #'
 #' If `d` is a list, its 'y' and 'x' components should supply the y and x component distances.
