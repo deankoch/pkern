@@ -11,26 +11,33 @@
 #' the `raster` package, 'SpatRaster' objects from `terra`, as well as any non-complex matrix,
 #' or a list containing the vectorization of one, or a vector of grid dimensions.
 #'
-#' It returns a list with the following 3-5 elements:
+#' It returns a list with the following 3-6 elements:
 #'
 #' * gyx: `list(y, x)`, the coordinates of the y and x grid lines in vectors `y` and `x`
 #' * gres: `c(y, x)`, the (numeric) y and x distances between grid lines
 #' * gdim: `c(y, x)`, the (integer) number of y and x grid lines
-#' * gval: vector, the data (if any) in column-major order with y descending, x ascending
+#' * gval: vector or matrix, the data (if any) in column-major order with y descending, x ascending
 #' * crs: character, the WKT string (if available) describing coordinate reference system
+#' * idx_grid: integer vector, mapping rows of `gval` to points on the grid
 #'
 #' where 'crs' is included only for geo-referenced inputs from `raster` and `terra`.
 #'
 #' The input `g` can itself be a list containing a subset of these elements (including at least
 #' one of 'gdim' or 'gyx'), and the function will fill in missing entries with their defaults:
-#' If 'gval' is missing, the function sets NAs in the data vector; If 'res' is missing, it is
+#' If 'gval' is missing, the function sets NAs; If 'res' is missing, it is
 #' computed from the first two grid lines in 'gyx'. If 'gyx' is missing, it is assigned the sequence
 #' `1:n` (scaled by 'res', if available) for each `n` in 'gdim'; and if 'gdim' is missing, it
 #' is set to equal the number of grid lines specified in (each vector of) 'gyx'.
 #'
-#' `g` can also be a vector of the form `c(y, x)` defining grid dimensions (as a shorthand for
-#' the call `pkern_grid(g=list(gdim=gdim))`). Note that 1-dimensional grids are not supported,
-#' ie. there must be at least 2 grid lines in both the x and y dimensions.
+#' `g` can also be a vector of the form `c(y, x)` defining grid dimensions y and x (as a
+#' shorthand for the call `pkern_grid(g=list(gdim=gdim))`). Note that 1-dimensional grids
+#' are not supported, ie. there must be at least 2 grid lines in both the x and y dimensions.
+#'
+#' `gval` may be a matrix of multiple layers, with vectorized grid data in columns. This should
+#' include only the subset of observed data, with NAs indicating by the mapping `idx_grid`.
+#' `idx_grid` is a vector of length `prod(gdim)` with NAs for unobserved points, and otherwise
+#' the row number (in `gval`) of the observed point  These non-NA values must comprise
+#' `seq(nrow(gval))` (ie all rows must be mapped), but they can be in any order.
 #'
 #' @param g grid object such as a matrix or raster or vector of grid dimensions (see details)
 #' @param vals logical indicating to include the data vector 'gval' in return list
@@ -46,7 +53,10 @@
 #' str(g)
 #' str(pkern_grid(gdim, vals=FALSE))
 #'
-#' # supply grid lines instead to get the same result
+#' # pass result to pkern_grid and get the same thing back
+#' identical(g, pkern_grid(g))
+#'
+#' # supply grid lines instead and get the same result
 #' all.equal(g, pkern_grid(g=list(gyx=lapply(gdim, function(x) seq(x)-1L))) )
 #'
 #' # display coordinates and grid line indices
@@ -157,12 +167,55 @@ pkern_grid = function(g, vals=TRUE)
   # handle list objects
   if( is.list(g) )
   {
-    # shortcut to return the list unchanged when all required names are there
+    # check class of gval contents
+    is_gval = names(g) == 'gval'
+    if( any(is_gval) )
+    {
+      # check for multi-layer input
+      is_indexed = !is.null(g[['idx_grid']])
+      is_multi = is.matrix(g[['gval']])
+
+      # handle missing indexing vector when it is expected
+      if(is_multi & !is_indexed)
+      {
+        warning('idx_grid not supplied. Assuming g has no missing data')
+        g[['idx_grid']] = seq(nrow(g[['gval']]))
+        is_indexed = TRUE
+      }
+
+      # handle indexing vector
+      if(is_indexed)
+      {
+        # vector gval overwritten with 1-column matrix when indexed
+        if(!is_multi) g[['gval']] = matrix(g[['gval']], ncol=1L)
+
+        # remove redundant indexing vectors
+        if( (ncol(g[['gval']]) == 1) & !anyNA(g[['idx_grid']]) )
+        {
+          # overwrite gval with vector to replace matrix
+          g[['gval']] = as.vector(g[['gval']])[g[['idx_grid']]]
+          g[['idx_grid']] = NULL
+          is_indexed = FALSE
+        }
+      }
+    }
+
+    # skip further checking below when all other required names are found
     if( all(nm_g %in% names(g)) )
     {
-      # remove gval if not requested
-      is_gval = names(g) == 'gval'
-      if( any(is_gval) & !vals ) return(g[!is_gval])
+      # return the list
+      if(!vals) return(g[!is_gval])
+
+      # consistency check for vector lengths
+      if( !any(is_gval) ) { g[['gval']] = rep(NA, prod(g[['gdim']])) } else {
+
+        n_got = ifelse(is_indexed, nrow(g[['gval']]), length(g[['gval']]))
+        n_expect = ifelse(is_indexed, sum(!is.na(g[['idx_grid']])), prod(g[['gdim']]))
+        msg_gval = ifelse(is_indexed, 'number of rows in gval', 'length of gval')
+        msg_gdim = ifelse(is_indexed, 'number of non-NAs in idx_grid', 'prod(gdim)')
+        if(n_got != n_expect) stop(paste('mismatch between', msg_gdim, 'and', msg_gval))
+      }
+
       return(g)
     }
 
@@ -331,14 +384,17 @@ pkern_export = function(g, template='terra')
 #' list containing either `gdim` or`gres`, from which an appropriately spaced set of grid
 #' lines is derived, centered under the bounding box of the points.
 #'
-#' `trim` controls the extent of the output grid. If `trim=FALSE` the function returns
-#' the smallest regular grid containing both `g` (a sub-grid) and the snapped `from`
-#' points. If `trim=TRUE` NA border columns and rows are omitted, so that the grid is
-#' flush over the snapped points.
+#' `crop_from` and `crop_g` control the extent of the output grid. If both are `FALSE`
+#' (the default) the function returns the smallest regular grid containing both `g`
+#' and the snapped `from` points. If `crop_from=TRUE` and `crop_g=FALSE` the output
+#' grid will match `g` exactly. If `crop_from=FALSE` and `crop_g=TRUE` the output
+#' grid will include all snapped points, and possibly omit some or all of `g`. And if
+#' both are `TRUE`, the output grid encloses the intersection of the points and `g`.
 #'
 #' @param from matrix, data frame, or points object from `sp` or `sf`, the source points
 #' @param g any grid object accepted or returned by `pkern_grid`, the destination grid
-#' @param trim logical, indicating to trim NA borders from the result.
+#' @param crop_from logical, indicating to omit points not overlying `g`.
+#' @param crop_g logical, indicating to trim `g` to the extent of `from`.
 #'
 #' @return list of form returned by `pkern_grid`, defining a grid containing the snapped
 #' points. These are assigned the corresponding data value in `from`, or if  `from` has no
@@ -377,7 +433,13 @@ pkern_export = function(g, template='terra')
 #' graphics::points(from[c('x', 'y')])
 #'
 #' # find smallest subgrid enclosing all snapped grid points
-#' g_snap = pkern_snap(from, g, trim=TRUE)
+#' g_snap = pkern_snap(from, g, crop_g=TRUE)
+#' pkern_plot(g_snap, col_grid='black', reset=FALSE)
+#' graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
+#' graphics::points(from[c('x', 'y')])
+#'
+#' # snap only the points overlying the input grid
+#' g_snap = pkern_snap(from, g, crop_from=TRUE)
 #' pkern_plot(g_snap, col_grid='black', reset=FALSE)
 #' graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
 #' graphics::points(from[c('x', 'y')])
@@ -433,7 +495,7 @@ pkern_export = function(g, template='terra')
 #'
 #' }
 #'
-pkern_snap = function(from, g=NULL, trim=FALSE)
+pkern_snap = function(from, g=NULL, crop_from=FALSE, crop_g=FALSE)
 {
   # set up more appropriate grid lines later input g doesn't specify them
   gres_input = NULL
@@ -453,7 +515,7 @@ pkern_snap = function(from, g=NULL, trim=FALSE)
   nm_yx = c('y', 'x')
   is_sf = any( c('sf','sfc', 'sfg') %in% class(from) )
   is_sp = any( c('SpatialPoints', 'SpatialPointsDataFrame') %in% class(from) )
-  to_crs = NULL
+  #to_crs = NULL
 
   # get coordinate(s) from sf objects as matrix/vector
   if(is_sf)
@@ -488,13 +550,23 @@ pkern_snap = function(from, g=NULL, trim=FALSE)
   if( is.vector(from) ) from = as.matrix(from, nrow=1)
   if( is.matrix(from) ) from = apply(from, 2, identity, simplify=FALSE)
 
+  # crop input points if requested
+  if( crop_from )
+  {
+    omit_y = ( from[[1]] < min(g[['gyx']][['y']]) ) | ( from[[1]] > max(g[['gyx']][['y']]) )
+    omit_x = ( from[[2]] < min(g[['gyx']][['x']]) ) | ( from[[2]] > max(g[['gyx']][['x']]) )
+    omit_from = omit_y | omit_x
+    from = lapply(from, function(x) x[!omit_from])
+    vals = vals[!omit_from]
+  }
+
   # copy data and find bounding box
   if( length(from) > 2 ) vals = from[[3]]
   from_yx = stats::setNames(from[1:2], nm_yx)
   from_n = length(from_yx[['x']])
   from_bds = lapply(list(min, max), function(f) sapply(from_yx, f))
 
-  # automatically set grid lines
+  # automatically set grid lines to enclose all input points
   if(auto_gyx)
   {
     # automatically set grid dimensions based on requested resolution
@@ -513,9 +585,10 @@ pkern_snap = function(from, g=NULL, trim=FALSE)
 
     } else {
 
-    # place grid lines to coincide with bounding box edge points, then recompute gres
-    gyx = Map(function(yx, n) seq(min(yx), max(yx), length.out=n), yx=from_yx, n=g[['gdim']])
-    g = pkern_grid(list(gdim=g[['gdim']], gyx=gyx, gres=NULL))
+      # place grid lines to coincide with bounding box edge points, then recompute gres
+      gyx = Map(function(yx, n) seq(min(yx), max(yx), length.out=n), yx=from_yx, n=g[['gdim']])
+      gres = sapply(gyx, function(yx) diff(yx[1:2]))
+      g = pkern_grid(list(gdim=g[['gdim']], gyx=gyx, gres=gres))
 
     }
   }
@@ -529,9 +602,10 @@ pkern_snap = function(from, g=NULL, trim=FALSE)
   to_min = from_bds[[1]] - to_pad[[1]] + as.integer(to_pad[[1]] > (g[['gres']]/2)) * g[['gres']]
   to_max = from_bds[[2]] - to_pad[[2]] + as.integer(to_pad[[2]] > (g[['gres']]/2)) * g[['gres']]
 
-  # if not cropping, extend these grid lines to include all of g_bbox
-  if( !trim )
+  # crop the grid to the extent of g
+  if( !crop_g )
   {
+    # if not cropping, extend these grid lines to include all of g_bbox
     to_min = pmin(to_min, sapply(g_bbox, min))
     to_max = pmax(to_max, sapply(g_bbox, max))
   }
@@ -548,7 +622,6 @@ pkern_snap = function(from, g=NULL, trim=FALSE)
   ij_min = stats::setNames(lapply(d_yx_all, function(d) max.col(-d, ties.method='f')), c('i', 'j'))
   ij_min[['i']] = g_out[['gdim']]['y'] + 1L - ij_min[['i']]
   to_idx = pkern_mat2vec(ij_min, g_out[['gdim']])
-
 
   # handle multiple points mapping to a single grid-point
   is_dupe = duplicated(to_idx)
