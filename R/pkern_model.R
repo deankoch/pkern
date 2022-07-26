@@ -45,8 +45,8 @@
 #' n_betas = 3
 #' betas = rnorm(n_betas)
 #' X_all = cbind(1, matrix(rnorm(n*(n_betas-1)), n))
-#' g_obs$gval = as.vector( pkern_sim(g_obs) + (X_all %*% betas) )
-#' z = g_obs$gval
+#' g_obs[['gval']] = as.vector( pkern_sim(g_obs) + (X_all %*% betas) )
+#' z = g_obs[['gval']]
 #'
 #' # two methods for likelihood
 #' LL_chol = pkern_LL(pars, g_obs, method='chol')
@@ -64,12 +64,13 @@
 #' abs( LL_naive - LL_chol ) / max(LL_naive, LL_chol)
 #' abs( LL_naive - LL_eigen ) / max(LL_naive, LL_eigen)
 #'
+#'
 #' # repeat with most data missing
 #' n_obs = 50
-#' idx_obs = sort(sample.int(prod(gdim), n_obs))
+#' idx_obs = sort(sample.int(n, n_obs))
 #' z_obs = g_obs$gval[idx_obs]
 #' g_miss = modifyList(g_obs, list(gval=rep(NA, n)))
-#' g_miss$gval[idx_obs] = z_obs
+#' g_miss[['gval']][idx_obs] = z_obs
 #' LL_chol = pkern_LL(pars, g_miss, method='chol')
 #' LL_eigen = pkern_LL(pars, g_miss, method='eigen')
 #'
@@ -84,7 +85,30 @@
 #' abs( LL_naive - LL_chol ) / max(LL_naive, LL_chol)
 #' abs( LL_naive - LL_eigen ) / max(LL_naive, LL_eigen)
 #'
-#' # repeat with covariates (and complete data)
+#' # copy covariates (don't pass the intercept column in X)
+#' X = X_all[idx_obs, -1]
+#'
+#' # use GLS to de-trend, with and without covariatea
+#' g_detrend = g_detrend_X = g_miss
+#' g_detrend[['gval']][idx_obs] = z_obs - pkern_GLS(g_miss, pars)
+#' g_detrend_X[['gval']][idx_obs] = z_obs - pkern_GLS(g_miss, pars, X, out='z')
+#'
+#' # pass X (or NA) to pkern_LL to do this automatically
+#' LL_detrend = pkern_LL(pars, g_detrend)
+#' LL_detrend_X = pkern_LL(pars, g_detrend_X)
+#' LL_detrend - pkern_LL(pars, g_miss, X=NA)
+#' LL_detrend_X - pkern_LL(pars, g_miss, X=X)
+#'
+#' # equivalent sparse input specification
+#' idx_grid = match(seq(n), idx_obs)
+#' g_sparse = modifyList(g_obs, list(gval=matrix(z_obs, ncol=1), idx_grid=idx_grid))
+#' LL_chol - pkern_LL(pars, g_sparse)
+#' LL_eigen - pkern_LL(pars, g_sparse)
+#' LL_detrend - pkern_LL(pars, g_sparse, X=NA)
+#' LL_detrend_X - pkern_LL(pars, g_sparse, X=X)
+#'
+#'
+#' # repeat with complete data
 #'
 #' # (don't pass the intercept column in X)
 #' X = X_all[,-1]
@@ -112,45 +136,58 @@
 #' LL_result$d - log_det
 #' LL_result$n - n
 #'
-#' # find max profile likelihood for psill with eps replaced by eps*psill and all other pars fixed
-#' psill_best = LL_result$q / LL_result$n
-#' pars_opt = pars |> modifyList(list(psill=psill_best, eps=pars$eps*psill_best))
-#' anything_else = abs(rnorm(1))
-#' pars_other = modifyList(pars, list(psill=anything_else, eps=pars$eps*anything_else))
-#' pkern_LL(pars_opt, g_obs, X=X) > pkern_LL(pars_other, g_obs, X=X)
 #'
 pkern_LL = function(pars, g_obs, X=0, method='chol', fac=NULL, quiet=TRUE, more=FALSE)
 {
-  # copy non-NA data as needed
-  is_obs = as.vector(!is.na(g_obs[['gval']]))
-  z = g_obs[['gval']][is_obs]
-  if( is.null(z) ) stop('No non-NA values found in g_obs')
-  n_obs = length(z)
+  # set flag for GLS and default one layer count
+  if(is.data.frame(X)) X = as.matrix(X)
+  use_GLS = is.matrix(X) | anyNA(X)
 
-  # check for complete sub-grids
-  sg = pkern_sub_find(is_obs, g_obs[['gdim']])
-  is_sg = !is.null(sg)
-  if( is_sg )
+  # multi-layer support
+  n_layer = 1
+  is_multi = !is.null(g_obs[['idx_grid']])
+  if(is_multi)
   {
-    # extract sub-grid layout and find separable covariance eigen-decomposition
-    method = 'eigen'
-    g_obs = list(gdim=sg[['gdim']], gres=g_obs[['gres']] * sg[['res_scale']])
-    if( is.null(fac) ) fac = pkern_var(g_obs, pars=pars, scaled=TRUE, method=method)
+    # coerce vector to 1-column matrix and identify non-NA points
+    if( !is.matrix(g_obs[['gval']]) ) g_obs[['gval']] = matrix(g_obs[['gval']], ncol=1L)
+    is_obs = !is.na(g_obs[['idx_grid']])
 
-    # g_obs should have no missing (NA) data points now
-    g_obs[['gval']] = z
-    is_obs = rep(TRUE, n_obs)
+    # reorder the non-NA data matrix to grid-vectorized order
+    reorder_z = g_obs[['idx_grid']][is_obs]
+    n_layer = ncol(g_obs[['gval']])
+
+    # matrix(.., ncol) avoids R simplifying to vector in 1 column case
+    z = matrix(g_obs[['gval']][reorder_z,], ncol=n_layer)
+    n_obs = nrow(z)
 
   } else {
 
-    # compute factorization (scaled=TRUE means partial sill is factored out)
-    if( is.null(fac) ) fac = pkern_var(g_obs, pars=pars, scaled=TRUE, method=method)
+    # single layer mode - copy non-NA data
+    is_obs = as.vector(!is.na(g_obs[['gval']]))
+    z = matrix(g_obs[['gval']][is_obs], ncol=1L)
+    if( is.null(z) ) stop('No non-NA values found in g_obs')
+    n_obs = length(z)
   }
 
+  # complete data case triggers separability methods, which require eigen
+  is_complete = all(is_obs)
+  if(is_complete) method = 'eigen'
+
+  # compute factorization (scaled=TRUE means partial sill is factored out)
+  if( is.null(fac) ) fac = pkern_var(g_obs, pars=pars, scaled=TRUE, method=method)
+
   # GLS estimate of mean based on predictors in X
-  use_GLS = is.matrix(X) | anyNA(X)
   if( use_GLS ) X = pkern_GLS(g_obs, pars, X=X, fac=fac, method=method, out='z')
-  if( length(X) == 1 ) X = rep(X, n_obs)
+
+  # matricize scalar and vector input to X
+  if( !is.matrix(X) ) X = matrix(X, ncol=1L)
+  if( nrow(X) == 1 ) X = matrix(rep(X, n_obs), ncol=ncol(X))
+
+  # reorder X to match z
+  if(is_multi) X = X[reorder_z,]
+
+  # matrix of de-trended Gaussian random vectors to evaluate
+  z_centered = matrix(z-X, ncol=n_layer)
 
   # Cholesky factor method is fastest
   if( method == 'chol' )
@@ -158,8 +195,10 @@ pkern_LL = function(pars, g_obs, X=0, method='chol', fac=NULL, quiet=TRUE, more=
     # check for bad fac input (it should be matrix t(C), where C is the output of chol)
     if( !is.matrix(fac) ) stop('Cholesky factor (matrix) not found in fac')
 
-    # get quadratic form of centered variable
-    quad_form = pkern_var_mult(z-X, pars, fac=fac, method=method, quad=TRUE) |> as.numeric()
+    # get quadratic form of de-trended variable(s)
+    quad_form = apply(z_centered, 2, function(z_i) {
+      as.numeric(pkern_var_mult(z_i, pars, fac=fac, method=method, quad=TRUE))
+    })
 
     # determinant is the squared product of the diagonal elements in Cholesky factor t(C)
     log_det_corr = sum(log(diag(fac)))
@@ -174,29 +213,32 @@ pkern_LL = function(pars, g_obs, X=0, method='chol', fac=NULL, quiet=TRUE, more=
     # check for bad fac input (it should be the list output of eigen)
     if( !is.list(fac) ) stop('eigendecomposition (list) not found in fac')
 
-    # get quadratic form of centered variable
-    quad_form = pkern_var_mult(z-X, pars, fac=fac, method=method, quad=TRUE) |> as.numeric()
+    # get quadratic form of de-trended variable(s)
+    quad_form = apply(z_centered, 2, function(z_i) {
+      as.numeric(pkern_var_mult(z_i, pars, fac=fac, method=method, quad=TRUE))
+    })
 
     # determinant is product of the eigenvalues
-    if( !is_sg )
+    if( !is_complete )
     {
       # partial sill was factored out earlier so we multiply it back in (on log scale)
       log_det = n_obs * log(pars[['psill']]) + sum(log(fac[['values']]))
 
     } else {
 
-      # subgrid case: eigenvalues are a kronecker product plus diagonal nugget effect
+      # separable case: eigenvalues are a kronecker product plus diagonal nugget effect
       ev_scaled = kronecker(fac[['y']][['values']], fac[['x']][['values']])
       log_det = sum(log(pars[['eps']] + pars[['psill']] * ev_scaled))
     }
   }
 
   # compute log likelihood, print to console then return
-  log_likelihood = (-1/2) * ( n_obs * log( 2 * pi ) + log_det + quad_form )
+  log_likelihood = (-1/2) * ( n_layer*( n_obs * log( 2 * pi ) + log_det ) + sum(quad_form) )
   if( !quiet ) cat( paste(round(log_likelihood, 5), '\n') )
   if(more) return(list(LL=log_likelihood, q=quad_form, d=log_det, n_obs=n_obs))
   return(log_likelihood)
 }
+
 
 #' Compute negative log-likelihood for parameter vector `p`
 #'
