@@ -395,10 +395,21 @@ pkern_sub_find = function(g_obs, gdim=NULL)
     # make sure gdim doesn't get ignored for non-logical vector input
     if( is.vector(g_obs) & !is.list(g_obs) ) g_obs = list(gval=g_obs, gdim=gdim)
 
-    # open as pkern list object then find NAs
+    # open as pkern list object
     g_result = pkern_grid(g_obs)
+
+    # process only the first column of multi-layer input
+    if( is.matrix(g_result[['gval']]) ) g_result[['gval']] = as.vector(g_obs[['gval']][,1])
     g_obs = !is.na( g_result[['gval']] )
     gdim = g_result[['gdim']]
+
+    # handle sparse indexing
+    if( !is.null(g_result[['idx_obs']]) )
+    {
+      # decompress and replace NAs with FALSE
+      g_obs = g_obs[ g_result[['idx_obs']] ]
+      g_obs[is.na(g_obs)] = FALSE
+    }
   }
 
   # checks for valid arguments

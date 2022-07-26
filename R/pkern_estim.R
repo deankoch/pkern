@@ -4,7 +4,7 @@
 
 #' Generalized least squares (GLS) estimator
 #'
-#' Computes coefficients of the linear predictor E(Z) = Xb using the GLS equation
+#' Computes coefficients b of the linear predictor E(Z) = Xb using the GLS equation
 #'
 #'  b = ( X^T V^{-1} X )^{-1} X^T V^{-1} z
 #'
@@ -14,23 +14,26 @@
 #' is a vector of coefficients whose first entry is the mean and subsequent entries are
 #' coefficients to multiply the columns of the predictor matrix `X`
 #'
-#' If supplied, the columns of matrix `X` should be independent, and the number of rows should
-#' match the number of observed grid points (non-`NA` values in `g_obs$gval`). An intercept
-#' column is appended to this linear predictor matrix before evaluating the GLS expression
-#' (without checking if it's there already). Do not include an intercept column in
-#' argument `X`!
+#' If X is supplied, its columns should be independent, and the number of rows should
+#' match either the length of `g_obs$gval`, or the the number of non-NA data values
+#' `g_obs$gval` can also be a matrix containing multiple repetitions (layers) of the
+#' same spatial process, which the function assumes are mutually independent.
+#'
+#' An intercept column is appended to `X` before evaluating the GLS expression
+#' (and without checking if it's there already). DO NOT include an intercept column in
+#' argument `X` or you will get errors related to colinearity.
 #'
 #' When `out='z'`, the function multiplies the GLS coefficients by `X` (with appended
 #' intercept column) to get the linear predictor for E(z)
 #'
-#' Note that the factorization returned in fac_X is for the model scaled by partial sill
+#' Note that the factorization returned in `fac_X` is scaled by the partial sill
 #'
 #' @param g_obs list of form returned by `pkern_grid` (with entries 'gdim', 'gres', 'gval')
 #' @param pars list of form returned by `pkern_pars` (with entries 'y', 'x', 'eps', 'psill')
 #' @param X matrix or NA, the linear predictors (in columns) excluding intercept
 #' @param method character, the factorization to use: 'chol' (default) or 'eigen'
 #' @param fac matrix or list, (optional) pre-computed covariance matrix factorization
-#' @param out character, either 'c' (coefficients) or 'z' (linear predictor)
+#' @param out character, either 'b' (coefficients), 'z' (linear predictor), or 'x'
 #'
 #' @return numeric vector of length equal to one plus the number of columns in `X`
 #' @export
@@ -40,7 +43,7 @@
 #' gdim = c(45, 31)
 #' n = prod(gdim)
 #' g = pkern_grid(gdim)
-#' pars = modifyList(pkern_pars(g, 'gau'), list(psill=12))
+#' pars = modifyList(pkern_pars(g, 'gau'), list(psill=2))
 #'
 #' # generate spatial noise
 #' z = pkern_sim(g, pars, quiet=TRUE)
@@ -50,18 +53,20 @@
 #' n_betas = 3
 #' betas = rnorm(n_betas, 0, 10)
 #' X_all = cbind(1, matrix(rnorm(n*(n_betas-1)), n))
-#' g_obs = modifyList(g, list(gval=z + (X_all %*% betas)))
+#' lm_actual = as.vector(X_all %*% betas)
+#' g_obs = modifyList(g, list(gval=z+lm_actual))
 #'
 #' # exclude intercept column in calls to pkern_GLS
-#' X = X_all[,-1]
+#' X_pass = X_all[,-1]
 #'
 #' # find the GLS coefficients
-#' betas_est = pkern_GLS(g_obs, pars, X)
+#' betas_est = pkern_GLS(g_obs, pars, X_pass)
 #' print(betas_est)
 #' print(betas)
 #'
 #' # compute trend as product of betas with matrix X_all, or by setting out='z'
-#' max(abs( pkern_GLS(g_obs, pars, X, out='z') - (X_all %*% betas_est) ))
+#' lm_est = X_all %*% betas_est
+#' max( abs( pkern_GLS(g_obs, pars, X_pass, out='z') - lm_est ) )
 #'
 #' # missing data example
 #' n_obs = 10
@@ -69,59 +74,82 @@
 #' g_miss = g_obs
 #' g_miss$gval[idx_rem] = NA
 #' pkern_plot(g_miss)
-#' betas_est = pkern_GLS(g_miss, pars, X)
+#' betas_est = pkern_GLS(g_miss, pars, X_pass)
 #' print(betas_est)
 #' print(betas)
 #'
-pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, method='chol', out='b')
+#' # set X to NA to estimate the a spatially constant trend (the adjusted mean)
+#' pkern_GLS(g_miss, pars, X=NA)
+#' mean(g_miss$gval, na.rm=TRUE)
+#'
+#' # generate some extra layers
+#' z_extra = lapply(seq(9), function(x) pkern_sim(g, pars, quiet=TRUE))
+#' z_multi = lm_actual + do.call(cbind, c(list(z), z_extra))
+#'
+#' # multi-layer example with sparse grid specification
+#' is_obs = !is.na(g_miss$gval)
+#' map_sparse = match(seq(n), which(is_obs))
+#' g_sparse = modifyList(g_miss, list(gval=z_multi[is_obs,], idx_grid=map_sparse))
+#' betas_sparse = pkern_GLS(g_obs=g_sparse, pars, X=X_pass)
+#' print(betas_sparse)
+#' print(betas)
+#'
+#' pkern_GLS(g_sparse, pars, NA)
+#' mean(g_sparse$gval, na.rm=TRUE)
+#'
+pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, method='auto', out='b')
 {
-  # copy non-NA data
-  is_obs = as.vector(!is.na(g_obs[['gval']]))
-  if( is.null(g_obs[['gval']][is_obs]) ) stop('No non-NA values found in g_obs')
-  z = g_obs[['gval']][is_obs]
-  n_obs = sum(is_obs)
-  n = length(g_obs[['gval']])
-
-  # compute V factorization
-  if( all(is_obs) ) method = 'eigen'
-  if( is.null(fac) )
+  # multi-layer support
+  n_layer = 1L
+  is_multi = !is.null(g_obs[['idx_grid']])
+  if(is_multi)
   {
-    # check for sub-grid structure and substitute simpler equivalent problem if possible
-    sg = pkern_sub_find(is_obs, g_obs[['gdim']])
-    is_sg = !is.null(sg)
-    if( is_sg )
-    {
-      # extract sub-grid layout and find separable covariance eigen-decomposition
-      method = 'eigen'
-      g_obs = list(gdim=sg[['gdim']], gres=g_obs[['gres']] * sg[['res_scale']])
-      fac = pkern_var(g_obs, pars=pars, scaled=TRUE, method=method)
+    # identify non-NA points
+    is_obs = !is.na(g_obs[['idx_grid']])
 
-      # g_obs should have no missing (NA) data points now
-      g_obs[['gval']] = z
-      is_obs = rep(TRUE, n_obs)
-      n = n_obs
+    # reorder the non-NA data matrix to grid-vectorized order
+    reorder_z = g_obs[['idx_grid']][is_obs]
+    n_layer = ncol(g_obs[['gval']])
 
-    } else {
+    # matrix(.., ncol) avoids R simplifying to vector in 1 column case
+    z = matrix(g_obs[['gval']][reorder_z,], ncol=n_layer)
 
-      # compute factorization (scaled=TRUE means partial sill is factored out)
-      fac = pkern_var(g_obs, pars=pars, scaled=TRUE, method=method)
-    }
+  } else {
+
+    # copy non-NA data as a 1-column matrix
+    is_obs = as.vector(!is.na(g_obs[['gval']]))
+    if( sum(is_obs) < 2 ) stop('Not enough non-NA values in g_obs')
+    z = matrix(g_obs[['gval']][is_obs], ncol=n_layer)
   }
 
+  # compute variance factorization (scaled=TRUE -> partial sill is factored out)
+  if(method=='auto') method = ifelse(all(is_obs), 'eigen', 'chol')
+  if( all(is_obs) & (method=='chol') ) warning('eigen method is preferred for complete grids')
+  if( is.null(fac) )  fac = pkern_var(g_obs, pars=pars, scaled=TRUE, method=method)
+
   # build matrix of covariate values from intercept column and (optionally) X
-  if( !anyNA(X) )
+  n = length(is_obs)
+  n_obs = sum(is_obs)
+  if( anyNA(X) )
   {
-    # check for invalid input to X
+    # if X is a matrix with NAs, discard it with a warning
+    if( is.matrix(X) ) warning('X contained NA value(s). Setting X=NA')
+    X = X_obs = matrix(1L, nrow=n_obs)
+
+  } else {
+
+    # check for invalid input to X and append intercept column
     if( !is.matrix(X) ) stop('X must be a matrix of covariate values')
-    msg_mismatch = 'nrow(X) did not match length(g_obs$gval) or the number of non-NA points'
-    if( anyNA(X) ) { X = NULL } else { if( !( nrow(X) %in% c(n_obs, n) ) ) stop(msg_mismatch) }
+    X = X_obs = cbind(1L, X)
 
-    # handle case of observed data only
-    if( nrow(X) == n_obs ) is_obs = rep(TRUE, n_obs)
-    X = cbind(1, X)
-    X_obs = matrix(X[is_obs,], nrow=n_obs)
+    # check for incorrect length in X
+    msg_expected = paste('expected', n, 'or', n_obs, 'but got', nrow(X))
+    if( !( nrow(X) %in% c(n, n_obs) ) ) stop(paste('incorrect number of rows in X:', msg_expected))
 
-  } else { X = X_obs = matrix(1, nrow=n_obs) }
+    # reorder X to match z
+    if( nrow(X) > n_obs ) X_obs = matrix(X[is_obs,], ncol=ncol(X))
+    if( is_multi ) X_obs = matrix(X_obs[reorder_z,], ncol=ncol(X))
+  }
 
   # return data matrix
   if(startsWith(out, 'x')) return(X_obs)
@@ -132,6 +160,7 @@ pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, method='chol', out='b')
   # compute GLS coefficients using whitened observation data
   z_trans = pkern_var_mult(z, pars, fac=fac, method=method)
   betas_gls = pkern_var_mult(t(crossprod(z_trans, X_obs)), pars, fac=fac_X, method=method)
+  if(is_multi) betas_gls = rowMeans(betas_gls)
 
   # return betas if requested
   if(startsWith(out, 'b')) return(as.numeric(betas_gls))
@@ -143,7 +172,6 @@ pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, method='chol', out='b')
   # return everything in a list
   return(list(b = as.numeric(betas_gls), z = z_gls, x = X, fac_X = fac_X))
 }
-
 
 #' Fit a covariance model to the data by maximum likelihood
 #'
@@ -195,18 +223,28 @@ pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, method='chol', out='b')
 #' pkern_plot(g_miss)
 #'
 #'
-pkern_fit = function(g_obs, pars=NULL, X=NA, iso=TRUE, initial=NULL, quiet=FALSE)
+pkern_fit = function(g_obs, pars=NULL, X=NA, iso=TRUE, initial=NULL, quiet=FALSE,
+                     lower=NULL, upper=NULL)
 {
-  # unpack grid as list
-  g = pkern_grid(g_obs)
-  gdim = g[['gdim']]
-  is_obs = !is.na(g[['gval']])
-  if( !any(is_obs) ) stop('no data found in g_obs')
+  # unpack vectorized grid as list
+  g_obs = pkern_grid(g_obs)
+  gdim = g_obs[['gdim']]
 
+  # check for missingness and count observations
+  is_obs = !is.na(g_obs[['gval']])
+  if( !any(is_obs) ) stop('no data found in g_obs')
   n_all = prod(gdim)
-  n_obs = sum(is_obs)
+
+  # # handle sparse indexing
+  # if( is.null(g[['idx_grid']]) )
+  # {
+  #   g[['idx_grid']]
+  #
+  #
+  # }
 
   # coerce to matrix of appropriate dimensions
+  # n_obs = sum(is_obs)
   # if( is.matrix(X) )
   # {
   #   # pad with NAs as needed
@@ -221,25 +259,34 @@ pkern_fit = function(g_obs, pars=NULL, X=NA, iso=TRUE, initial=NULL, quiet=FALSE
   #   if( all(is.na(X)) ) X = NA
   # }
 
-  # substitute equivalent sub-grid problem if possible
-  sub_result = pkern_sub_find(g)
-  if( !is.null(sub_result) )
-  {
-    # skip when full grid is non-NA
-    if( any(sub_result[['gdim']] < gdim) )
-    {
-      # compute new grid configuration and copy to g
-      gdim = sub_result[['gdim']]
-      gres = g[['gres']] * sub_result[['res_scale']]
-      gyx = Map(function(yx, idx) yx[idx], yx=g[['gyx']], idx=sub_result[['ij']])
-      g = modifyList(g, list(gdim=gdim, gres=gres, gyx=gyx, gval=g[['gval']][is_obs]))
-      is_obs = rep(TRUE, prod(gdim))
-    }
-  }
+  # # set flags for multi-layer support
+  # is_indexed = !is.null(g_obs[['idx_grid']])
+  # is_multi = is.matrix(g_obs[['gval']]) | is_indexed
+  # if(is_multi) { g_obs[['gval']] = as.matrix(g_obs[['gval']]) } else {
+  #
+  #   # substitute equivalent sub-grid problem if possible
+  #   sub_result = pkern_sub_find(g_obs=g)
+  #   if( !is.null(sub_result) )
+  #   {
+  #     # skip when full grid is non-NA
+  #     if( any(sub_result[['gdim']] < gdim) )
+  #     {
+  #       # compute new grid configuration and copy to g
+  #       gdim = sub_result[['gdim']]
+  #       gres = g[['gres']] * sub_result[['res_scale']]
+  #       gyx = Map(function(yx, idx) yx[idx], yx=g[['gyx']], idx=sub_result[['ij']])
+  #
+  #
+  #       # TODO: test and fix this for sparse and matrix-valued cases
+  #       g = modifyList(g, list(gdim=gdim, gres=gres, gyx=gyx, gval=g[['gval']][is_obs]))
+  #       is_obs = rep(TRUE, prod(gdim))
+  #     }
+  #   }
+  # }
 
   # set covariance parameter defaults
-  if( !is.list(pars) ) pars = pkern_pars(g, ifelse(is.null(pars), 'gau', pars))
-  p_fixed = pkern_pars_update(pars, iso=TRUE)
+  if( !is.list(pars) ) pars = pkern_pars(g_obs, ifelse(is.null(pars), 'gau', pars))
+  p_fixed = pkern_pars_update(pars, iso=iso)
   is_fitted = is.na(p_fixed)
   if( !any(is_fitted) ) is_fitted[] = TRUE
 
@@ -247,11 +294,12 @@ pkern_fit = function(g_obs, pars=NULL, X=NA, iso=TRUE, initial=NULL, quiet=FALSE
   nm_fitted = names(is_fitted)[is_fitted]
   nm_fixed = names(is_fitted)[!is_fitted]
   if( is.null(initial) ) initial = pkern_bds(pars, g, rows=nm_fitted)[['initial']]
-  pars = pkern_pars_update(pars, p_fixed, iso=TRUE)
+  pars = pkern_pars_update(pars, p_fixed, iso=iso)
 
   # fit the model
   #v = var(g[['gval']], na.rm=TRUE)
-  result_optim = pkern_optim(g_obs=g, pars_fix=pars, X=X, iso=TRUE, initial=initial, quiet=quiet)
+  result_optim = pkern_optim(g_obs, pars, X=X, iso=iso, initial=initial, quiet=quiet,
+                             lower=lower, upper=upper)
   pars_out = result_optim[['pars']]
 
   # # check sequence of likely psill substitutions
@@ -261,13 +309,13 @@ pkern_fit = function(g_obs, pars=NULL, X=NA, iso=TRUE, initial=NULL, quiet=FALSE
   # pars_out[['psill']] = psill_test[ which.max(LL_test) ]
 
   # de-trend the data by subtracting GLS estimate
-  z_gls = 0
-  if( anyNA(X) | is.matrix(X) ) z_gls = pkern_GLS(g, pars_out, X=X, out='z')
-  g[['gval']][is_obs] = g[['gval']][is_obs] - z_gls
+  #z_gls = 0
+  #if( anyNA(X) | is.matrix(X) ) z_gls = pkern_GLS(g, pars_out, X=X, out='z')
+  #g[['gval']][is_obs] = g[['gval']][is_obs] - z_gls
 
   # plot the semi-variogram for de-trended data
-  vg_detrend = pkern_sample_vg(g)
-  pkern_plot_semi(vg_detrend, pars_out)
+  #vg_detrend = pkern_sample_vg(g)
+  #pkern_plot_semi(vg_detrend, pars_out)
   return(result_optim)
 
 
@@ -289,7 +337,7 @@ pkern_fit = function(g_obs, pars=NULL, X=NA, iso=TRUE, initial=NULL, quiet=FALSE
 
   # fit the model
   if( anyNA(X) ) X = NA
-  result_optim = pkern_optim(g, pars_fix=pars, X=X, iso=TRUE, initial=initial)
+  result_optim = pkern_optim(g, pars, X=X, iso=TRUE, initial=initial)
   pars_out = result_optim[['pars']]
 
   # check sequence of likely psill values
@@ -323,7 +371,7 @@ pkern_fit = function(g_obs, pars=NULL, X=NA, iso=TRUE, initial=NULL, quiet=FALSE
 #' documentation unfinished
 #'
 #' @param g_obs list of form returned by `pkern_grid` (with entries 'gdim', 'gres', 'gval')
-#' @param pars_fix list of fixed kernel parameters, with NAs indicating parameters to fit
+#' @param pars list of fixed kernel parameters, with NAs indicating parameters to fit
 #' @param X numeric, vector, matrix, or NA, the mean or its linear predictors, passed to `pkern_LL`
 #' @param iso logical, indicating to constrain the y and x kernel parameters to be the same
 #' @param control list, passed to `stats::optim`
@@ -340,17 +388,17 @@ pkern_fit = function(g_obs, pars=NULL, X=NA, iso=TRUE, initial=NULL, quiet=FALSE
 #' pkern_optim(g_obs, quiet=TRUE)
 #'
 #' # repeat with one or more parameters fixed
-#' pars_fix = pkern_pars_make('gau') # NA parameters list
-#' pars_fix$psill = 1
-#' pkern_optim(g_obs, pars_fix, quiet=TRUE)
-#' pars_fix$y$kp = 1
-#' pkern_optim(g_obs, pars_fix, quiet=TRUE)
+#' pars = pkern_pars_make('gau') # NA parameters list
+#' pars$psill = 1
+#' pkern_optim(g_obs, pars, quiet=TRUE)
+#' pars$y$kp = 1
+#' pkern_optim(g_obs, pars, quiet=TRUE)
 #'
 #' # iso mode constrains x parameters to equal y parameters
 #' pkern_optim(g_obs, iso=T, quiet=TRUE)
-#' pkern_optim(g_obs, pars_fix, iso=T, quiet=TRUE)
+#' pkern_optim(g_obs, pars, iso=T, quiet=TRUE)
 #'
-pkern_optim = function(g_obs, pars_fix='gau', X=0, iso=F, control=list(), quiet=F,
+pkern_optim = function(g_obs, pars='gau', X=0, iso=FALSE, control=list(), quiet=FALSE,
                        log_scale=TRUE, method='L-BFGS-B', ...)
 {
   # only L-BFGS-B accepts bounds, so log-scale is mandatory for other methods
@@ -360,14 +408,16 @@ pkern_optim = function(g_obs, pars_fix='gau', X=0, iso=F, control=list(), quiet=
     log_scale = TRUE
   }
 
-  # standardize input to pars_fix and set NAs for missing values
-  pars_fix = pkern_pars_make(pars_fix)
+  g_obs = pkern_grid(g_obs)
+
+  # standardize input to pars and set NAs for missing values
+  pars_fix = pkern_pars_make(pars)
 
   # extract parameter names and NA structure supplied in pars_fix
   pars_fix_vec = pkern_pars_update(pars_fix, iso=iso)
   nm_fit = names(pars_fix_vec)[ is.na(pars_fix_vec) ]
 
-  # if all parameters are supplied in pars_fix, fit them all
+  # TODO: when values are specified for all parameters in `pars`, use as initial values
   if( length(nm_fit) == 0 )
   {
     # set initial value automatically here?
@@ -389,7 +439,7 @@ pkern_optim = function(g_obs, pars_fix='gau', X=0, iso=F, control=list(), quiet=
     pars_fix_vec = log(pars_fix_vec)
   }
 
-  # sacling constants for internal use by optimizer
+  # sacling constants passed to optimizer for internal use
   optim_scale = apply(pars_df, 1L, function(p) diff(range(p)))
 
   # TODO: check this
