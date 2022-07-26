@@ -41,14 +41,17 @@ pkern_pars = function(g, pars='gau', fill='initial')
 #' Returns a data-frame of initial values and upper/lower bounds on covariance
 #' parameters for the kernel names in `pars`.
 #'
-#' psill (partial sill) and eps (measurement variance) are assigned minima (and
-#' maxima) equal to 1/100th times (and 100 times) the sample variance `var_obs`.
-#' The user must supply either `var_obs` or `g$gval` so it can be computed.
+#' Range parameters (`y.rho` and `x.rho`) are bounded by the shortest and longest
+#' inter-point distances along the corresponding dimension (y or x). This is
+#' computed by taking the element-wise product of dimensions and resolution, ie
+#' `g$gres * g$gdim`. Ranges are initialized to the geometric mean of the upper
+#' and lower bounds.
 #'
-#' Each range parameter (rho for y and x) is assigned a minimum (and maximum) equal to
-#' the shortest (and longest) inter-point distance along the corresponding dimension;
-#' its initial value is set to the geometric mean of the upper and lower bounds.
-#' Distances are computed using `g$gres` and its (element-wise) product with `g$gdim`.
+#' `eps` (measurement variance) and `psill` (partial sill) are both initialized to
+#' one half the sample variance, `v`, and bounded above by `var_obs * wid`. The lower
+#' bound for `eps` is set to a small positive number (`1e-6`) for numerical stability,
+#' and the lower bound for `psill` is set to `var_obs / wid`. The user must supply either
+#' `var_obs` or `g$gval` so that sample variance can be computed.
 #'
 #' Shape parameter bounds are hard-coded, and are set conservatively to avoid problems
 #' with numerical precision in functions like `exp` and `gamma` when evaluating very
@@ -68,7 +71,7 @@ pkern_pars = function(g, pars='gau', fill='initial')
 #' pkern_bds('mat', g)
 #' pkern_bds('mat', g, lower=0)
 #' pkern_bds('mat', g, rows=c('eps', 'psill'), lower=c(0, 0.5))
-pkern_bds = function(pars, g, var_obs=NULL, wid=25, rows=NULL, initial=NULL, lower=NULL, upper=NULL)
+pkern_bds = function(pars, g, var_obs=NULL, wid=2, rows=NULL, initial=NULL, lower=NULL, upper=NULL)
 {
   # set up hard-coded shape parameter bounds
   kap_bds = list(gxp=list(lower=0.5, initial=1, upper=2),
@@ -85,13 +88,13 @@ pkern_bds = function(pars, g, var_obs=NULL, wid=25, rows=NULL, initial=NULL, low
   idx_kap = sapply(idx_yx, function(x) x[-1])
 
   # compute sample variance if not supplied, or set to default 1 when there is no data
-  if( is.null(var_obs) ) var_obs = ifelse(is.null(g[['gval']]), 1, var(g[['gval']], na.rm=TRUE))
+  if( is.null(var_obs) ) var_obs = ifelse(is.null(g[['gval']]), 1, var(c(g[['gval']]), na.rm=TRUE))
   if( is.na(var_obs) ) var_obs = 1
 
   # set up bounds for variance components
   bds = as.list(p_vec)
-  bds[['psill']] = list(lower=var_obs/wid, initial=var_obs, upper=var_obs*wid)
-  bds[['eps']] = list(lower=1e-6, initial=var_obs, upper=var_obs*wid)
+  bds[['psill']] = list(lower=1e-6, initial=var_obs/2, upper=var_obs*wid)
+  bds[['eps']] = list(lower=1e-6, initial=var_obs/2, upper=var_obs*wid)
 
   # set up bounds for kernel ranges - initial is geometric mean of upper and lower
   bds_kp = Map(function(r,d) list(lower=r, initial=NA, upper=r*d), r=g[['gres']], d=g[['gdim']])
