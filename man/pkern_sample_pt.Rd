@@ -43,7 +43,7 @@ For a given \code{interval}, the grid \code{g} can be partitioned into \code{int
 non-overlapping sub-grids. When \code{over=FALSE} (the default), the function apportions
 its \code{n} point samples as evenly as possible among these disjoint subsets. This ensures
 that if \code{n} is less than or equal to \code{interval^2}, and there are no NAs, there can be
-no repetition (or "over"lap) of points in the returned sub-grids.
+no repetition (overlap) of points in the returned sub-grids.
 }
 \examples{
 # define a grid
@@ -73,7 +73,7 @@ interval = 2
 n = interval^2 # to get disjoint results n must be less than or equal to interval^2
 lag_max = 10 * interval # vary to get larger/smaller subsets. max allowable: min(gdim)/2
 idx_sample = pkern_sample_pt(gdim, n=n, interval=interval, lag_max=lag_max)
-idx_overlap = rowSums( sapply(idx_sample[-1], \(i) seq(ng) \%in\% i) )
+idx_overlap = rowSums( sapply(idx_sample[-1], function(i) seq(ng) \%in\% i) )
 pkern_plot(as.integer(idx_overlap), gdim, zlab='times sampled')
 
 # plot each list element a different color
@@ -83,7 +83,7 @@ pkern_plot(group_sample, gdim, breaks=c('not sampled', seq(interval^2)), zlab='s
 
 # compare with over=TRUE (usually results in overlap - try running a few times)
 idx_sample_compare = pkern_sample_pt(gdim, n=n, interval=interval, lag_max=lag_max, over=TRUE)
-idx_overlap_compare = rowSums( sapply(idx_sample_compare[-1], \(i) seq(ng) \%in\% i) )
+idx_overlap_compare = rowSums( sapply(idx_sample_compare[-1], function(i) seq(ng) \%in\% i) )
 pkern_plot(as.integer(idx_overlap_compare), gdim, zlab='times sampled')
 
 # only non-NA points are eligible in initial sample of center points

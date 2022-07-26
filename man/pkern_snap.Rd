@@ -2,46 +2,143 @@
 % Please edit documentation in R/pkern_grid.R
 \name{pkern_snap}
 \alias{pkern_snap}
-\title{Title}
+\title{Snap a set of points to a grid}
 \usage{
-pkern_snap(from, g = NULL, vals = TRUE, crop = TRUE)
+pkern_snap(from, g = NULL, crop_from = FALSE, crop_g = FALSE)
 }
 \arguments{
 \item{from}{matrix, data frame, or points object from \code{sp} or \code{sf}, the source points}
 
-\item{g}{any grid object accepted or returned by pkern_grid, the destination grid}
+\item{g}{any grid object accepted or returned by \code{pkern_grid}, the destination grid}
 
-\item{vals}{logical, indicating to copy data values from points to the grid}
+\item{crop_from}{logical, indicating to omit points not overlying \code{g}.}
+
+\item{crop_g}{logical, indicating to trim \code{g} to the extent of \code{from}.}
 }
 \value{
-
+list of form returned by \code{pkern_grid}, defining a grid containing the snapped
+points. These are assigned the corresponding data value in \code{from}, or if  \code{from} has no
+data, an integer mapping to the points in \code{from}. Un-mapped grid points are set to NA.
 }
 \description{
-Title
+Maps the input points in \code{from} to the closest grid points in the extension of \code{g}
+covering the bounding box of \code{from} (ie. the lattice of which \code{g} is a sub-grid).
+In cases of duplicate mappings, the function returns the first matches only.
+}
+\details{
+\code{from} can be a geometry collection from packages \code{sf} or \code{sp}, or a matrix or list
+of y and x coordinates (and, optionally, data values to copy to the snapped grid
+points). When \code{from} is a matrix, its first two columns should by y and x, and the
+(optional) third the data. When \code{from} is a list, the function expects (two or three)
+vectors of equal length, ordered as above.
+
+When \code{from} is a geometry collection with a CRS string, points are first transformed
+to the coordinate reference system of \code{g}. If one or both of \code{from} and \code{g} are missing
+a CRS definition, the function assumes the same one is shared in both.
+
+\code{g} can be a raster geometry object (such as SpatRaster), in which case the function
+behaves like \code{terra::rasterize}. It can also be a matrix (supplying dimensions) or a
+list containing either \code{gdim} or\code{gres}, from which an appropriately spaced set of grid
+lines is derived, centered under the bounding box of the points.
+
+\code{crop_from} and \code{crop_g} control the extent of the output grid. If both are \code{FALSE}
+(the default) the function returns the smallest regular grid containing both \code{g}
+and the snapped \code{from} points. If \code{crop_from=TRUE} and \code{crop_g=FALSE} the output
+grid will match \code{g} exactly. If \code{crop_from=FALSE} and \code{crop_g=TRUE} the output
+grid will include all snapped points, and possibly omit some or all of \code{g}. And if
+both are \code{TRUE}, the output grid encloses the intersection of the points and \code{g}.
 }
 \examples{
-# 3x2 example and sf output type
 
-pkern_coords(c(3,2))
+# functions to scale arbitrary inverval to (1, 2,... 100) and make color palettes
+num_to_cent = function(x) 1L + floor(99*( x-min(x) ) / diff(range(x)))
+my_pal = function(x) hcl.colors(x, 'Spectral', rev=T)
+my_col = function(x) my_pal(1e2)[ num_to_cent(x) ]
+
+# create a grid object
+gdim = c(40, 30)
+g = pkern_grid(list(gdim=gdim, gres=1.1))
+
+# randomly position points within bounding box of g
+n_pts = 10
+from = lapply(g$gyx, function(yx) runif(n_pts, min(yx), max(yx)) )
+
+# translate away from g (no overlap is required)
+from[['y']] = from[['y']] + 5
+from[['x']] = from[['x']] + 15
+
+# add example data values and plot
+from[['z']] = rnorm(length(from[['y']]))
+pkern_plot(g, reset=FALSE)
+graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
+graphics::points(from[c('x', 'y')])
+
+# snap points and plot
+g_snap = pkern_snap(from, g)
+pkern_plot(g_snap, col_grid='black', reset=FALSE)
+graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
+graphics::points(from[c('x', 'y')])
+
+# find smallest subgrid enclosing all snapped grid points
+g_snap = pkern_snap(from, g, crop_g=TRUE)
+pkern_plot(g_snap, col_grid='black', reset=FALSE)
+graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
+graphics::points(from[c('x', 'y')])
+
+# snap only the points overlying the input grid
+g_snap = pkern_snap(from, g, crop_from=TRUE)
+pkern_plot(g_snap, col_grid='black', reset=FALSE)
+graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
+graphics::points(from[c('x', 'y')])
+
+# create a new grid of different resolution enclosing all input points
+g_snap = pkern_snap(from, g=list(gres=c(0.5, 0.5)))
+pkern_plot(g_snap, reset=FALSE)
+graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
+graphics::points(from[c('x', 'y')])
 
 if( requireNamespace('sf') ) {
 
+# a different example, snapping misaligned subgrid
+g_pts = pkern_grid(list(gdim=c(15, 8), gres=1.7), vals=FALSE)
+g_pts[['gyx']][['y']] = g_pts[['gyx']][['y']] + 5
+g_pts[['gyx']][['x']] = g_pts[['gyx']][['x']] + 5
+n_pts = prod(g_pts$gdim)
+from = pkern_coords(g_pts, out='list')
 
-g = pkern_grid(list(gdim=c(13, 12), gres=0.7))
-g$gyx$x = g$gyx$x + 10
-g$gyx$y = g$gyx$y - 100
+# convert to sf
+eg_sfc = sf::st_geometry(pkern_coords(g_pts, out='sf'))
+pkern_plot(g, reset=FALSE)
+plot(eg_sfc, add=TRUE)
 
-eg_sf = pkern_coords(c(13, 12), out='sf')
+# generate example data and plot
+eg_sf = sf::st_sf(data.frame(z=rnorm(n_pts)), geometry=eg_sfc)
+pkern_plot(g, reset=FALSE)
+plot(eg_sf, pch=16, add=TRUE, pal=my_pal)
+plot(eg_sfc, add=TRUE)
 
-from = eg_sf
+# snap points
+g_snap = pkern_snap(from=eg_sf, g)
+pkern_plot(g_snap, reset=FALSE, col_grid='black')
+plot(eg_sf, pch=16, add=TRUE, pal=my_pal)
+plot(eg_sfc, add=TRUE)
 
+# snapping points without data produces the mapping (non-NA values index "from")
+g_snap = pkern_snap(from=eg_sfc, g)
+pkern_plot(g_snap, ij=TRUE, reset=FALSE, col_grid='black')
+plot(eg_sfc, add=TRUE)
 
-from = as(eg_sf,'Spatial')
+# with trim=TRUE
+g_snap = pkern_snap(from=eg_sfc, g, trim=TRUE)
+pkern_plot(g_snap, reset=FALSE, col_grid='black')
+plot(eg_sfc, add=TRUE)
 
-
-
-
-
+# test with sp class
+eg_sp = as(eg_sf,'Spatial')
+g_snap = pkern_snap(from=eg_sp, g)
+pkern_plot(g_snap, reset=FALSE, col_grid='black')
+plot(eg_sf, pch=16, add=TRUE, pal=my_pal)
+plot(eg_sfc, add=TRUE)
 
 }
 

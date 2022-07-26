@@ -2,7 +2,7 @@
 % Please edit documentation in R/pkern_var.R
 \name{pkern_var_mult}
 \alias{pkern_var_mult}
-\title{Multiply a vector by the inverse covariance matrix}
+\title{Multiply a vector by a power of the covariance matrix}
 \usage{
 pkern_var_mult(g_obs, pars, method = NULL, fac = NULL, quad = FALSE, p = -1)
 }
@@ -21,42 +21,40 @@ pkern_var_mult(g_obs, pars, method = NULL, fac = NULL, quad = FALSE, p = -1)
 numeric matrix
 }
 \description{
-The function computes \code{W \%*\% z} where W=V^p, V is the covariance matrix for data \code{z}, and,
-by default, \code{p=-1}. In 'eigen' mode, the argument \code{p} can be set any integer or fractional
-power. In 'chol' mode, argument \code{p} is ignored and W is the inverse of V.
+Computes \code{W \%*\% z}, where \code{z} is the vector of non-NA data in \code{g_obs},
+and \code{W} is the \code{p}th power of \code{V}, the covariance matrix for \code{z}. By default,
+\code{p=-1}, so the function computes products with the inverse covariance matrix.
 }
 \details{
 Alternatively, \code{out='quad'} computes the quadratic form \code{t(z) \%*\% W \%*\% z}.
 
-\code{method} specifies the covariance matrix factorization to use for computations, either
-'chol' (Cholesky factorization), which is fastest, or 'eigen' (eigen-decomposition),
-which supports matrix powers other than \code{p=-1}.
+\code{method} specifies the covariance matrix factorization to use: either 'chol'
+(Cholesky factorization), which only supports \code{p=-1}; or 'eigen' (eigen-decomposition),
+which supports any integer or numeric power for \code{p}. By default, the 'chol' method
+is used, unless an eigen-decomposition is passed in \code{fac}.
 
-Factorization is the slow part of the computation. It can be pre-computed
+As factorization is the slow part of the computation, it can be pre-computed
 using \code{pkern_var(..., scaled=TRUE)} and passed to \code{pkern_var_mult} in argument \code{fac}.
-This is the factorization of the covariance matrix after scaling by the partial sill
-(see \code{?pkern_var}); it must either be the lower Cholesky factor (the transposed output
-of chol), or a list of eigen-vectors and eigen-values (the output of eigen).
+This must be the factorization of the covariance matrix after scaling by the partial sill
+(see \code{?pkern_var}); either the lower Cholesky factor (eg the transposed output of
+\code{base::chol}), or a list of eigen-vectors and eigen-values (eg. the output of \code{base::eigen}).
 
-Note that when \code{fac} is supplied, all entries in \code{pars} are ignored except for \code{psill},
-as they are baked into the eigen-decomposition already. \code{g_obs} can in this case be a
-numeric vector, the vector of observed data (with NAs omitted).
+When when a factorization is supplied, all entries in \code{pars}, except for \code{psill}, are ignored,
+as they are baked into the factorization already. \code{g_obs} can in this case be a numeric vector
+or matrix, containing one or more layers of observed data (with NAs omitted).
 }
 \examples{
 # relative error comparing output x to reference y
 rel_err = \(x, y) ifelse(y == 0, 0, abs( (x - y) / y ) )
 
-# increase from 1 to test multi-layer functionality
-n_lyr = 1
-
 # define example grid and data
 gdim = c(10, 15)
 n = prod(gdim)
-z_all = rnorm(n_lyr * n) |> matrix(n)
-g_obs = pkern_grid(gdim) |> modifyList(list(gval = z_all))
+z_all = rnorm(n)
+g_obs = modifyList(pkern_grid(gdim), list(gval = z_all))
 
 # define covariance parameters
-pars = pkern_pars(g_obs, 'gau') |> modifyList(list(psill=2, eps=0.5))
+pars = modifyList(pkern_pars(g_obs, 'gau'), list(psill=2, eps=0.5))
 
 # COMPLETE CASE
 
@@ -64,62 +62,60 @@ V = pkern_var(g_obs, pars, method='none', sep=FALSE)
 V_inv = chol2inv(chol(V))
 out_reference = V_inv \%*\% z_all
 out_reference_quad = t(z_all) \%*\% out_reference
-pkern_var_mult(g_obs, pars) |> rel_err(out_reference) |> max()
-pkern_var_mult(g_obs, pars, quad=TRUE) |> rel_err(out_reference_quad)
+max( rel_err(pkern_var_mult(g_obs, pars), out_reference) )
+rel_err(pkern_var_mult(g_obs, pars, quad=TRUE), out_reference_quad)
 
 # pre-computed factorization on separable components of correlation matrix
 fac_corr = pkern_var(modifyList(g_obs, list(gval=NULL)), pars, method='eigen')
-pkern_var_mult(g_obs, pars, fac=fac_corr) |> rel_err(out_reference) |> max()
-pkern_var_mult(g_obs, pars, fac=fac_corr, quad=TRUE) |> rel_err(out_reference_quad)
+max( rel_err(pkern_var_mult(g_obs, pars, fac=fac_corr), out_reference) )
+rel_err(pkern_var_mult(g_obs, pars, fac=fac_corr, quad=TRUE), out_reference_quad)
 
 # matrix powers
 out_reference = V \%*\% z_all
-pkern_var_mult(g_obs, pars, method='eigen', p=1) |> rel_err(out_reference) |> max()
-pkern_var_mult(g_obs, pars, method='eigen', p=1, quad=TRUE) |> rel_err(t(z_all) \%*\% out_reference)
+max( rel_err(pkern_var_mult(g_obs, pars, method='eigen', p=1), out_reference) )
+rel_err(pkern_var_mult(g_obs, pars, method='eigen', p=1, quad=TRUE), t(z_all) \%*\% out_reference)
 
 # INCOMPLETE CASE
 
-n_sample = ceiling(n/2)
+n_sample = floor(n/10)
 idx_sampled = sample.int(n, n_sample) |> sort()
-z_obs = matrix(NA, n, n_lyr)
-for(idx in idx_sampled) z_obs[idx,] = z_all[idx,]
-g_obs = pkern_grid(gdim) |> modifyList(list(gval = z_obs))
+z_obs = rep(NA, n)
+z_obs[idx_sampled] = z_all[idx_sampled]
+g_obs = modifyList(g_obs, list(gval = z_obs))
 V = pkern_var(g_obs, pars, method='none')
-
-# uncomment to draw matrix as a heatmap
-V |> pkern_plot()
+pkern_plot(V)
 
 # correctness check
-z = z_obs[!is.na(z_obs)] |> matrix(n_sample)
+z = matrix(z_obs[idx_sampled], ncol=1)
 V_inv = chol2inv(chol(V))
 out_reference = (V_inv \%*\% z)
 out_reference_quad = t(z) \%*\% out_reference
 
 # check error for two output types by Cholesky method
-pkern_var_mult(g_obs, pars) |> rel_err(out_reference) |> max()
-pkern_var_mult(g_obs, pars, quad=TRUE) |> rel_err(out_reference_quad)
+max(rel_err(pkern_var_mult(g_obs, pars), out_reference))
+rel_err(pkern_var_mult(g_obs, pars, quad=TRUE), out_reference_quad)
 
 # check eigen-decomposition method
-pkern_var_mult(g_obs, pars, method='eigen') |> rel_err(out_reference) |> max()
-pkern_var_mult(g_obs, pars, quad=TRUE, method='eigen') |> rel_err(out_reference_quad)
+max( rel_err(pkern_var_mult(g_obs, pars, method='eigen'), out_reference) )
+rel_err(pkern_var_mult(g_obs, pars, quad=TRUE, method='eigen'), out_reference_quad)
 
 # supply data as a vector instead of list by pre-computing factorization
 fac_chol = pkern_var(g_obs, pars, scaled=TRUE, method='chol')
 fac_eigen = pkern_var(g_obs, pars, scaled=TRUE, method='eigen')
-pkern_var_mult(z, pars, fac=fac_chol) |> rel_err(out_reference) |> max()
-pkern_var_mult(g_obs, pars, fac=fac_eigen) |> rel_err(out_reference) |> max()
-pkern_var_mult(z, pars, fac=fac_chol, quad=TRUE) |> rel_err(out_reference_quad)
-pkern_var_mult(g_obs, pars, fac=fac_eigen, quad=TRUE) |> rel_err(out_reference_quad)
+max(rel_err(pkern_var_mult(z, pars, fac=fac_chol), out_reference))
+max(rel_err(pkern_var_mult(g_obs, pars, fac=fac_eigen), out_reference))
+rel_err(pkern_var_mult(z, pars, fac=fac_chol, quad=TRUE), out_reference_quad)
+rel_err(pkern_var_mult(g_obs, pars, fac=fac_eigen, quad=TRUE), out_reference_quad)
 
 # matrix powers in eigen mode
 out_reference = V \%*\% z
-pkern_var_mult(g_obs, pars, method='eigen', p=1) |> rel_err(out_reference) |> max()
-pkern_var_mult(g_obs, pars, method='eigen', p=1, quad=TRUE) |> rel_err(t(z) \%*\% out_reference)
-pkern_var_mult(g_obs, pars, method='eigen', p=2) |> rel_err(V \%*\% out_reference) |> max()
+max(rel_err(pkern_var_mult(g_obs, pars, method='eigen', p=1), out_reference))
+rel_err(pkern_var_mult(g_obs, pars, method='eigen', p=1, quad=TRUE), t(z) \%*\% out_reference)
+max(rel_err(pkern_var_mult(g_obs, pars, method='eigen', p=2), V \%*\% out_reference))
 
 # multiply g_obs twice by a square root of V
 g_obs_sqrt = g_obs
 g_obs_sqrt$gval[!is.na(g_obs$gval)] = pkern_var_mult(g_obs, pars, method='eigen', p=1/2)
-pkern_var_mult(g_obs_sqrt, pars, method='eigen', p=1/2) |> rel_err(out_reference) |> max()
+max( rel_err(pkern_var_mult(g_obs_sqrt, pars, method='eigen', p=1/2), out_reference) )
 
 }

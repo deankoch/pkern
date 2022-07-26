@@ -4,7 +4,7 @@
 \alias{pkern_plot_semi}
 \title{Plot a semi-variogram}
 \usage{
-pkern_plot_semi(vg, pars = NULL, add = FALSE, fun = "root_median", ...)
+pkern_plot_semi(vg, pars = NULL, add = FALSE, fun = "root_mean", ...)
 }
 \arguments{
 \item{vg}{data frame of sample absolute differences, with columns 'dabs', 'd' (and 'bin')}
@@ -27,15 +27,15 @@ A covariance model (\code{pars}) is optionally drawn over the sample data as a r
 }
 \details{
 If \code{vg} is a data frame, it should contain absolute differences (numeric 'dabs'),
-inter-point distances (numeric 'd'), and an assignment into distance bins (integer 'bin')
-for a sample of point pairs. If 'bin' is missing, the function calls \code{pkern_add_bins} to
-assign them automatically.
+inter-point distances (numeric 'd'), and, optionally, an assignment into distance bins
+(integer 'bin') for a sample of point pairs. If 'bin' is missing, the function calls
+\code{pkern_add_bins} to assign them automatically.
 
 Function \code{fun} is the statistic to use for estimating the variogram (ie twice the
 semi-variogram) from the distance-binned absolute differences in \code{vg}. If \code{fun} is a
 function, it must accept sub-vectors of the numeric \code{vg$dabs} as its only argument,
 returning a non-negative numeric scalar. \code{fun} can also be set to one of the names
-'root_median' (the default), 'root_mean', or 'classical', as shorthand for the robust
+'root_median', 'root_mean' (the default), or 'classical', as shorthand for the robust
 fourth-root-based methods in section 2.4 of Cressie (1993), or the classical mean of
 squares method of Matheron.
 
@@ -105,7 +105,7 @@ pkern_plot_semi(g_obs, pars)
 
 # change annotations, sharpen ribbon border
 pkern_plot_semi(g_obs, pars, main='title', xlab='x', ylab='y')
-pkern_plot_semi(g_obs, pars, alpha_model_b=1, main='example', xlab='x', ylab='y')
+pkern_plot_semi(g_obs, pars, alpha_model_b=1, main='example title', xlab='x', ylab='y')
 
 # input and output units are 'm' by default
 pkern_plot_semi(g_obs, pars, unit_out='km')
@@ -117,8 +117,8 @@ vg = pkern_sample_vg(g_obs)
 pkern_plot_semi(vg)
 
 # different aggregation methods
-pkern_plot_semi(vg, fun='root_median') # default
-pkern_plot_semi(vg, fun='root_mean')
+pkern_plot_semi(vg, fun='root_median')
+pkern_plot_semi(vg, fun='root_mean') # default
 pkern_plot_semi(vg, fun='classical')
 pkern_plot_semi(vg, fun=function(x) mean(x^2)) # same as classical
 

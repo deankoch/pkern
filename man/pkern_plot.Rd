@@ -82,6 +82,8 @@ the color scale (default TRUE}
 \item{ij}{logical: enables/disables matrix style plot with j axis annotations on top
 (default TRUE for vector and matrix input, otherwise FALSE)}
 
+\item{layer}{integer: the layer (column) to plot (default 1)}
+
 \item{lwd_axis, lwd_ticks}{numeric: respectively, line widths for the axis lines and
 ticks (0 to omit, default 1)}
 
@@ -140,6 +142,11 @@ z = apply(expand.grid(g$gyx), 1, \(z) cos( sqrt(sum(z^2))/50 ) )
 g_example = modifyList(g, list(gval=z))
 pkern_plot(g_example)
 
+# specify the layer for multi-layer objects (default is first layer)
+g_example = modifyList(g, list(gval=cbind(z, z^2), idx_grid=seq(n)))
+pkern_plot(g_example)
+pkern_plot(g_example, layer=2)
+
 # reduce number of color breaks or specify a factor for discrete value plots
 pkern_plot(g_example, breaks=50)
 pkern_plot(g_example, breaks=3) # not a great way to bin the data
@@ -148,11 +155,10 @@ pkern_plot(g=modifyList(g, list(gval=cut(z, 3, dig.lab=1))))
 # pass color bar labels for discrete plots in breaks (in order low to high)
 pkern_plot(modifyList(g, list(gval=cut(z, 3))), breaks=c('a', 'b', 'c'), zlab='group')
 
-# make a covariance matrix
-gv = modifyList(g_example, list(gval=NA))
-idx_obs = sample.int(prod(gdim), 1e2)
-gv$gval[idx_obs] = z[idx_obs]
-v = pkern_var(gv)
+# select some "observed" points and make a covariance matrix
+idx_obs = match(seq(n), sort(sample.int(prod(gdim), 1e2)))
+g_v_example = modifyList(g_example, list(gval=idx_obs))
+v = pkern_var(g_v_example)
 
 # matrix display mode is automatic when first argument is a matrix or vector
 pkern_plot(v, zlab=expression(V[ij]))

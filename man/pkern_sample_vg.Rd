@@ -4,7 +4,14 @@
 \alias{pkern_sample_vg}
 \title{Sample point pair absolute differences for use in semi-variogram estimation}
 \usage{
-pkern_sample_vg(g, n_pp = 10000, idx = NULL, n_bin = 25)
+pkern_sample_vg(
+  g,
+  n_pp = 10000,
+  idx = NULL,
+  n_bin = 25,
+  n_layer_max = NA,
+  quiet = FALSE
+)
 }
 \arguments{
 \item{g}{any grid object accepted or returned by \code{pkern_grid}, containing non-NA data}
@@ -22,14 +29,18 @@ along with a number of indexing vectors for both point locations and relative se
 'bin' is an integer splitting distances into \code{n_bin} categories.
 }
 \description{
-Computes the absolute differences for point pairs in \code{g}, along with their separation
+Compute the absolute differences for point pairs in \code{g}, along with their separation
 distances. If no sample point index is supplied (in \code{idx}), the function samples points
 at random using \code{pkern_sample_pt}.
 }
 \details{
-If \code{idx} has length n, there are n_pp(n) = (n^2 - n) / 2 possible point pairs. The inverse
-n(n_pp), is used to determine the maximum number of sample points in \code{g} to use in order to
-satisfy the argument to \code{n_pp} (a random sub-sample of \code{idx} is taken as needed).
+In a set of n points there are n_pp(n) = (n^2 - n) / 2 possible point pairs. This
+expression is inverted to determine the maximum number of sample points in \code{g} to use
+in order to satisfy the user-supplied argument \code{n_pp}. A random sub-sample of \code{idx} is
+taken as needed.
+
+The mean of the point pair absolute values ('dabs') is the classical estimator of the
+variogram. This and two other robust methods are implemented in \code{pkern_plot_vg}.
 }
 \examples{
 # make example grid and reference covariance model
@@ -39,14 +50,14 @@ g_obs = pkern_grid(gdim)
 pars = pkern_pars(g_obs, 'mat')
 
 # generate sample data and sample semi-variogram
-g_obs$gval = pkern_sim(g=g_obs, pars)
+g_obs[['gval']] = pkern_sim(g=g_obs, pars)
 vg = pkern_sample_vg(g_obs)
 str(vg)
 
 # pass to plotter and overlay the model that generated the data
 pkern_plot_semi(vg, pars)
 
-# repeat with smaller sample size
+# repeat with smaller sample sizes
 pkern_plot_semi(pkern_sample_vg(g_obs, 1e2), pars)
 pkern_plot_semi(pkern_sample_vg(g_obs, 1e3), pars)
 
@@ -60,5 +71,19 @@ pkern_plot_semi(vg, pars)
 vg = pkern_sample_vg(g_obs, n_pp=Inf)
 pkern_plot_semi(vg, pars)
 ( n^2 - n ) / 2 # the number of point pairs
+
+## example with multiple layers
+
+# generate five layers
+z_multi = sapply(seq(5), function(x) pkern_sim(g=g_obs, pars))
+g_obs_multi = modifyList(g_obs, list(gval=z_multi, idx_grid=seq(n)))
+
+# by default, a sub-sample of sqrt(n_layers) is selected
+vg = pkern_sample_vg(g_obs_multi)
+pkern_plot_semi(vg, pars)
+
+# change this behaviour with n_layer_max
+vg = pkern_sample_vg(g_obs_multi, n_layer_max=5)
+pkern_plot_semi(vg, pars)
 
 }

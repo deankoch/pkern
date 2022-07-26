@@ -53,47 +53,97 @@ or eigen-decomposition ('eigen'). A pre-computed factorization \code{fac} can be
 calling first \code{pkern_var} with the same \code{method}.
 }
 \examples{
-# set up example grid, data, covariance parameters
+# set up example grid, covariance parameters
 gdim = c(25, 12)
-n_obs = prod(gdim)
+n = prod(gdim)
 g_obs = pkern_grid(gdim)
-pars = modifyList(pkern_pars(g_obs, 'gau') , list(psill=2))
+pars = modifyList(pkern_pars(g_obs, 'gau'), list(psill=0.7, eps=5e-2))
 
-# generate some covariates and data
+# generate some covariates and complete data
 n_betas = 3
 betas = rnorm(n_betas)
-X_all = cbind(1, matrix(rnorm(n_obs*(n_betas-1)), n_obs))
-g_obs$gval = as.vector( rnorm(n_obs) + (X_all \%*\% betas) )
+X_all = cbind(1, matrix(rnorm(n*(n_betas-1)), n))
+g_obs[['gval']] = as.vector( pkern_sim(g_obs) + (X_all \%*\% betas) )
+z = g_obs[['gval']]
 
 # two methods for likelihood
 LL_chol = pkern_LL(pars, g_obs, method='chol')
 LL_eigen = pkern_LL(pars, g_obs, method='eigen')
 
-# (don't pass the intercept column in X)
-X = X_all[,-1]
-LL_X_chol = pkern_LL(pars, g_obs, X=X)
-LL_X_eigen = pkern_LL(pars, g_obs, method='eigen', X=X)
-
 # compare to working directly with matrix inverse
-V = pkern_var(g_obs, pars, sep=FALSE)
-z = g_obs$gval
-g_trans = V |> chol() |> chol2inv() |> crossprod(z)
+V = pkern_var(g_obs, pars, method='none', sep=FALSE)
+V_inv = chol2inv(chol(V))
+g_trans = crossprod(V_inv, z)
 quad_form = as.numeric( t(z) \%*\% g_trans )
-log_det = determinant(V)$modulus |> as.numeric()
-LL_naive = -log(2*pi) - ( ( log_det + quad_form ) / 2 )
+log_det = as.numeric( determinant(V, logarithm=TRUE) )[1]
+LL_naive = (-1/2) * ( n * log( 2 * pi ) + log_det + quad_form )
 
 # relative errors
 abs( LL_naive - LL_chol ) / max(LL_naive, LL_chol)
 abs( LL_naive - LL_eigen ) / max(LL_naive, LL_eigen)
 
-# repeat with covariates
-V_inv = V |> chol() |> chol2inv()
+
+# repeat with most data missing
+n_obs = 50
+idx_obs = sort(sample.int(n, n_obs))
+z_obs = g_obs$gval[idx_obs]
+g_miss = modifyList(g_obs, list(gval=rep(NA, n)))
+g_miss[['gval']][idx_obs] = z_obs
+LL_chol = pkern_LL(pars, g_miss, method='chol')
+LL_eigen = pkern_LL(pars, g_miss, method='eigen')
+
+# working with matrix inverse
+V = pkern_var(g_miss, pars, method='none')
+z_mat = matrix(z_obs, ncol=1)
+V_inv = chol2inv(chol(V))
+g_trans = (V_inv \%*\% z_mat)
+quad_form = t(z_mat) \%*\% g_trans
+log_det = as.numeric( determinant(V, logarithm=TRUE) )[1]
+LL_naive = (-1/2) * ( n_obs * log( 2 * pi ) + log_det + quad_form )
+abs( LL_naive - LL_chol ) / max(LL_naive, LL_chol)
+abs( LL_naive - LL_eigen ) / max(LL_naive, LL_eigen)
+
+# copy covariates (don't pass the intercept column in X)
+X = X_all[idx_obs, -1]
+
+# use GLS to de-trend, with and without covariatea
+g_detrend = g_detrend_X = g_miss
+g_detrend[['gval']][idx_obs] = z_obs - pkern_GLS(g_miss, pars)
+g_detrend_X[['gval']][idx_obs] = z_obs - pkern_GLS(g_miss, pars, X, out='z')
+
+# pass X (or NA) to pkern_LL to do this automatically
+LL_detrend = pkern_LL(pars, g_detrend)
+LL_detrend_X = pkern_LL(pars, g_detrend_X)
+LL_detrend - pkern_LL(pars, g_miss, X=NA)
+LL_detrend_X - pkern_LL(pars, g_miss, X=X)
+
+# equivalent sparse input specification
+idx_grid = match(seq(n), idx_obs)
+g_sparse = modifyList(g_obs, list(gval=matrix(z_obs, ncol=1), idx_grid=idx_grid))
+LL_chol - pkern_LL(pars, g_sparse)
+LL_eigen - pkern_LL(pars, g_sparse)
+LL_detrend - pkern_LL(pars, g_sparse, X=NA)
+LL_detrend_X - pkern_LL(pars, g_sparse, X=X)
+
+
+# repeat with complete data
+
+# (don't pass the intercept column in X)
+X = X_all[,-1]
+LL_X_chol = pkern_LL(pars, g_obs, X=X)
+LL_X_eigen = pkern_LL(pars, g_obs, method='eigen', X=X)
+z_obs = g_obs$gval[!is.na(g_obs$gval)]
+z_mat = matrix(z_obs, ncol=1)
+V = pkern_var(g_obs, pars, sep=FALSE)
+V_inv = chol2inv(chol(V))
 X_tilde_inv = crossprod(crossprod(V_inv, X_all), X_all) |> chol() |> chol2inv()
+g_trans = (V_inv \%*\% z_mat)
 betas_gls = X_tilde_inv \%*\% crossprod(X_all, g_trans)
-z_gls = z - (X_all \%*\% betas_gls)
-z_gls_trans = V_inv |> crossprod(z_gls)
+z_gls = z_mat - (X_all \%*\% betas_gls)
+z_gls_trans = crossprod(V_inv, z_gls)
 quad_form = as.numeric( t(z_gls) \%*\% z_gls_trans )
-LL_naive = -log(2*pi) - ( ( log_det + quad_form ) / 2 )
+log_det = as.numeric( determinant(V, logarithm=TRUE) )[1]
+LL_naive = (-1/2) * ( n * log( 2 * pi ) + log_det + quad_form )
 abs( LL_naive - LL_X_chol ) / max(LL_naive, LL_X_chol)
 abs( LL_naive - LL_X_eigen ) / max(LL_naive, LL_X_eigen)
 
@@ -102,13 +152,7 @@ LL_result = pkern_LL(pars, g_obs, X=X, more=TRUE)
 LL_result$LL - LL_X_chol
 LL_result$q - quad_form
 LL_result$d - log_det
-LL_result$n - n_obs
+LL_result$n - n
 
-# find max profile likelihood for psill with eps replaced by eps*psill and all other pars fixed
-psill_best = LL_result$q / LL_result$n
-pars_opt = pars |> modifyList(list(psill=psill_best, eps=pars$eps*psill_best))
-anything_else = abs(rnorm(1))
-pars_other = pars |> modifyList(list(psill=anything_else, eps=pars$eps*anything_else))
-pkern_LL(pars_opt, g_obs, X=X) > pkern_LL(pars_other, g_obs, X=X)
 
 }

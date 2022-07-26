@@ -37,7 +37,8 @@ prediction error under the covariance model specified by \code{pars}.
 }
 \details{
 Set \code{makev=TRUE} to return the pointwise kriging variance. This takes approximately
-n_obs times longer to evaluate than \code{makev=FALSE}.
+n_obs times longer to evaluate than \code{makev=FALSE}. A progress bar will be printed to
+console unless \code{quiet=TRUE}.
 
 The covariance factorization \code{fac} can be pre-computed using \code{pkern_var(..., scaled=TRUE)}
 to speed up repeated calls where only the observed data values change (ie same covariance

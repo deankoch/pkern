@@ -41,31 +41,31 @@ z which are all zero (replacing them afterwards).
 n = 10
 y = exp(1-seq(n))
 y_mat = pkern_toep_mult(y)
-( y_mat - stats::toeplitz(y) ) |> abs() |> max()
+max( abs(y_mat - stats::toeplitz(y))  )
 
 # multiply by random matrix and compare with default matrix multiply
-z = rnorm(n^2) |> matrix(n)
+z = matrix(rnorm(n^2), n)
 result_default = y_mat \%*\% z
-abs( result_default - pkern_toep_mult(y_mat, z) ) |> max()
+max( abs( result_default - pkern_toep_mult(y_mat, z) ) )
 
 # save memory by passing only the first row of the Toeplitz matrix
-abs( result_default - pkern_toep_mult(y, z) ) |> max()
+max( abs( result_default - pkern_toep_mult(y, z) ) )
 
 # sparsify z and repeat
 idx_sparse = sample.int(n^2, n^2 - n)
 z[idx_sparse] = 0
 result_default = y_mat \%*\% z
-abs( result_default - pkern_toep_mult(y, z) ) |> max()
+max( abs( result_default - pkern_toep_mult(y, z) ) )
 
 # right-multiply with another kernel
 x = exp( 2 *( 1-seq(n) ) )
 x_mat = pkern_toep_mult(x)
 result_default = result_default \%*\% x_mat
-abs( result_default - pkern_toep_mult(y, z, x) ) |> max()
+max( abs( result_default - pkern_toep_mult(y, z, x) ) )
 
 # z can also be supplied as vector of nonzero grid values
 idx_obs = which(z != 0)
 gdim = c(y=n, x=n)
-abs( result_default - pkern_toep_mult(y, z=z[idx_obs], x, idx_obs, gdim) ) |> max()
+max( abs( result_default - pkern_toep_mult(y, z=z[idx_obs], x, idx_obs, gdim) ) )
 
 }

@@ -4,7 +4,7 @@
 \alias{pkern_GLS}
 \title{Generalized least squares (GLS) estimator}
 \usage{
-pkern_GLS(g_obs, pars, X = NA, fac = NULL, method = "chol", out = "b")
+pkern_GLS(g_obs, pars, X = NA, fac = NULL, method = "auto", out = "b")
 }
 \arguments{
 \item{g_obs}{list of form returned by \code{pkern_grid} (with entries 'gdim', 'gres', 'gval')}
@@ -17,16 +17,16 @@ pkern_GLS(g_obs, pars, X = NA, fac = NULL, method = "chol", out = "b")
 
 \item{method}{character, the factorization to use: 'chol' (default) or 'eigen'}
 
-\item{out}{character, either 'c' (coefficients) or 'z' (linear predictor)}
+\item{out}{character, either 'b' (coefficients), 'z' (linear predictor), or 'x'}
 }
 \value{
 numeric vector of length equal to one plus the number of columns in \code{X}
 }
 \description{
-Computes the GLS equation for coefficients of the linear predictor E(Z) = Xb
+Computes coefficients b of the linear predictor E(Z) = Xb using the GLS equation
 }
 \details{
-b =  X^T V^{-1} X )^{-1} X^T z
+b = ( X^T V^{-1} X )^{-1} X^T V^{-1} z
 
 where V is the covariance matrix for data z, and X is a matrix of covariates. If
 \code{X=NA}, X in the above is replaced by an intercept column (a vector of 1's) and this
@@ -34,39 +34,77 @@ expression is a length-1 numeric (the estimated spatially constant mean). Otherw
 is a vector of coefficients whose first entry is the mean and subsequent entries are
 coefficients to multiply the columns of the predictor matrix \code{X}
 
-If supplied, the columns of matrix \code{X} should be independent, and the number of rows should
-match the number of observed grid points (non-\code{NA} values in \code{g_obs$gval}). An intercept
-column is appended to this linear predictor matrix before evaluating the GLS expression
-(without checking if it's there already). Do not include an intercept column in
-argument \code{X}!
+If X is supplied, its columns should be independent, and the number of rows should
+match either the length of \code{g_obs$gval}, or the the number of non-NA data values
+\code{g_obs$gval} can also be a matrix containing multiple repetitions (layers) of the
+same spatial process, which the function assumes are mutually independent.
+
+An intercept column is appended to \code{X} before evaluating the GLS expression
+(and without checking if it's there already). DO NOT include an intercept column in
+argument \code{X} or you will get errors related to colinearity.
 
 When \code{out='z'}, the function multiplies the GLS coefficients by \code{X} (with appended
 intercept column) to get the linear predictor for E(z)
 
-Note that the factorization returned in fac_X is for the model scaled by partial sill
+Note that the factorization returned in \code{fac_X} is scaled by the partial sill
 }
 \examples{
-# set up example grid, data, covariance parameters
-gdim = c(10, 11)
-n_obs = prod(gdim)
-g_obs = pkern_grid(gdim)
-pars = modifyList(pkern_pars(g_obs, 'gau'), list(psill=2))
+# set up example grid, and covariance parameters
+gdim = c(45, 31)
+n = prod(gdim)
+g = pkern_grid(gdim)
+pars = modifyList(pkern_pars(g, 'gau'), list(psill=2))
+
+# generate spatial noise
+z = pkern_sim(g, pars, quiet=TRUE)
+pkern_plot(modifyList(g, list(gval=z)))
 
 # generate some covariates and data
 n_betas = 3
-betas = rnorm(n_betas)
-X_all = cbind(1, matrix(rnorm(n_obs*(n_betas-1)), n_obs))
-g_obs$gval = rnorm(n_obs) + (X_all \%*\% betas)
+betas = rnorm(n_betas, 0, 10)
+X_all = cbind(1, matrix(rnorm(n*(n_betas-1)), n))
+lm_actual = as.vector(X_all \%*\% betas)
+g_obs = modifyList(g, list(gval=z+lm_actual))
 
-# linear predictors should not include an intercept column
-X = X_all[,-1]
+# exclude intercept column in calls to pkern_GLS
+X_pass = X_all[,-1]
 
 # find the GLS coefficients
-betas |> print()
-betas_est = pkern_GLS(g_obs, pars, X)
-betas_est |> print()
+betas_est = pkern_GLS(g_obs, pars, X_pass)
+print(betas_est)
+print(betas)
 
-# their product with X, the linear predictor
-max(abs( pkern_GLS(g_obs, pars, X, out='z') - (X_all \%*\% betas_est) ))
+# compute trend as product of betas with matrix X_all, or by setting out='z'
+lm_est = X_all \%*\% betas_est
+max( abs( pkern_GLS(g_obs, pars, X_pass, out='z') - lm_est ) )
+
+# missing data example
+n_obs = 10
+idx_rem = sort(sample.int(n, n-n_obs))
+g_miss = g_obs
+g_miss$gval[idx_rem] = NA
+pkern_plot(g_miss)
+betas_est = pkern_GLS(g_miss, pars, X_pass)
+print(betas_est)
+print(betas)
+
+# set X to NA to estimate the a spatially constant trend (the adjusted mean)
+pkern_GLS(g_miss, pars, X=NA)
+mean(g_miss$gval, na.rm=TRUE)
+
+# generate some extra layers
+z_extra = lapply(seq(9), function(x) pkern_sim(g, pars, quiet=TRUE))
+z_multi = lm_actual + do.call(cbind, c(list(z), z_extra))
+
+# multi-layer example with sparse grid specification
+is_obs = !is.na(g_miss$gval)
+map_sparse = match(seq(n), which(is_obs))
+g_sparse = modifyList(g_miss, list(gval=z_multi[is_obs,], idx_grid=map_sparse))
+betas_sparse = pkern_GLS(g_obs=g_sparse, pars, X=X_pass)
+print(betas_sparse)
+print(betas)
+
+pkern_GLS(g_sparse, pars, NA)
+mean(g_sparse$gval, na.rm=TRUE)
 
 }

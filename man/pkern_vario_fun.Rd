@@ -12,28 +12,51 @@ pkern_vario_fun(pars, d = NULL)
 \item{d}{numeric vector or list with vector entries 'y' and 'x', the distances to evaluate}
 }
 \value{
-vector (for list \code{d}) or data.frame (for vector \code{d})
+data frame (for list \code{d}) or numeric vector (for vector \code{d}) of variogram values
 }
 \description{
-Computes the value of the semi-variogram function defined by covariance model \code{pars}
-at the component (y and x) lags in list \code{d}.
+Computes the value of the variogram function \code{v}, defined by covariance model \code{pars}
+at the component y and x lags supplied in \code{d}.
 }
 \details{
-If \code{d} is a list, its 'y' and 'x' components should be equal length nonnegative numeric
-vectors. The function returns the semi-variance in a vector of the same length.
+By definition \code{v} is Var( Z(s1) - Z(s2) ), where s1 and s2 are a pair of spatial
+locations, and Z is the spatial process value. \code{pkern} assumes that Z is second-order
+stationary, which means that \code{v} only depends on the relative displacement s1-s2.
+\code{v} in this case is equal to twice the covariance function. \code{pkern_vario_fun} computes
+the covariance function as the sum of \code{eps} and \code{psill} times 1 minus the correlation
+function for the supplied distances.
 
-If \code{d} is a numeric vector, it is interpreted as a set of distances to at which to
-evaluate the range of the (anisotropic) semi-variogram function. The function returns
-a list with named numeric vectors 'min' and 'max'.
+NOTE: \code{v} is twice the semi-variogram, usually denoted by greek letter gamma. Variogram
+\code{v} is therefore often written 2\emph{gamma. This can (and does) lead to confusion in the
+literature about whether to include a factor 2 in downstream calculations.
+This function multiplies the covariance function by 2, returning the variogram \code{v}
+(ie 2}gamma), NOT the semi-variogram.
+
+If \code{d} is a list, its 'y' and 'x' components should supply the y and x component distances.
+These must be equal-length non-negative numeric vectors. The function returns the corresponding
+variogram values in a vector of the same length.
+
+If \code{d} is a numeric vector, it is interpreted as a set of distances at which to
+evaluate the range of the variogram function. Anisotropic variograms will exhibit a range
+of values for a given distance (depending on the relative sizes of the x and y components).
+The function returns this range in a data frame with columns 'min' and 'max'.
 }
 \examples{
+# set up example grid and parameters
 gdim = c(10, 15)
 d_max = sqrt(sum(gdim^2))
 pars = pkern_pars(gdim, 'mat')
 
+# set up test distances
 d_test = seq(0, d_max, length.out=1e2)
-vario = pkern_vario_fun(pars, d=list(y=0, x=d_test))
-plot(d_test, vario)
+
+# evaluate and plot the variogram values for equal displacements along x and y
+d_equal = stats::setNames(rep(list(sqrt(1/2)*d_test), 2), c('y', 'x'))
+vario = pkern_vario_fun(pars, d=d_equal)
+plot(d_test, vario, pch=NA)
+lines(d_test, vario, col='blue')
+
+# evaluate and plot the range of variogram values (for all possible x and y displacements)
 vario_lims = pkern_vario_fun(pars, d=d_test)
 lines(d_test, vario_lims[,1])
 lines(d_test, vario_lims[,2])

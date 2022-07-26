@@ -8,7 +8,7 @@ pkern_bds(
   pars,
   g,
   var_obs = NULL,
-  w = 5,
+  wid = 2,
   rows = NULL,
   initial = NULL,
   lower = NULL,
@@ -30,14 +30,17 @@ Returns a data-frame of initial values and upper/lower bounds on covariance
 parameters for the kernel names in \code{pars}.
 }
 \details{
-psill (partial sill) and eps (measurement variance) are assigned minima (and
-maxima) equal to 1/100th times (and 100 times) the sample variance \code{var_obs}.
-The user must supply either \code{var_obs} or \code{g$gval} so it can be computed.
+Range parameters (\code{y.rho} and \code{x.rho}) are bounded by the shortest and longest
+inter-point distances along the corresponding dimension (y or x). This is
+computed by taking the element-wise product of dimensions and resolution, ie
+\code{g$gres * g$gdim}. Ranges are initialized to the geometric mean of the upper
+and lower bounds.
 
-Each range parameter (rho for y and x) is assigned a minimum (and maximum) equal to
-the shortest (and longest) inter-point distance along the corresponding dimension;
-its initial value is set to the geometric mean of the upper and lower bounds.
-Distances are computed using \code{g$gres} and its (element-wise) product with \code{g$gdim}.
+\code{eps} (measurement variance) and \code{psill} (partial sill) are both initialized to
+one half the sample variance, \code{v}, and bounded above by \code{var_obs * wid}. The lower
+bound for \code{eps} is set to a small positive number (\code{1e-6}) for numerical stability,
+and the lower bound for \code{psill} is set to \code{var_obs / wid}. The user must supply either
+\code{var_obs} or \code{g$gval} so that sample variance can be computed.
 
 Shape parameter bounds are hard-coded, and are set conservatively to avoid problems
 with numerical precision in functions like \code{exp} and \code{gamma} when evaluating very

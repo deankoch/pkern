@@ -6,11 +6,11 @@
 \usage{
 pkern_optim(
   g_obs,
-  pars_fix = "gau",
+  pars = "gau",
   X = 0,
-  iso = F,
+  iso = FALSE,
   control = list(),
-  quiet = F,
+  quiet = FALSE,
   log_scale = TRUE,
   method = "L-BFGS-B",
   ...
@@ -19,7 +19,7 @@ pkern_optim(
 \arguments{
 \item{g_obs}{list of form returned by \code{pkern_grid} (with entries 'gdim', 'gres', 'gval')}
 
-\item{pars_fix}{list of fixed kernel parameters, with NAs indicating parameters to fit}
+\item{pars}{list of fixed kernel parameters, with NAs indicating parameters to fit}
 
 \item{X}{numeric, vector, matrix, or NA, the mean or its linear predictors, passed to \code{pkern_LL}}
 
@@ -35,7 +35,7 @@ pkern_optim(
 
 }
 \description{
-Fit covariance parameters to data by maximum (profile) likelihood using optim
+documentation unfinished
 }
 \examples{
 # set up example grid and data
@@ -44,14 +44,14 @@ g_obs$gval = rnorm(10^2)
 pkern_optim(g_obs, quiet=TRUE)
 
 # repeat with one or more parameters fixed
-pars_fix = pkern_pars_make('gau') # NA parameters list
-pars_fix$psill = 1
-pkern_optim(g_obs, pars_fix, quiet=TRUE)
-pars_fix$y$kp = 1
-pkern_optim(g_obs, pars_fix, quiet=TRUE)
+pars = pkern_pars_make('gau') # NA parameters list
+pars$psill = 1
+pkern_optim(g_obs, pars, quiet=TRUE)
+pars$y$kp = 1
+pkern_optim(g_obs, pars, quiet=TRUE)
 
 # iso mode constrains x parameters to equal y parameters
 pkern_optim(g_obs, iso=T, quiet=TRUE)
-pkern_optim(g_obs, pars_fix, iso=T, quiet=TRUE)
+pkern_optim(g_obs, pars, iso=T, quiet=TRUE)
 
 }

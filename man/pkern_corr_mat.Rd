@@ -7,7 +7,7 @@
 pkern_corr_mat(pars, n, gres = 1, i = seq(n), j = seq(n))
 }
 \arguments{
-\item{pars}{list of kernel parameters "k" and "kp" (see \code{pkern_corr})}
+\item{pars}{list of kernel parameters 'k' and 'kp' (see \code{pkern_corr})}
 
 \item{n}{positive integer, the number of points on the 1D line}
 
@@ -21,16 +21,49 @@ pkern_corr_mat(pars, n, gres = 1, i = seq(n), j = seq(n))
 the n x n correlation matrix, or its subset as specified in \code{i}, \code{j}
 }
 \description{
-An effient implementation that uses symmetry and Toeplitz structure arising
-from assumption of stationarity of the random field and regularity of the grid.
+The i,jth value of the returned correlation matrix is the marginal correlation between
+the ith and jth points in a regularly spaced sequence of \code{n} (1D) points, given the
+correlation model with parameters defined in list \code{pars}.
 }
 \details{
-\code{gres} scales the distance between adjacent points
+This matrix is symmetric and Toeplitz as a result of the assumption of stationarity
+of the random field and regularity of the grid.
+
+The distance between adjacent points is specified by \code{gres}. Subsets of
+the correlation matrix can be requested by specifying \code{i} and/or \code{j} (default
+behaviour is to include all).
+
+Like \code{pkern_corr}, this function is for computing 1D components of a 2D process.
+The product of two matrices returned by \code{pkern_corr_mat} is the correlation
+matrix for a spatially separable process (see examples).
 }
 \examples{
-pars_x = pkern_pars(10, 'gxp')[['x']]
-pkern_corr_mat(pars_x, n=10)
-pkern_corr_mat(pars_x, n=10, i=2:4, j=2:4)
-pkern_corr_mat(pars_x, n=3)
-pkern_corr_mat(pars_x, n=3, gres=2)
+
+# define test distances, grid, and example kernel
+n_test = 10
+g_example = pkern_grid(n_test)
+pars = pkern_pars(g_example, c('mat', 'gau'))
+
+# compute the correlation matrices and their kronecker product
+cx = pkern_corr_mat(pars[['x']], n=n_test)
+cy = pkern_corr_mat(pars[['y']], n=n_test)
+cxy = kronecker(cx, cy)
+
+# pkern_var returns these two matrices in a list...
+max(abs( pkern_var(g_example, pars)[['y']] - cy ))
+max(abs( pkern_var(g_example, pars)[['x']] - cx ))
+
+# ... or it can compute the full covariance matrix for model pars
+var_matrix = pkern_var(g_example, pars, sep=FALSE)
+var_matrix_compare = (pars$psill*cxy) + diag(pars$eps, n_test^2)
+max(abs( var_matrix - var_matrix_compare ))
+
+# extract a subgrid without computing the whole thing
+cx_sub = pkern_corr_mat(pars_x, n=n_test, i=2:4, j=2:4)
+cx_sub - cx[2:4, 2:4]
+
+# gres scales distances. Increasing gres causes correlations to decrease
+cx_long = pkern_corr_mat(pars_x, n=n_test, gres=2*g_example$gres)
+cx_long < cx
+
 }

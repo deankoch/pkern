@@ -2,7 +2,7 @@
 % Please edit documentation in R/pkern_var.R
 \name{pkern_var}
 \alias{pkern_var}
-\title{Compute covariance matrix for a (sub)sample of gridded data}
+\title{Generate covariance matrix for a grid sample, or its factorization}
 \usage{
 pkern_var(
   g_obs,
@@ -19,38 +19,45 @@ pkern_var(
 
 \item{pars}{list of form returned by \code{pkern_pars} (with entries 'y', 'x', 'eps', 'psill')}
 
-\item{scaled}{logical, if \code{TRUE} sets \code{pars$psill = 1} and \code{eps = pars$eps / pars$psill}}
+\item{scaled}{logical, whether to scale by \code{1/pars$psill}}
 
 \item{method}{character, the factorization to return, one of 'none', 'chol', 'eigen'}
 
 \item{X}{numeric matrix, the \code{X} in \code{t(X) \%*\% V \%*\% X} (default is identity)}
+
+\item{sep}{logical, indicating to return correlation components instead of full covariance matrix}
 }
 \value{
 either matrix \code{V}, or \code{t(X) \%*\% V_inv \%*\% X}, or a factorization ('chol' or 'eigen')
 }
 \description{
-Computes the covariance matrix \code{V} for observed grid data \code{g_obs} and covariance model
-\code{pars} (default \code{method=='none'}) or the quadratic form \code{t(X) \%*\% V_inv \%*\% X} where
-\code{X} is a covariates matrix and \code{V_inv} is the inverse of \code{V}.
+Computes the covariance matrix \code{V} for the non-NA points in grid \code{g_obs}, given the model
+parameters list \code{pars}; Or, if \code{X} is supplied, the quadratic form \code{t(X) \%*\% V_inv \%*\% X},
+where \code{V_inv} is the inverse of \code{V}.
 }
 \details{
-When \code{method=='eigen'} the function instead returns the eigen-decomposition of this
-matrix; and when \code{method=='chol'} it returns the lower triangular Cholesky factor.
+By default, \code{method='none'}, and the function returns the above matrix. When
+\code{method=='eigen'} the function instead returns its eigen-decomposition, and when
+\code{method=='chol'} its lower triangular Cholesky factor is returned.
 
-NAs in the data vector \code{g_obs$gval} indicate to return the marginal covariance, ie
-the sub-matrix of V where the rows and columns corresponding to the NA grid points
-are omitted. If \code{g_obs$gval} is a matrix, it is assumed to be an array of data vectors
-(in the columns), all having NA structure identical to the first column.
+\code{scaled=TRUE} computes the result scaled by \code{1/pars$psill} (before factorization). This can
+be helpful for resolving issues of numerical stability. Note that when \code{X} is supplied and
+\code{scaled=TRUE}, the output matrix is scaled by \code{pars$psill} but the inverse of \code{V} is not.
 
-The data vector(s) can be absent from \code{g_obs} (ie \code{is.null(g_obs$gval) == TRUE}),
-in which case the function computes the full component correlation matrices (or their
-factorization), for dimensions x and y, and returns them in a list (except when \code{X}
-is supplied, since the output matrix is not generally separable in this case).
+If none of the grid points are NA, then \code{V} becomes separable. In this case (if \code{X} is not
+supplied) the function returns the x and y component correlation matrices - or their
+factorizations according to \code{method} - separately in a list. This behaviour can be toggled
+off using \code{sep=FALSE}, which causes the full matrix to be returned instead. Note that \code{sep}
+has no effect when \code{X} is supplied as the quadratic form is not generally separable.
 
-When \code{scaled=TRUE} and the data vector is supplied in \code{g_obs}, the function returns
-\code{V/pars$psill} (or the appropriate sub-matrix, or factorization). If \code{X} is also supplied,
-then the product \code{t(X) \%*\% V_inv \%*\% X} is scaled by this factor (but \code{V_inv} is computed
-without the scaling).
+Missing data are identified by looking for NAs in the data vector \code{g_obs$gval}. If all
+are NA (or if 'gval' is missing from \code{g_obs}), the function behaves as though all grid
+points are observed. For multi-layer input, NAs are instead determined from \code{g_obs$idx_grid}
+and 'gval' is ignored (see \code{?pkern_grid}).
+
+Note that when the component correlation matrices are requested, \code{scaled} has no effect and
+the output is depends only on \code{pars$x} and \code{pars$y} (independent of the values of \code{pars$eps}
+and \code{pars$psill}).
 }
 \examples{
 # define example grid with NAs and example predictors matrix
@@ -58,60 +65,71 @@ gdim = c(12, 13)
 n = prod(gdim)
 n_obs = floor(n/3)
 idx_obs = sort(sample.int(n, n_obs))
-g_obs = pkern_grid(gdim)
+g = g_obs = pkern_grid(gdim)
 g_obs$gval[idx_obs] = rnorm(n_obs)
-nX = 3
-X_all = rnorm(nX * n) |> matrix(ncol=nX)
 
 # example kernel
 psill = 0.3
 pars = pkern_pars(g_obs) |> modifyList(list(psill=psill))
 
-# plot the full covariance matrix, its cholesky factor and eigen-decomposition
-V = pkern_var(g_obs, pars)
-V_chol = pkern_var(g_obs, pars, method='chol')
-V_eigen = pkern_var(g_obs, pars, method='eigen')
-pkern_plot(V)
-pkern_plot(V_chol)
-pkern_plot(V_eigen$vectors)
+# plot the covariance matrix for observed data, its cholesky factor and eigen-decomposition
+V_obs = pkern_var(g_obs, pars)
+V_obs_chol = pkern_var(g_obs, pars, method='chol')
+V_obs_eigen = pkern_var(g_obs, pars, method='eigen')
+pkern_plot(V_obs)
+pkern_plot(V_obs_chol)
+pkern_plot(V_obs_eigen$vectors)
 
 # with no NAs (or no data at all) the function returns the correlation matrix components
 g_nodata = modifyList(g_obs, list(gval=NULL))
-str(pkern_var(g_nodata, pars))
+
+# 1d correlation matrices
+c_components = pkern_var(g_nodata, pars)
+str(c_components)
+
+# ... their Cholesky decompositions and eigendecompositions
 str(pkern_var(g_nodata, pars, method='chol'))
 str(pkern_var(g_nodata, pars, method='eigen'))
 
 # get the full covariance matrix with sep=FALSE...
-V2 = pkern_var(g_nodata, pars, sep=FALSE)[idx_obs, idx_obs]
-max(abs( V - V2 ))
+V_full = pkern_var(g_nodata, pars, sep=FALSE)
+max(abs( V_obs - V_full[idx_obs, idx_obs] ))
 
 # ... or compute it yourself from the components
 corr_components = pkern_var(g_nodata, pars)
 corr_mat = kronecker(corr_components[['x']], corr_components[['y']])
-nugget_effect = diag(pars$eps, n)
-V3 = pars$psill * corr_mat + nugget_effect
-max(abs(V - V3[idx_obs, idx_obs]))
+V_full_compare = pars$psill * corr_mat + diag(pars$eps, n)
+max(abs(V_full - V_full_compare))
 
 # test quadratic form with X
-X = cbind(1, X_all)[idx_obs, ]
-cprod = crossprod(X, chol2inv(chol(V))) \%*\% X
-abs(max(pkern_var(g_obs, pars, X=X) - cprod ))
+nX = 3
+X_all = cbind(1, matrix(rnorm(nX * n), ncol=nX))
+cprod_all = crossprod(X_all, chol2inv(chol(V_full))) \%*\% X_all
+abs(max(pkern_var(g, pars, X=X_all) - cprod_all ))
 
 # test products with inverse of quadratic form with X
-z = rnorm(nX + 1)
-cprod_inv = chol2inv(chol(cprod))
-pars0 = pars |> modifyList(list(psill=1, eps=0))
-cprod_inv_chol = pkern_var(g_obs, pars, X=X, method='chol')
-pkern_var_mult(z, pars0, fac=cprod_inv_chol) - (cprod_inv \%*\% z)
+mult_test = rnorm(nX+1)
+cprod_all_inv = chol2inv(chol(cprod_all))
+cprod_all_inv_chol = pkern_var(g, pars, X=X_all, scaled=TRUE, method='eigen')
+pkern_var_mult(mult_test, pars, fac=cprod_all_inv_chol) - cprod_all_inv \%*\% mult_test
+
+# repeat with missing data
+X_obs = X_all[idx_obs,]
+cprod_obs = crossprod(X_obs, chol2inv(chol(V_obs))) \%*\% X_obs
+abs(max(pkern_var(g_obs, pars, X=X_obs) - cprod_obs ))
+cprod_obs_inv = chol2inv(chol(cprod_obs))
+cprod_obs_inv_chol = pkern_var(g_obs, pars, X=X_obs, scaled=T, method='eigen')
+pkern_var_mult(mult_test, pars, fac=cprod_obs_inv_chol) - cprod_obs_inv \%*\% mult_test
 
 # `scaled` indicates to divide matrix by psill
 print( pars[['eps']]/pars[['psill']] )
 diag(pkern_var(g_obs, pars, scaled=TRUE)) # diagonal elements equal to 1 + eps/psill
 ( pkern_var(g_obs, pars) - psill * pkern_var(g_obs, pars, scaled=TRUE) ) |> abs() |> max()
-( pkern_var(g_obs, pars, X=X, scaled=TRUE) - ( cprod/psill ) ) |> abs() |> max()
+( pkern_var(g_obs, pars, X=X_obs, scaled=TRUE) - ( cprod_obs/psill ) ) |> abs() |> max()
 
 # in cholesky factor this produces a scaling by square root of psill
-max(abs( V_chol - sqrt(psill) * pkern_var(g_obs, pars, method='chol', scaled=TRUE) ))
+max(abs( V_obs_chol - sqrt(psill) * pkern_var(g_obs, pars, method='chol', scaled=TRUE) ))
+
 # and in the eigendecomposition, a scaling of the eigenvalues
 vals_scaled = pkern_var(g_obs, pars, method='eigen', scaled=TRUE)$values
 max(abs( pkern_var(g_obs, pars, method='eigen')$values - psill*vals_scaled ))
