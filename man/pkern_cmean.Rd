@@ -10,7 +10,7 @@ pkern_cmean(
   X = NA,
   fac = NULL,
   out = "p",
-  method = "chol",
+  fac_method = "chol",
   quiet = FALSE
 )
 }

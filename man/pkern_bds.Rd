@@ -4,16 +4,7 @@
 \alias{pkern_bds}
 \title{Set default parameter covariance parameter bounds}
 \usage{
-pkern_bds(
-  pars,
-  g,
-  var_obs = NULL,
-  wid = 2,
-  rows = NULL,
-  initial = NULL,
-  lower = NULL,
-  upper = NULL
-)
+pkern_bds(pars, g, var_obs = NULL, var_mult = 2)
 }
 \arguments{
 \item{pars}{list or character vector of 1-2 kernel names (see \code{pkern_pars})}
@@ -21,9 +12,11 @@ pkern_bds(
 \item{g}{list, a pkern grid definition (or object accepted by \code{pkern_grid})}
 
 \item{var_obs}{positive numeric, the sample variance of data \code{g$gval}}
+
+\item{var_mult}{numeric > 1, constant to multiply by \code{var_obs} to get upper bounds}
 }
 \value{
-a data frame of intial values and lower/upper bounds for the parameters in \code{pars}
+a data frame of initial values and lower/upper bounds for the parameters in \code{pars}
 }
 \description{
 Returns a data-frame of initial values and upper/lower bounds on covariance
@@ -36,11 +29,12 @@ computed by taking the element-wise product of dimensions and resolution, ie
 \code{g$gres * g$gdim}. Ranges are initialized to the geometric mean of the upper
 and lower bounds.
 
-\code{eps} (measurement variance) and \code{psill} (partial sill) are both initialized to
-one half the sample variance, \code{v}, and bounded above by \code{var_obs * wid}. The lower
-bound for \code{eps} is set to a small positive number (\code{1e-6}) for numerical stability,
-and the lower bound for \code{psill} is set to \code{var_obs / wid}. The user must supply either
-\code{var_obs} or \code{g$gval} so that sample variance can be computed.
+Variance bounds centered around \code{var_obs}, which by default is set to the sample
+variance of the data in \code{g$gval}. \code{eps} (measurement variance) and \code{psill} (partial
+sill) are both initialized to one half of \code{var_obs}, bounded above by \code{var_obs}
+times \code{var_mult}, and bounded below by a small positive number (\code{1e-6}). Note that
+while \code{eps=0} produces valid models in theory, in practice \code{eps>0} is often
+necessary for numerical stability.
 
 Shape parameter bounds are hard-coded, and are set conservatively to avoid problems
 with numerical precision in functions like \code{exp} and \code{gamma} when evaluating very

@@ -2,59 +2,55 @@
 % Please edit documentation in R/pkern_model.R
 \name{pkern_sim}
 \alias{pkern_sim}
-\title{Generate random draw from multivariate normal distribution for grid points}
+\title{Random draw from multivariate normal distribution for grids}
 \usage{
-pkern_sim(
-  g_obs,
-  pars = pkern_pars(g_obs),
-  fac = NULL,
-  add_frac = 1e-16,
-  quiet = FALSE
-)
+pkern_sim(g, pars = pkern_pars(g), fac = NULL)
 }
 \arguments{
+\item{g}{any object accepted or returned by \code{pkern_grid}}
+
 \item{pars}{list, covariance parameters in form returned by \code{pkern_pars}}
 
-\item{fac}{(optional) list, precomputed factorization of component correlation matrices}
-
-\item{add_frac}{numeric > 0, small constant for adjusting negative eigen-values (see details)}
-
-\item{quiet}{logical, indicating to suppress warnings about negative eigen-values}
-
-\item{g}{any object accepted or returned by \code{pkern_grid}}
+\item{fac}{list, optional pre-computed factorization of component correlation matrices}
 }
 \value{
 numeric vector, the vectorized grid data
 }
 \description{
-Generate random draw from multivariate normal distribution for grid points
+Generates a random draw from the multivariate Gaussian distribution for the
+covariance model \code{pars} on grid \code{g}, with mean zero.
+}
+\details{
+\code{pars} and \code{g} define the model's covariance matrix V.
+
+The function uses \code{base::rnorm} to get a vector of independent standard normal
+variates, which it multiplies by the square root of the covariance matrix, V,
+for the desired model (as defined by \code{pars} and \code{g}). The result is has a
+multivariate normal distribution with mean zero and covariance V.
 }
 \examples{
 
 # example grid and covariance parameters
-gdim = c(25,15)
+gdim = c(100, 200)
 g = pkern_grid(gdim)
-pars = pkern_pars(g, 'mat')
+pars_gau = pkern_pars(g)
 
 # this example has a large nugget effect
-gval = pkern_sim(g, pars)
+gval = pkern_sim(g, pars=pars_gau)
 pkern_plot(matrix(gval, gdim))
 
 # plot with yx coordinates
 g_sim = modifyList(g, list(gval=gval))
 pkern_plot(g_sim)
 
-# repeat without nugget effect for smooth field
-pars0 = modifyList(pars, list(eps=0))
-gval = pkern_sim(g, pars0)
-pkern_plot(matrix(gval, gdim))
+# repeat with smaller nugget effect for less noisy data
+gval_smooth = pkern_sim(g, modifyList(pars, list(eps=1e-2)))
+g_sim_smooth = modifyList(g, list(gval=gval_smooth))
+pkern_plot(g_sim_smooth)
 
-# plot with yx coordinates
-g_sim = modifyList(g, list(gval=gval))
-pkern_plot(g_sim)
-
-# parameters are automatically assigned if not supplied
-pkern_pars(g) # default is gau x gau with ranges roughly equal to grid side lengths
-pkern_plot(matrix(pkern_sim(g), gdim))
+# the nugget effect can be very small, but avoid eps=0
+gval_smoother = pkern_sim(g, modifyList(pars, list(eps=1e-12)))
+g_sim_smoother = modifyList(g, list(gval=gval_smoother))
+pkern_plot(g_sim_smoother)
 
 }

@@ -17,8 +17,8 @@ pkern_toep_mult(y, z = NULL, x = NULL, idx_obs = NULL, gdim = NULL)
 numeric matrix, the product of yzx or yz (if x is NULL)
 }
 \description{
-This computes the product y \%*\% z (and, optionally, right-multiplies the result
-by x) for symmetric Toeplitz matrices y (and x). It uses fast Fourier transforms to
+Computes the product y \%*\% z and (optionally) right-multiplies the result
+by x, for symmetric Toeplitz matrices y (and x). This uses fast Fourier transforms to
 reduce the memory footprint of computations, particularly when z is sparse.
 }
 \details{
@@ -34,7 +34,7 @@ forming y or x in memory.
 
 The function is optimized for grid data z that are sparse (many zeros). Before
 computing any transformations it first scans for and removes columns and rows of
-z which are all zero (replacing them afterwards).
+z which are all zero, replacing them afterwards.
 }
 \examples{
 # define example 1D exponential variogram

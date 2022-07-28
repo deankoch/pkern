@@ -2,7 +2,7 @@
 % Please edit documentation in R/pkern_model.R
 \name{pkern_nLL}
 \alias{pkern_nLL}
-\title{Compute negative log-likelihood for parameter vector \code{p}}
+\title{Negative log-likelihood for parameter vector \code{p}}
 \usage{
 pkern_nLL(
   p,
@@ -36,11 +36,13 @@ model \code{pars_fix}, given data grid \code{g_obs}.
 }
 \details{
 This is a wrapper for \code{-pkern_LL()} allowing parameters to be passed as a numeric
-vector instead of a list (for use in optimization etc). parameters in \code{p} are copied
+vector instead of a list (for use in optimization etc). Parameters in \code{p} are copied
 to \code{pars_fix} and passed to the likelihood computer.
 
-\code{p} is the vector of covariance parameters to test. It must be in the form (length,
-order) accepted by \code{pkern_pars_update(pars_fix, p, na_omit=TRUE, iso=iso)}.
+\code{p} is the vector of covariance parameters to test. Names in \code{p} are ignored; Its length
+and order should correspond with the pattern of NAs in \code{pars_fix}. Users should check that
+the desired parameter list is being constructed correctly by testing with:
+\code{pkern_pars_update(pars_fix, p, iso=iso, na_omit=TRUE)}.
 }
 \examples{
 # set up example grid and data
@@ -48,9 +50,38 @@ g_obs = pkern_grid(10)
 g_obs$gval = rnorm(10^2)
 
 # get some default parameters and vectorize them
-pars_fix = pkern_pars(g_obs, 'gau')
-p = pars_fix |> pkern_pars_update()
-pkern_nLL(p, g_obs, pars_fix)
-pkern_nLL(p, g_obs, pars_fix, eps_scaled=TRUE)
+pars = pkern_pars(g_obs, 'gau')
+p = pkern_pars_update(pars)
+pkern_nLL(p, g_obs, pars)
+
+# change a parameter and re-evaluate
+p_compare = p
+p_compare[1] = 2*p_compare[1]
+pkern_nLL(p_compare, g_obs, pars)
+
+# repeat by calling pkern_LL directly
+pars_compare = pars
+pars_compare$eps = 2*pars_compare$eps
+-pkern_LL(pars_compare, g_obs)
+
+# set up a subset of parameters for fitting
+pars_fix = pars
+pars_fix$eps = NA
+pars_fix$y$kp = NA
+
+# names in p_fit are for illustration only (only the order matters)
+p_fit = c(eps=1, y.rho=1)
+pkern_nLL(p_fit, g_obs, pars_fix)
+
+# equivalently:
+pars_fit = pars
+pars_fit$eps = p_fit[1]
+pars_fit$y$kp = p_fit[2]
+-pkern_LL(pars_fit, g_obs)
+
+# check an input specification
+pkern_pars_update(pars_fix, p_fit, na_omit=TRUE)
+pars_fit
+
 
 }

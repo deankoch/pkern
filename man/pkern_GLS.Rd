@@ -4,7 +4,7 @@
 \alias{pkern_GLS}
 \title{Generalized least squares (GLS) estimator}
 \usage{
-pkern_GLS(g_obs, pars, X = NA, fac = NULL, method = "auto", out = "b")
+pkern_GLS(g_obs, pars, X = NA, fac = NULL, fac_method = "eigen", out = "b")
 }
 \arguments{
 \item{g_obs}{list of form returned by \code{pkern_grid} (with entries 'gdim', 'gres', 'gval')}
@@ -15,38 +15,39 @@ pkern_GLS(g_obs, pars, X = NA, fac = NULL, method = "auto", out = "b")
 
 \item{fac}{matrix or list, (optional) pre-computed covariance matrix factorization}
 
-\item{method}{character, the factorization to use: 'chol' (default) or 'eigen'}
+\item{fac_method}{character, factorization method: 'eigen' (default) or 'chol' (see \code{pkern_var})}
 
-\item{out}{character, either 'b' (coefficients), 'z' (linear predictor), or 'x'}
+\item{out}{character, either 'b' (coefficients) or 'z' (linear predictor)}
 }
 \value{
-numeric vector of length equal to one plus the number of columns in \code{X}
+numeric vector, either b (default) or Xb (if \code{out='z'})
 }
 \description{
 Computes coefficients b of the linear predictor E(Z) = Xb using the GLS equation
 }
 \details{
-b = ( X^T V^{-1} X )^{-1} X^T V^{-1} z
+The GLS equation is: b = ( X^T V^{-1} X )^{-1} X^T V^{-1} z,
 
-where V is the covariance matrix for data z, and X is a matrix of covariates. If
-\code{X=NA}, X in the above is replaced by an intercept column (a vector of 1's) and this
-expression is a length-1 numeric (the estimated spatially constant mean). Otherwise it
-is a vector of coefficients whose first entry is the mean and subsequent entries are
-coefficients to multiply the columns of the predictor matrix \code{X}
+where V is the covariance matrix for data z, and X is a matrix of covariates.
+V is generated from the covariance model specified in \code{pars} on the grid \code{g_obs},
+where the non-NA values of \code{g_obs$gval} form the vector z. Operations with V^{-1}
+are computed using the factorization \code{fac}, or else as specified in \code{fac_method}.
 
-If X is supplied, its columns should be independent, and the number of rows should
-match either the length of \code{g_obs$gval}, or the the number of non-NA data values
-\code{g_obs$gval} can also be a matrix containing multiple repetitions (layers) of the
-same spatial process, which the function assumes are mutually independent.
+When \code{out='z'}, the function returns the product Xb instead of b.
 
-An intercept column is appended to \code{X} before evaluating the GLS expression
-(and without checking if it's there already). DO NOT include an intercept column in
-argument \code{X} or you will get errors related to colinearity.
+Argument \code{X} should provide matrix X without the intercept column (a vector of 1's).
+DO NOT include an intercept column in argument \code{X} or you will get collinearity errors
+(the function appends it without checking if its there already). The columns of \code{X} must
+be independent, and its rows should match the entries of \code{g_obs$gval}, or its non-NA data
+values, in order. Use \code{X=NA} to specify an intercept-only model; ie to fit a spatially
+constant mean. This replaces X in the GLS equation by a vector of 1's.
 
-When \code{out='z'}, the function multiplies the GLS coefficients by \code{X} (with appended
-intercept column) to get the linear predictor for E(z)
-
-Note that the factorization returned in \code{fac_X} is scaled by the partial sill
+\code{g_obs$gval} can be a matrix whose columns are multiple repetitions (layers) of the
+same spatial process (see \code{pkern_grid}), in which case the covariates in \code{X} are recycled
+for each layer. Layers are assumed mutually independent and the GLS equation is evaluated
+using the corresponding block-diagonal V. Note that this is equivalent to (but faster
+than) calling \code{pkern_GLS} separately on each layer with the same \code{X} and averaging the
+estimated b's.
 }
 \examples{
 # set up example grid, and covariance parameters
@@ -77,6 +78,11 @@ print(betas)
 # compute trend as product of betas with matrix X_all, or by setting out='z'
 lm_est = X_all \%*\% betas_est
 max( abs( pkern_GLS(g_obs, pars, X_pass, out='z') - lm_est ) )
+
+# repeat with pre-computed eigen factorization
+fac_eigen = pkern_var(g_obs, pars, fac_method='eigen', sep=TRUE)
+betas_est_compare_eigen = pkern_GLS(g_obs, pars, X_pass, fac=fac_eigen)
+max( abs( betas_est_compare_eigen - betas_est ) )
 
 # missing data example
 n_obs = 10
