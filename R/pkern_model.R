@@ -2,142 +2,153 @@
 # Dean Koch, 2022
 # Functions for modeling with pkern
 
-
-#' Compute likelihood function value for covariance parameters `pars` given data `g_obs`
+#' Likelihood of covariance model `pars` given data `g_obs`
 #'
-#' Returns the log-likelihood of model parameter list `pars`, given data grid `g_obs`.
-#' This is equal to `-log( 2 * pi ) - ( 1/2 ) * ( log_det + quad_form )`, where `log_det`
-#' is the log-determinant of covariance matrix V, and `quad_form` is z^T V^{-1} z, with
-#' z equal to the observed data vector minus the model mean.
+#' Computes the log-likelihood for the Gaussian process covariance model `pars`,
+#' given 2-dimensional grid data `g_obs`, and, optionally, linear trend data in `X`.
 #'
-#' If the model has a known trend (mean) vector, supply it in `X`. A spatially constant mean
-#' can be supplied as (length-1) numeric. If `X` is a matrix, it is interpreted as a data
-#' matrix of predictors for the non-NA values in `g_obs`; the function uses GLS to estimate
-#' the mean. If `X=NA` it estimates a spatially constant mean.
+#' The function evaluates:
 #'
-#' When `more=TRUE`, the function returns a list containing a count of the number of
-#' observations, the likelihood function value, and its two major components; the
+#' `-log( 2 * pi ) - ( 1/2 ) * ( log_det + quad_form )`,
+#'
+#' where `log_det` is the logarithm of the determinant of covariance matrix V, and
+#' `quad_form` is z^T V^{-1} z, for the observed response vector z. This z is constructed
+#' by subtracting the trend specified in `X` (if any) from the non-NA values in `g_obs$gval`.
+#'
+#' If the trend is known, it can be supplied in argument `X` as a numeric scalar or vector of
+#' length equal to the number of non-NA values in `g_obs$gval`, in matching order. Equivalently,
+#' users can simply subtract the trend from `g_obs` beforehand and set `X=0` (the default).
+#' If the trend is unknown, the function optionally estimates it by GLS using the model
+#' `pars`. To estimate a spatially constant mean, set `X=NA`. To estimate a spatially variable
+#' mean, supply linear predictors as columns of a matrix argument to `X` (see `pkern_GLS`).
+#'
+#' `fac_method` specifies how to factorize V, either using the Cholesky factor ('chol')
+#' or eigen-decomposition ('eigen'). A pre-computed factorization `fac` can be supplied by
+#' first calling `pkern_var(..., scaled=TRUE)` (in which case `fac_method` is ignored).
+#'
+#' When `more=TRUE`, the function returns a list of diagnostics: a count of the
+#' number of observations, the likelihood function value, and its two major components; the
 #' log-determinant `log_det`, and the quadratic form `quad_form`.
 #'
-#' `method` specifies how to factorize V, either using the Cholesky factor ('chol')
-#' or eigen-decomposition ('eigen'). A pre-computed factorization `fac` can be supplied by
-#' calling first `pkern_var` with the same `method`.
 #'
 #' @param pars list of form returned by `pkern_pars` (with entries 'y', 'x', 'eps', 'psill')
 #' @param g_obs list of form returned by `pkern_grid` (with entries 'gdim', 'gres', 'gval')
 #' @param X numeric, vector, matrix, or NA, a fixed mean value, or matrix of linear predictors
-#' @param method character, the factorization to use: 'chol' (default) or 'eigen'
+#' @param fac_method character, the factorization to use: 'chol' (default) or 'eigen'
 #' @param fac matrix or list, (optional) pre-computed covariance factorization
 #' @param more logical, indicates to return list with likelihood components
 #' @param quiet logical indicating to suppress console output
 #'
-#' @return numeric, the likelihood of `pars` given `g_obs`
+#' @return numeric, the likelihood of `pars` given `g_obs` and `X`, or list (if `more=TRUE`)
 #' @export
 #'
 #' @examples
 #' # set up example grid, covariance parameters
 #' gdim = c(25, 12)
 #' n = prod(gdim)
-#' g_obs = pkern_grid(gdim)
-#' pars = modifyList(pkern_pars(g_obs, 'gau'), list(psill=0.7, eps=5e-2))
+#' g_all = pkern_grid(gdim)
+#' pars = modifyList(pkern_pars(g_all, 'gau'), list(psill=0.7, eps=5e-2))
 #'
 #' # generate some covariates and complete data
 #' n_betas = 3
 #' betas = rnorm(n_betas)
 #' X_all = cbind(1, matrix(rnorm(n*(n_betas-1)), n))
-#' g_obs[['gval']] = as.vector( pkern_sim(g_obs) + (X_all %*% betas) )
-#' z = g_obs[['gval']]
+#' z = as.vector( pkern_sim(g_all) + (X_all %*% betas) )
+#' g_all[['gval']] = z
 #'
 #' # two methods for likelihood
-#' LL_chol = pkern_LL(pars, g_obs, method='chol')
-#' LL_eigen = pkern_LL(pars, g_obs, method='eigen')
+#' LL_chol = pkern_LL(pars, g_all, fac_method='chol')
+#' LL_eigen = pkern_LL(pars, g_all, fac_method='eigen')
 #'
 #' # compare to working directly with matrix inverse
-#' V = pkern_var(g_obs, pars, method='none', sep=FALSE)
+#' V = pkern_var(g_all, pars, fac_method='none', sep=FALSE)
 #' V_inv = chol2inv(chol(V))
-#' g_trans = crossprod(V_inv, z)
-#' quad_form = as.numeric( t(z) %*% g_trans )
+#' quad_form = as.numeric( t(z) %*% crossprod(V_inv, z) )
 #' log_det = as.numeric( determinant(V, logarithm=TRUE) )[1]
-#' LL_naive = (-1/2) * ( n * log( 2 * pi ) + log_det + quad_form )
+#' LL_direct = (-1/2) * ( n * log( 2 * pi ) + log_det + quad_form )
 #'
 #' # relative errors
-#' abs( LL_naive - LL_chol ) / max(LL_naive, LL_chol)
-#' abs( LL_naive - LL_eigen ) / max(LL_naive, LL_eigen)
+#' abs( LL_direct - LL_chol ) / max(LL_direct, LL_chol)
+#' abs( LL_direct - LL_eigen ) / max(LL_direct, LL_eigen)
 #'
+#' # repeat with pre-computed variance factorization
+#' fac_eigen = pkern_var(g_all, pars, fac_method='eigen', sep=TRUE)
+#' pkern_LL(pars, g_all, fac=fac_eigen) - LL_eigen
 #'
 #' # repeat with most data missing
 #' n_obs = 50
 #' idx_obs = sort(sample.int(n, n_obs))
-#' z_obs = g_obs$gval[idx_obs]
-#' g_miss = modifyList(g_obs, list(gval=rep(NA, n)))
-#' g_miss[['gval']][idx_obs] = z_obs
-#' LL_chol = pkern_LL(pars, g_miss, method='chol')
-#' LL_eigen = pkern_LL(pars, g_miss, method='eigen')
+#' z_obs = g_all$gval[idx_obs]
+#' g_obs = modifyList(g_all, list(gval=rep(NA, n)))
+#' g_obs[['gval']][idx_obs] = z_obs
+#' LL_chol_obs = pkern_LL(pars, g_obs, fac_method='chol')
+#' LL_eigen_obs = pkern_LL(pars, g_obs, fac_method='eigen')
 #'
-#' # working with matrix inverse
-#' V = pkern_var(g_miss, pars, method='none')
-#' z_mat = matrix(z_obs, ncol=1)
-#' V_inv = chol2inv(chol(V))
-#' g_trans = (V_inv %*% z_mat)
-#' quad_form = t(z_mat) %*% g_trans
-#' log_det = as.numeric( determinant(V, logarithm=TRUE) )[1]
-#' LL_naive = (-1/2) * ( n_obs * log( 2 * pi ) + log_det + quad_form )
-#' abs( LL_naive - LL_chol ) / max(LL_naive, LL_chol)
-#' abs( LL_naive - LL_eigen ) / max(LL_naive, LL_eigen)
+#' # working directly with matrix inverse
+#' V_obs = pkern_var(g_obs, pars, fac_method='none')
+#' V_obs_inv = chol2inv(chol(V_obs))
+#' quad_form_obs = as.numeric( t(z_obs) %*% crossprod(V_obs_inv, z_obs) )
+#' log_det_obs = as.numeric( determinant(V_obs, logarithm=TRUE) )[1]
+#' LL_direct_obs = (-1/2) * ( n_obs * log( 2 * pi ) + log_det_obs + quad_form_obs )
+#' abs( LL_direct_obs - LL_chol_obs ) / max(LL_direct_obs, LL_chol_obs)
+#' abs( LL_direct_obs - LL_eigen_obs ) / max(LL_direct_obs, LL_eigen_obs)
+#'
+#' # again using a pre-computed variance factorization
+#' fac_chol_obs = pkern_var(g_obs, pars, fac_method='chol', scaled=TRUE)
+#' fac_eigen_obs = pkern_var(g_obs, pars, fac_method='eigen', scaled=TRUE)
+#' pkern_LL(pars, g_obs, fac=fac_chol_obs) - LL_chol_obs
+#' pkern_LL(pars, g_obs, fac=fac_eigen_obs) - LL_eigen_obs
 #'
 #' # copy covariates (don't pass the intercept column in X)
 #' X = X_all[idx_obs, -1]
 #'
 #' # use GLS to de-trend, with and without covariatea
-#' g_detrend = g_detrend_X = g_miss
-#' g_detrend[['gval']][idx_obs] = z_obs - pkern_GLS(g_miss, pars)
-#' g_detrend_X[['gval']][idx_obs] = z_obs - pkern_GLS(g_miss, pars, X, out='z')
+#' g_detrend_obs = g_detrend_obs_X = g_obs
+#' g_detrend_obs[['gval']][idx_obs] = z_obs - pkern_GLS(g_obs, pars)
+#' g_detrend_obs_X[['gval']][idx_obs] = z_obs - pkern_GLS(g_obs, pars, X, out='z')
 #'
 #' # pass X (or NA) to pkern_LL to do this automatically
-#' LL_detrend = pkern_LL(pars, g_detrend)
-#' LL_detrend_X = pkern_LL(pars, g_detrend_X)
-#' LL_detrend - pkern_LL(pars, g_miss, X=NA)
-#' LL_detrend_X - pkern_LL(pars, g_miss, X=X)
+#' LL_detrend_obs = pkern_LL(pars, g_detrend_obs)
+#' LL_detrend_obs_X = pkern_LL(pars, g_detrend_obs_X)
+#' LL_detrend_obs - pkern_LL(pars, g_obs, X=NA)
+#' LL_detrend_obs_X - pkern_LL(pars, g_obs, X=X)
 #'
 #' # equivalent sparse input specification
 #' idx_grid = match(seq(n), idx_obs)
-#' g_sparse = modifyList(g_obs, list(gval=matrix(z_obs, ncol=1), idx_grid=idx_grid))
-#' LL_chol - pkern_LL(pars, g_sparse)
-#' LL_eigen - pkern_LL(pars, g_sparse)
-#' LL_detrend - pkern_LL(pars, g_sparse, X=NA)
-#' LL_detrend_X - pkern_LL(pars, g_sparse, X=X)
-#'
+#' g_sparse = modifyList(g_all, list(gval=matrix(z_obs, ncol=1), idx_grid=idx_grid))
+#' LL_chol_obs - pkern_LL(pars, g_sparse)
+#' LL_eigen_obs - pkern_LL(pars, g_sparse)
+#' LL_detrend_obs - pkern_LL(pars, g_sparse, X=NA)
+#' LL_detrend_obs_X - pkern_LL(pars, g_sparse, X=X)
 #'
 #' # repeat with complete data
 #'
 #' # (don't pass the intercept column in X)
 #' X = X_all[,-1]
-#' LL_X_chol = pkern_LL(pars, g_obs, X=X)
-#' LL_X_eigen = pkern_LL(pars, g_obs, method='eigen', X=X)
-#' z_obs = g_obs$gval[!is.na(g_obs$gval)]
-#' z_mat = matrix(z_obs, ncol=1)
-#' V = pkern_var(g_obs, pars, sep=FALSE)
+#' LL_X_chol = pkern_LL(pars, g_all, X=X)
+#' LL_X_eigen = pkern_LL(pars, g_all, fac_method='eigen', X=X)
+#' z_obs = g_all$gval[!is.na(g_all$gval)]
+#' #z_mat = matrix(z_obs, ncol=1)
+#' V = pkern_var(g_all, pars, sep=FALSE)
 #' V_inv = chol2inv(chol(V))
-#' X_tilde_inv = crossprod(crossprod(V_inv, X_all), X_all) |> chol() |> chol2inv()
-#' g_trans = (V_inv %*% z_mat)
-#' betas_gls = X_tilde_inv %*% crossprod(X_all, g_trans)
-#' z_gls = z_mat - (X_all %*% betas_gls)
+#' X_tilde_inv = chol2inv(chol( crossprod(crossprod(V_inv, X_all), X_all) ))
+#' betas_gls = X_tilde_inv %*% crossprod(X_all, (V_inv %*% z_obs))
+#' z_gls = z_obs - (X_all %*% betas_gls)
 #' z_gls_trans = crossprod(V_inv, z_gls)
 #' quad_form = as.numeric( t(z_gls) %*% z_gls_trans )
 #' log_det = as.numeric( determinant(V, logarithm=TRUE) )[1]
-#' LL_naive = (-1/2) * ( n * log( 2 * pi ) + log_det + quad_form )
-#' abs( LL_naive - LL_X_chol ) / max(LL_naive, LL_X_chol)
-#' abs( LL_naive - LL_X_eigen ) / max(LL_naive, LL_X_eigen)
+#' LL_direct = (-1/2) * ( n * log( 2 * pi ) + log_det + quad_form )
+#' abs( LL_direct - LL_X_chol ) / max(LL_direct, LL_X_chol)
+#' abs( LL_direct - LL_X_eigen ) / max(LL_direct, LL_X_eigen)
 #'
 #' # return components of likelihood with more=TRUE
-#' LL_result = pkern_LL(pars, g_obs, X=X, more=TRUE)
+#' LL_result = pkern_LL(pars, g_all, X=X, more=TRUE)
 #' LL_result$LL - LL_X_chol
 #' LL_result$q - quad_form
 #' LL_result$d - log_det
 #' LL_result$n - n
 #'
-#'
-pkern_LL = function(pars, g_obs, X=0, method='chol', fac=NULL, quiet=TRUE, more=FALSE)
+pkern_LL = function(pars, g_obs, X=0, fac_method='chol', fac=NULL, quiet=TRUE, more=FALSE)
 {
   # set flag for GLS and default one layer count
   if(is.data.frame(X)) X = as.matrix(X)
@@ -170,14 +181,17 @@ pkern_LL = function(pars, g_obs, X=0, method='chol', fac=NULL, quiet=TRUE, more=
   }
 
   # complete data case triggers separability methods, which require eigen
-  is_complete = all(is_obs)
-  if(is_complete) method = 'eigen'
+  is_sep = all(is_obs)
+  if(is_sep) fac_method = 'eigen'
 
   # compute factorization (scaled=TRUE means partial sill is factored out)
-  if( is.null(fac) ) fac = pkern_var(g_obs, pars=pars, scaled=TRUE, method=method)
+  if( is.null(fac) ) fac = pkern_var(g_obs, pars, scaled=TRUE, fac_method=fac_method, sep=is_sep)
+
+  # detect supplied factorization type
+  fac_method = ifelse(is.matrix(fac), 'chol', 'eigen')
 
   # GLS estimate of mean based on predictors in X
-  if( use_GLS ) X = pkern_GLS(g_obs, pars, X=X, fac=fac, method='auto', out='z')
+  if( use_GLS ) X = pkern_GLS(g_obs, pars, X=X, fac=fac, out='z')
 
   # matricize scalar and vector input to X
   if( !is.matrix(X) ) X = matrix(X, ncol=1L)
@@ -190,14 +204,14 @@ pkern_LL = function(pars, g_obs, X=0, method='chol', fac=NULL, quiet=TRUE, more=
   z_centered = matrix(z-X, ncol=n_layer)
 
   # Cholesky factor method is fastest
-  if( method == 'chol' )
+  if( fac_method == 'chol' )
   {
     # check for bad fac input (it should be matrix t(C), where C is the output of chol)
     if( !is.matrix(fac) ) stop('Cholesky factor (matrix) not found in fac')
 
     # get quadratic form of de-trended variable(s)
     quad_form = apply(z_centered, 2, function(z_i) {
-      as.numeric(pkern_var_mult(z_i, pars, fac=fac, method=method, quad=TRUE))
+      as.numeric(pkern_var_mult(z_i, pars, fac=fac, quad=TRUE))
     })
 
     # determinant is the squared product of the diagonal elements in Cholesky factor t(C)
@@ -208,25 +222,27 @@ pkern_LL = function(pars, g_obs, X=0, method='chol', fac=NULL, quiet=TRUE, more=
   }
 
   # eigen-decomposition method
-  if( method == 'eigen' )
+  if( fac_method == 'eigen' )
   {
     # check for bad fac input (it should be the list output of eigen)
-    if( !is.list(fac) ) stop('eigendecomposition (list) not found in fac')
+    if( !is.list(fac) ) stop('eigen-decomposition (list) not found in fac')
 
     # get quadratic form of de-trended variable(s)
     quad_form = apply(z_centered, 2, function(z_i) {
-      as.numeric(pkern_var_mult(z_i, pars, fac=fac, method=method, quad=TRUE))
+      as.numeric(pkern_var_mult(z_i, pars, fac=fac, quad=TRUE))
     })
 
     # determinant is product of the eigenvalues
-    if( !is_complete )
+    if( !is_sep )
     {
       # partial sill was factored out earlier so we multiply it back in (on log scale)
+      if( !('values' %in% names(fac)) ) stop('non-separable eigen-decomposition not found in fac')
       log_det = n_obs * log(pars[['psill']]) + sum(log(fac[['values']]))
 
     } else {
 
       # separable case: eigenvalues are a kronecker product plus diagonal nugget effect
+      if( !all(c('y', 'x') %in% names(fac)) ) stop('separable eigen-decomposition not found in fac')
       ev_scaled = kronecker(fac[['y']][['values']], fac[['x']][['values']])
       log_det = sum(log(pars[['eps']] + pars[['psill']] * ev_scaled))
     }
@@ -240,17 +256,19 @@ pkern_LL = function(pars, g_obs, X=0, method='chol', fac=NULL, quiet=TRUE, more=
 }
 
 
-#' Compute negative log-likelihood for parameter vector `p`
+#' Negative log-likelihood for parameter vector `p`
 #'
 #' Returns the negative log-likelihood of parameter vector `p` for the covariance
 #' model `pars_fix`, given data grid `g_obs`.
 #'
 #' This is a wrapper for `-pkern_LL()` allowing parameters to be passed as a numeric
-#' vector instead of a list (for use in optimization etc). parameters in `p` are copied
+#' vector instead of a list (for use in optimization etc). Parameters in `p` are copied
 #' to `pars_fix` and passed to the likelihood computer.
 #'
-#' `p` is the vector of covariance parameters to test. It must be in the form (length,
-#' order) accepted by `pkern_pars_update(pars_fix, p, na_omit=TRUE, iso=iso)`.
+#' `p` is the vector of covariance parameters to test. Names in `p` are ignored; Its length
+#' and order should correspond with the pattern of NAs in `pars_fix`. Users should check that
+#' the desired parameter list is being constructed correctly by testing with:
+#' `pkern_pars_update(pars_fix, p, iso=iso, na_omit=TRUE)`.
 #'
 #' @param p numeric vector of covariance parameters accepted by `pkern_pars_update`
 #' @param g_obs list of form returned by `pkern_grid` (with entries 'gdim', 'gres', 'gval')
@@ -268,10 +286,39 @@ pkern_LL = function(pars, g_obs, X=0, method='chol', fac=NULL, quiet=TRUE, more=
 #' g_obs$gval = rnorm(10^2)
 #'
 #' # get some default parameters and vectorize them
-#' pars_fix = pkern_pars(g_obs, 'gau')
-#' p = pars_fix |> pkern_pars_update()
-#' pkern_nLL(p, g_obs, pars_fix)
-#' pkern_nLL(p, g_obs, pars_fix, eps_scaled=TRUE)
+#' pars = pkern_pars(g_obs, 'gau')
+#' p = pkern_pars_update(pars)
+#' pkern_nLL(p, g_obs, pars)
+#'
+#' # change a parameter and re-evaluate
+#' p_compare = p
+#' p_compare[1] = 2*p_compare[1]
+#' pkern_nLL(p_compare, g_obs, pars)
+#'
+#' # repeat by calling pkern_LL directly
+#' pars_compare = pars
+#' pars_compare$eps = 2*pars_compare$eps
+#' -pkern_LL(pars_compare, g_obs)
+#'
+#' # set up a subset of parameters for fitting
+#' pars_fix = pars
+#' pars_fix$eps = NA
+#' pars_fix$y$kp = NA
+#'
+#' # names in p_fit are for illustration only (only the order matters)
+#' p_fit = c(eps=1, y.rho=1)
+#' pkern_nLL(p_fit, g_obs, pars_fix)
+#'
+#' # equivalently:
+#' pars_fit = pars
+#' pars_fit$eps = p_fit[1]
+#' pars_fit$y$kp = p_fit[2]
+#' -pkern_LL(pars_fit, g_obs)
+#'
+#' # check an input specification
+#' pkern_pars_update(pars_fix, p_fit, na_omit=TRUE)
+#' pars_fit
+#'
 #'
 pkern_nLL = function(p, g_obs, pars_fix, X=0, iso=FALSE, quiet=TRUE, log_scale=FALSE)
 {
@@ -293,13 +340,21 @@ pkern_nLL = function(p, g_obs, pars_fix, X=0, iso=FALSE, quiet=TRUE, log_scale=F
 }
 
 
-#' Generate random draw from multivariate normal distribution for grid points
+#' Random draw from multivariate normal distribution for grids
+#'
+#' Generates a random draw from the multivariate Gaussian distribution for the
+#' covariance model `pars` on grid `g`, with mean zero.
+#'
+#' `pars` and `g` define the model's covariance matrix V.
+#'
+#' The function uses `base::rnorm` to get a vector of independent standard normal
+#' variates, which it multiplies by the square root of the covariance matrix, V,
+#' for the desired model (as defined by `pars` and `g`). The result is has a
+#' multivariate normal distribution with mean zero and covariance V.
 #'
 #' @param g any object accepted or returned by `pkern_grid`
 #' @param pars list, covariance parameters in form returned by `pkern_pars`
-#' @param fac (optional) list, precomputed factorization of component correlation matrices
-#' @param add_frac numeric > 0, small constant for adjusting negative eigen-values (see details)
-#' @param quiet logical, indicating to suppress warnings about negative eigen-values
+#' @param fac list, optional pre-computed factorization of component correlation matrices
 #'
 #' @return numeric vector, the vectorized grid data
 #' @export
@@ -307,50 +362,42 @@ pkern_nLL = function(p, g_obs, pars_fix, X=0, iso=FALSE, quiet=TRUE, log_scale=F
 #' @examples
 #'
 #' # example grid and covariance parameters
-#' gdim = c(25,15)
+#' gdim = c(100, 200)
 #' g = pkern_grid(gdim)
-#' pars = pkern_pars(g, 'mat')
+#' pars_gau = pkern_pars(g)
 #'
 #' # this example has a large nugget effect
-#' gval = pkern_sim(g, pars)
+#' gval = pkern_sim(g, pars=pars_gau)
 #' pkern_plot(matrix(gval, gdim))
 #'
 #' # plot with yx coordinates
 #' g_sim = modifyList(g, list(gval=gval))
 #' pkern_plot(g_sim)
 #'
-#' # repeat without nugget effect for smooth field
-#' pars0 = modifyList(pars, list(eps=0))
-#' gval = pkern_sim(g, pars0)
-#' pkern_plot(matrix(gval, gdim))
+#' # repeat with smaller nugget effect for less noisy data
+#' gval_smooth = pkern_sim(g, modifyList(pars, list(eps=1e-2)))
+#' g_sim_smooth = modifyList(g, list(gval=gval_smooth))
+#' pkern_plot(g_sim_smooth)
 #'
-#' # plot with yx coordinates
-#' g_sim = modifyList(g, list(gval=gval))
-#' pkern_plot(g_sim)
+#' # the nugget effect can be very small, but avoid eps=0
+#' gval_smoother = pkern_sim(g, modifyList(pars, list(eps=1e-12)))
+#' g_sim_smoother = modifyList(g, list(gval=gval_smoother))
+#' pkern_plot(g_sim_smoother)
 #'
-#' # parameters are automatically assigned if not supplied
-#' pkern_pars(g) # default is gau x gau with ranges roughly equal to grid side lengths
-#' pkern_plot(matrix(pkern_sim(g), gdim))
-#'
-pkern_sim = function(g_obs, pars=pkern_pars(g_obs), fac=NULL, add_frac=1e-16, quiet=FALSE)
+pkern_sim = function(g, pars=pkern_pars(g), fac=NULL)
 {
-  gdim = g_obs[['gdim']]
+  gdim = g[['gdim']]
   n = prod(gdim)
 
   # eigen-decompositions of separable components of full grid correlation matrix
-  g_empty = modifyList(g_obs, list(gval=NULL))
-  if(is.null(fac)) fac = pkern_var(g_empty, pars, fac_method='eigen')
-  is_ev_negative = lapply(fac, function(eig) !( eig[['values']] > 0 ) )
+  g_empty = modifyList(g, list(gval=NULL))
+  if(is.null(fac)) fac = pkern_var(g_empty, pars, fac_method='eigen', sep=TRUE)
 
-  # warn of any non-positive eigenvalues and fix them
-  is_dim_invalid = sapply(is_ev_negative, any)
-  if( !quiet & any(is_dim_invalid) ) warning('component covariance had negative eigenvalue(s)')
-  for( nm_dim in names(is_dim_invalid)[is_dim_invalid] )
-  {
-    nz_constant = add_frac * min( fac[[nm_dim]][['values']][ !is_ev_negative[[nm_dim]] ] )
-    fac[[nm_dim]][['values']][ is_ev_negative[[nm_dim]] ] = nz_constant
-  }
+  # report eigenvalue problems
+  is_ev_negative = lapply(fac, function(eig) !( (pars$eps + eig[['values']]) > 0 ) )
+  if( any(unlist(is_ev_negative)) ) stop('component correlation matrix has negative eigenvalue(s)')
 
+  # multiply random iid normal vector by covariance matrix square root
   return( as.vector(pkern_var_mult(rnorm(n), pars, fac=fac, fac_method='eigen', p=1/2)) )
 }
 
