@@ -141,7 +141,8 @@ gres = c(y=5, x=5)
 g_meuse = pkern_snap(meuse[['soils']]['log_zinc'], g=list(gres=gres))
 
 # plot the grid only
-pkern_plot(modifyList(g_meuse, list(gval=NA)), col_grid=NA)
+g = pkern_grid(modifyList(g_meuse, list(gval=NULL)))
+pkern_plot(modifyList(g_meuse, list(gval=NULL)), col_grid=NA)
 
 # plot with source points indicated over their snapped grid location
 pkern_plot(g_meuse, zlab='log(zinc)', reset=FALSE)
@@ -154,7 +155,11 @@ plot(sf::st_geometry(meuse[['soils']]), add=TRUE)
 #+ ordinary_kriging
 
 # ordinary kriging: fit isotropic gaussian model by default
-fit_result_OK = pkern_fit(g_obs=g_meuse, pars='gau', quiet=TRUE)
+fit_result_OK = pkern_fit(g_obs=g_meuse, quiet=TRUE)
+#fit_result_OK = pkern_fit(g_obs=g_meuse, pars='mat', quiet=TRUE)
+#vg_detrend = pkern_sample_vg(g_meuse)
+#pkern_plot_semi(vg_detrend, fit_result_OK$pars)
+
 
 #'
 #' By default, a sample semi-variogram is plotted, with the fitted model
@@ -194,7 +199,7 @@ X = matrix(meuse_predictors[is_obs,], nrow=n_obs)
 #+ universal_kriging
 
 # fit the model and plot semivariogram
-fit_result_UK = pkern_fit(g_obs=g_meuse, pars='gau', X=X, quiet=TRUE)
+fit_result_UK = pkern_fit(g_obs=g_meuse, X=X, quiet=TRUE)
 
 # print the GLS estimates for coefficients of the linear predictor
 pars_UK = fit_result_UK$pars
@@ -220,6 +225,14 @@ str(pars_UK)
 z_gls = pkern_GLS(g_meuse, pars_UK, X=meuse_predictors, out='z')
 g_meuse_gls = modifyList(g_meuse, list(gval=z_gls))
 pkern_plot(g_meuse_gls, main='estimated trend component')
+
+# g2 = g_meuse
+# g2[['gval']] = g2[['gval']] - z_gls
+# vg_detrend = pkern_sample_vg(g2)
+# pkern_plot_semi(vg_detrend, pars_UK, fun='classical')
+# pkern_plot_semi(vg_detrend, pars_UK, fun='root_median')
+
+
 
 #'
 #' Once you have a set of covariance parameters, interpolation becomes very easy
