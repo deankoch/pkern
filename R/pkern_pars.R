@@ -61,8 +61,9 @@ pkern_pars = function(g, pars='gau', fill='initial')
 #' @param pars list or character vector of 1-2 kernel names (see `pkern_pars`)
 #' @param g list, a pkern grid definition (or object accepted by `pkern_grid`)
 #' @param var_obs positive numeric, the sample variance of data `g$gval`
+#' @param var_mult numeric > 1, constant to multiply by `var_obs` to get upper bounds
 #'
-#' @return a data frame of intial values and lower/upper bounds for the parameters in `pars`
+#' @return a data frame of initial values and lower/upper bounds for the parameters in `pars`
 #' @export
 #'
 #' @examples
@@ -72,7 +73,7 @@ pkern_pars = function(g, pars='gau', fill='initial')
 #' pkern_bds('mat', g)
 #' pkern_bds('mat', g, lower=0)
 #' pkern_bds('mat', g, rows=c('eps', 'psill'), lower=c(0, 0.5))
-pkern_bds = function(pars, g, var_obs=NULL, var_mult=2, rows=NULL, initial=NULL, lower=NULL, upper=NULL)
+pkern_bds = function(pars, g, var_obs=NULL, var_mult=2)
 {
   # set up hard-coded shape parameter bounds
   kap_bds = list(gxp=list(lower=0.5, initial=1, upper=2),
@@ -108,14 +109,7 @@ pkern_bds = function(pars, g, var_obs=NULL, var_mult=2, rows=NULL, initial=NULL,
   if( any(has_kap) ) for( nm in nm_kap ) bds[[ idx_kap[[nm]] ]] = kap_bds[[ pars[[nm]][['k']] ]]
 
   # build requested subset of output data frame
-  if( is.null(rows) ) rows = names(bds)
-  df_out = do.call(rbind, lapply(bds[rows], data.frame))
-
-  # swap in any user-supplied values before finishing
-  if( !is.null(initial) ) df_out['initial'][rows,] = as.numeric(initial)
-  if( !is.null(lower) ) df_out['lower'][rows,] = as.numeric(lower)
-  if( !is.null(upper) ) df_out['upper'][rows,] = as.numeric(upper)
-  return(df_out)
+  return(do.call(rbind, lapply(bds, data.frame)))
 }
 
 
