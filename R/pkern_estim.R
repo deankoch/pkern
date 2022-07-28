@@ -6,36 +6,37 @@
 #'
 #' Computes coefficients b of the linear predictor E(Z) = Xb using the GLS equation
 #'
-#'  b = ( X^T V^{-1} X )^{-1} X^T V^{-1} z
+#' The GLS equation is: b = ( X^T V^{-1} X )^{-1} X^T V^{-1} z,
 #'
-#' where V is the covariance matrix for data z, and X is a matrix of covariates. If
-#' `X=NA`, X in the above is replaced by an intercept column (a vector of 1's) and this
-#' expression is a length-1 numeric (the estimated spatially constant mean). Otherwise it
-#' is a vector of coefficients whose first entry is the mean and subsequent entries are
-#' coefficients to multiply the columns of the predictor matrix `X`
+#' where V is the covariance matrix for data z, and X is a matrix of covariates.
+#' V is generated from the covariance model specified in `pars` on the grid `g_obs`,
+#' where the non-NA values of `g_obs$gval` form the vector z. Operations with V^{-1}
+#' are computed using the factorization `fac`, or else as specified in `fac_method`.
 #'
-#' If X is supplied, its columns should be independent, and the number of rows should
-#' match either the length of `g_obs$gval`, or the the number of non-NA data values
-#' `g_obs$gval` can also be a matrix containing multiple repetitions (layers) of the
-#' same spatial process, which the function assumes are mutually independent.
+#' When `out='z'`, the function returns the product Xb instead of b.
 #'
-#' An intercept column is appended to `X` before evaluating the GLS expression
-#' (and without checking if it's there already). DO NOT include an intercept column in
-#' argument `X` or you will get errors related to colinearity.
+#' Argument `X` should provide matrix X without the intercept column (a vector of 1's).
+#' DO NOT include an intercept column in argument `X` or you will get collinearity errors
+#' (the function appends it without checking if its there already). The columns of `X` must
+#' be independent, and its rows should match the entries of `g_obs$gval`, or its non-NA data
+#' values, in order. Use `X=NA` to specify an intercept-only model; ie to fit a spatially
+#' constant mean. This replaces X in the GLS equation by a vector of 1's.
 #'
-#' When `out='z'`, the function multiplies the GLS coefficients by `X` (with appended
-#' intercept column) to get the linear predictor for E(z)
-#'
-#' Note that the factorization returned in `fac_X` is scaled by the partial sill
+#' `g_obs$gval` can be a matrix whose columns are multiple repetitions (layers) of the
+#' same spatial process (see `pkern_grid`), in which case the covariates in `X` are recycled
+#' for each layer. Layers are assumed mutually independent and the GLS equation is evaluated
+#' using the corresponding block-diagonal V. Note that this is equivalent to (but faster
+#' than) calling `pkern_GLS` separately on each layer with the same `X` and averaging the
+#' estimated b's.
 #'
 #' @param g_obs list of form returned by `pkern_grid` (with entries 'gdim', 'gres', 'gval')
 #' @param pars list of form returned by `pkern_pars` (with entries 'y', 'x', 'eps', 'psill')
 #' @param X matrix or NA, the linear predictors (in columns) excluding intercept
-#' @param method character, the factorization to use: 'chol' (default) or 'eigen'
+#' @param fac_method character, factorization method: 'eigen' (default) or 'chol' (see `pkern_var`)
 #' @param fac matrix or list, (optional) pre-computed covariance matrix factorization
-#' @param out character, either 'b' (coefficients), 'z' (linear predictor), or 'x'
+#' @param out character, either 'b' (coefficients) or 'z' (linear predictor)
 #'
-#' @return numeric vector of length equal to one plus the number of columns in `X`
+#' @return numeric vector, either b (default) or Xb (if `out='z'`)
 #' @export
 #'
 #' @examples
@@ -67,6 +68,11 @@
 #' # compute trend as product of betas with matrix X_all, or by setting out='z'
 #' lm_est = X_all %*% betas_est
 #' max( abs( pkern_GLS(g_obs, pars, X_pass, out='z') - lm_est ) )
+#'
+#' # repeat with pre-computed eigen factorization
+#' fac_eigen = pkern_var(g_obs, pars, fac_method='eigen', sep=TRUE)
+#' betas_est_compare_eigen = pkern_GLS(g_obs, pars, X_pass, fac=fac_eigen)
+#' max( abs( betas_est_compare_eigen - betas_est ) )
 #'
 #' # missing data example
 #' n_obs = 10
@@ -123,11 +129,11 @@ pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, fac_method='eigen', out='b')
   }
 
   # set default factorization method
-  is_separable = all(is_obs)
-  if( all(is_obs) & (fac_method=='chol') ) stop('eigen method is required for complete grids')
+  is_sep = all(is_obs)
+  if( is_sep & (fac_method=='chol') ) stop('eigen method is required for complete grids')
 
   # compute variance factorization (scaled=TRUE -> partial sill is factored out)
-  if( is.null(fac) ) fac = pkern_var(g_obs, pars=pars, scaled=TRUE, fac_method=fac_method)
+  if( is.null(fac) ) fac = pkern_var(g_obs, pars, scaled=TRUE, fac_method=fac_method, sep=is_sep)
 
   # build matrix of covariate values from intercept column and (optionally) X
   n = length(is_obs)
@@ -153,9 +159,6 @@ pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, fac_method='eigen', out='b')
     if( is_multi ) X_obs = matrix(X_obs[reorder_z,], ncol=ncol(X))
   }
 
-  # return data matrix
-  if(startsWith(out, 'x')) return(X_obs)
-
   # find the factorization of quadratic form with X (scaling by V inverse)
   fac_X = pkern_var(g_obs, pars, X=X_obs, scaled=TRUE, fac=fac, fac_method='eigen')
 
@@ -164,15 +167,12 @@ pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, fac_method='eigen', out='b')
   betas_gls = pkern_var_mult(t(crossprod(z_trans, X_obs)), pars, fac=fac_X)
   if(is_multi) betas_gls = rowMeans(betas_gls)
 
-  # return betas if requested
+  # return betas by default
   if(startsWith(out, 'b')) return(as.numeric(betas_gls))
 
-  # return linear predictor
+  # or return linear predictor
   z_gls = as.numeric( tcrossprod(X, t(betas_gls)) )
-  if(startsWith(out, 'z')) return(z_gls)
-
-  # return everything in a list
-  return(list(b = as.numeric(betas_gls), z = z_gls, x = X, fac_X = fac_X))
+  return(z_gls)
 }
 
 #' Fit a covariance model to the data by maximum likelihood
@@ -295,7 +295,7 @@ pkern_fit = function(g_obs, pars=NULL, X=NA, iso=TRUE, initial=NULL, quiet=FALSE
   # set initial value defaults
   nm_fitted = names(is_fitted)[is_fitted]
   nm_fixed = names(is_fitted)[!is_fitted]
-  if( is.null(initial) ) initial = pkern_bds(pars, g, rows=nm_fitted)[['initial']]
+  if( is.null(initial) ) initial = pkern_bds(pars, g)[nm_fitted, 'initial']
   pars = pkern_pars_update(pars, p_fixed, iso=iso)
 
   # fit the model
@@ -430,8 +430,7 @@ pkern_optim = function(g_obs, pars='gau', X=0, iso=FALSE, control=list(), quiet=
   }
 
   # get default initial values and bounds data frame
-  pars_df = pkern_bds(pars_fix, g_obs, rows=nm_fit, ...)
-  #pars_df = pkern_bds(pars_fix, g_obs, rows=nm_fit)
+  pars_df = pkern_bds(pars_fix, g_obs)[nm_fit,]
 
   # switch to log-scale if requested
   if(log_scale)
@@ -550,7 +549,7 @@ pkern_optim = function(g_obs, pars='gau', X=0, iso=FALSE, control=list(), quiet=
 #' #g_obs |> modifyList(list(gval=g_pred)) |> pkern_plot()
 #' #g_obs |> modifyList(list(gval=g_var)) |> pkern_plot()
 #'
-pkern_cmean = function(g_obs, pars, X=NA, fac=NULL, out='p', method='chol', quiet=FALSE)
+pkern_cmean = function(g_obs, pars, X=NA, fac=NULL, out='p', fac_method='chol', quiet=FALSE)
 {
   # check for expected objects in list in g_obs
   nm_expect = c('gdim', 'gres', 'gval')
@@ -577,7 +576,9 @@ pkern_cmean = function(g_obs, pars, X=NA, fac=NULL, out='p', method='chol', quie
   cx = cx_obs = sqrt(pars[['psill']]) * pkern_corr_mat(pars[['x']], gdim[['x']], gres[['x']], i=1)
 
   # set up factorization when not supplied. Variance mode forces eigen-decomposition
-  if( startsWith(out, 'v') ) method = 'eigen'
+  if( startsWith(out, 'v') ) fac_method = 'eigen'
+
+  is_sep = n == n_obs
 
   # check for sub-grid structure and substitute simpler equivalent problem if possible
   sg = pkern_sub_find(is_obs, g_obs[['gdim']])
@@ -585,9 +586,9 @@ pkern_cmean = function(g_obs, pars, X=NA, fac=NULL, out='p', method='chol', quie
   if( is_sg )
   {
     # extract sub-grid layout and find separable covariance eigen-decomposition
-    method = 'eigen'
+    fac_method = 'eigen'
     g_obs = list(gval=z, gdim=sg[['gdim']], gres=g_obs[['gres']] * sg[['res_scale']])
-    if( is.null(fac) ) fac = pkern_var(g_obs, pars=pars, scaled=TRUE, method=method)
+    if( is.null(fac) ) fac = pkern_var(g_obs, pars, scaled=TRUE, fac_method=fac_method, sep=is_sep)
     cy_obs = cy[ sg[['ij']][['y']] ]
     cx_obs = cx[ sg[['ij']][['x']] ]
 
@@ -597,7 +598,7 @@ pkern_cmean = function(g_obs, pars, X=NA, fac=NULL, out='p', method='chol', quie
   } else {
 
     # compute factorization (scaled=TRUE means partial sill is factored out)
-    if( is.null(fac) ) fac = pkern_var(g_obs, pars=pars, scaled=TRUE, method=method)
+    if( is.null(fac) ) fac = pkern_var(g_obs, pars, scaled=TRUE, fac_method=fac_method, sep=is_sep)
   }
 
   # transform the observed data by left-multiplying with inverse covariance
@@ -617,7 +618,7 @@ pkern_cmean = function(g_obs, pars, X=NA, fac=NULL, out='p', method='chol', quie
     }
 
     # find betas, predictor, and the data matrix with an intercept column
-    gls = pkern_GLS(g_obs, pars, X=X_obs, fac=fac, method=method, out='a')
+    gls = pkern_GLS(g_obs, pars, X=X_obs, fac=fac, fac_method=fac_method, out='a')
     fac_X = gls[['fac_X']]
 
     # compute bias adjustment due to estimation of linear predictor
