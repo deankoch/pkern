@@ -345,12 +345,14 @@ pkern_nLL = function(p, g_obs, pars_fix, X=0, iso=FALSE, quiet=TRUE, log_scale=F
 #' Generates a random draw from the multivariate Gaussian distribution for the
 #' covariance model `pars` on grid `g`, with mean zero.
 #'
-#' `pars` and `g` define the model's covariance matrix V.
+#' `pars` and `g` define the model's covariance matrix V. This function uses `base::rnorm`
+#' to get a vector of independent standard normal variates, which it multiplies by the square
+#' root of the covariance matrix, V, for the desired model (as defined by `pars` and `g`). The
+#' result has a multivariate normal distribution with mean zero and covariance V.
 #'
-#' The function uses `base::rnorm` to get a vector of independent standard normal
-#' variates, which it multiplies by the square root of the covariance matrix, V,
-#' for the desired model (as defined by `pars` and `g`). The result is has a
-#' multivariate normal distribution with mean zero and covariance V.
+#' Multiple independent draws can be computed more efficiently by reusing the factorization
+#' of V. This can be pre-computed with `pkern_var` and supplied in `fac`, or a multi-layer
+#' `g` can be supplied (see examples).
 #'
 #' @param g any object accepted or returned by `pkern_grid`
 #' @param pars list, covariance parameters in form returned by `pkern_pars`
@@ -375,19 +377,34 @@ pkern_nLL = function(p, g_obs, pars_fix, X=0, iso=FALSE, quiet=TRUE, log_scale=F
 #' pkern_plot(g_sim)
 #'
 #' # repeat with smaller nugget effect for less noisy data
-#' gval_smooth = pkern_sim(g, modifyList(pars, list(eps=1e-2)))
+#' pars_smooth = modifyList(pars_gau, list(eps=1e-2))
+#' gval_smooth = pkern_sim(g, pars_smooth)
 #' g_sim_smooth = modifyList(g, list(gval=gval_smooth))
 #' pkern_plot(g_sim_smooth)
 #'
-#' # the nugget effect can be very small, but avoid eps=0
-#' gval_smoother = pkern_sim(g, modifyList(pars, list(eps=1e-12)))
+#' # the nugget effect can be very small, but users should avoid eps=0
+#' pars_smoother = modifyList(pars_gau, list(eps=1e-12))
+#' gval_smoother = pkern_sim(g, pars_smoother)
 #' g_sim_smoother = modifyList(g, list(gval=gval_smoother))
 #' pkern_plot(g_sim_smoother)
 #'
+#' # multi-layer example
+#' n_pt = prod(gdim)
+#' n_layer = 3
+#' g_multi = pkern_grid(list(gdim=gdim, gval=matrix(NA, n_pt, n_layer)))
+#' gval_multi = pkern_sim(g_multi, pars_smoother)
+#' g_sim_multi = modifyList(g, list(gval=gval_multi))
+#' pkern_plot(g_sim_multi, layer=1)
+#' pkern_plot(g_sim_multi, layer=2)
+#' pkern_plot(g_sim_multi, layer=3)
+#'
+#'
 pkern_sim = function(g, pars=pkern_pars(g), fac=NULL)
 {
+  # extract grid dimensions
   gdim = g[['gdim']]
   n = prod(gdim)
+  n_layer = ifelse(is.matrix(g[['gval']]), ncol(g[['gval']]), 1L)
 
   # eigen-decompositions of separable components of full grid correlation matrix
   g_empty = modifyList(g, list(gval=NULL))
@@ -397,7 +414,9 @@ pkern_sim = function(g, pars=pkern_pars(g), fac=NULL)
   is_ev_negative = lapply(fac, function(eig) !( (pars$eps + eig[['values']]) > 0 ) )
   if( any(unlist(is_ev_negative)) ) stop('component correlation matrix has negative eigenvalue(s)')
 
-  # multiply random iid normal vector by covariance matrix square root
-  return( as.vector(pkern_var_mult(rnorm(n), pars, fac=fac, fac_method='eigen', p=1/2)) )
+  # multiply random iid normal vector(s) by covariance matrix square root
+  seed_noise = matrix(rnorm(n*n_layer), ncol=n_layer)
+  sim_gval = pkern_var_mult(seed_noise, pars, fac=fac, fac_method='eigen', p=1/2)
+  if(n_layer==1) { return(as.vector(sim_gval)) } else { return(sim_gval) }
 }
 
