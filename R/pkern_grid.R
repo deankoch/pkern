@@ -5,51 +5,59 @@
 
 #' Make a pkern grid list object
 #'
-#' Define a 2-dimensional spatial grid as a list of vectors.
+#' Constructs a list representing a 2-dimensional spatial grid of data
 #'
-#' This function accepts (in its first argument) 'RasterLayer' and 'RasterStack' objects from
-#' the `raster` package, 'SpatRaster' objects from `terra`, as well as any non-complex matrix,
-#' or a list containing the vectorization of one, or a vector of grid dimensions.
+#' This function constructs pkern grid list objects, accepting 'RasterLayer' and 'RasterStack'
+#' inputs from the `raster` package, 'SpatRaster' objects from `terra`, as well as any
+#' non-complex matrix, or a list containing the vectorization of one. Empty grids can be
+#' initialized by specifying dimensions (and or setting `vals=FALSE`)
 #'
-#' It returns a list with the following 3-6 elements:
+#' The function returns a list with the following 3-6 elements:
 #'
-#' * gyx: `list(y, x)`, the coordinates of the y and x grid lines in vectors `y` and `x`
-#' * gres: `c(y, x)`, the (numeric) y and x distances between grid lines
-#' * gdim: `c(y, x)`, the (integer) number of y and x grid lines
-#' * gval: vector or matrix, the data (if any) in column-major order with y descending, x ascending
+#' * gval: the data (if any) in column-major order with y descending, x ascending
 #' * crs: character, the WKT string (if available) describing coordinate reference system
-#' * idx_grid: integer vector, mapping rows of `gval` to points on the grid
+#' * idx_grid: integer vector, mapping rows of matrix `gval` to points on the grid
+#' * gyx: a list containing the coordinates of the y and x grid lines in vectors `y` and `x`
+#' * gres: the (numeric) y and x distances between grid lines
+#' * gdim: the (integer) number of y and x grid lines
 #'
-#' where 'crs' is included only for geo-referenced inputs from `raster` and `terra`.
+#' The last three elements are required to define a valid `pkern` grid list object.
 #'
-#' The input `g` can itself be a list containing a subset of these elements (including at least
-#' one of 'gdim' or 'gyx'), and the function will fill in missing entries with their defaults:
-#' If 'gval' is missing, the function sets NAs; If 'res' is missing, it is
-#' computed from the first two grid lines in 'gyx'. If 'gyx' is missing, it is assigned the sequence
-#' `1:n` (scaled by 'res', if available) for each `n` in 'gdim'; and if 'gdim' is missing, it
-#' is set to equal the number of grid lines specified in (each vector of) 'gyx'.
+#' The input `g` can itself be a list containing some/all of these elements (including at least
+#' one of 'gdim' or 'gyx'), and the function will fill in missing entries wherever possible:
+#' If 'gval' is missing in the single-layer case, the function sets NAs; If 'res' is missing,
+#' it is computed from the first two grid lines in 'gyx'. If 'gyx' is missing, it is assigned
+#' the sequence `1:n` (scaled by 'res', if available) for each `n` in 'gdim'; and if 'gdim'
+#' is missing, it is set to equal the number of grid lines specified in (each vector of) 'gyx'.
 #'
-#' `g` can also be a vector of the form `c(y, x)` defining grid dimensions y and x (as a
-#' shorthand for the call `pkern_grid(g=list(gdim=gdim))`). Note that 1-dimensional grids
-#' are not supported, ie. there must be at least 2 grid lines in both the x and y dimensions.
+#' `gval` can be a vector, for single-layer grids, or a matrix whose columns are a set of grid
+#' layers. In the matrix case, `gval` stores the observed data only, with NAs indicating by the
+#' mapping `idx_grid`. This mapping is assumed to be the same in all layers, but is only computed
+#' for the first layer. If a point is missing from one layer, it should be missing from all layers.
 #'
-#' `gval` may be a matrix of multiple layers, with vectorized grid data in columns. This should
-#' include only the subset of observed data, with NAs indicating by the mapping `idx_grid`.
-#' `idx_grid` is a vector of length `prod(gdim)` with NAs for unobserved points, and otherwise
-#' the row number (in `gval`) of the observed point  These non-NA values must comprise
-#' `seq(nrow(gval))` (ie all rows must be mapped), but they can be in any order.
+#' `idx_grid` is a length `prod(gdim)` integer vector with NAs for unobserved points, and
+#' otherwise the row number (in `gval`) of the observed point. These non-NA values must
+#' comprise `seq(nrow(gval))` (ie all rows must be mapped), but they can be in any order.
+#' If `gval` is a matrix but `idx_grid` is missing, it is computed automatically (from the
+#' first column); and if `idx_grid` is supplied, but `gval` is a vector, it coerced to a 1-column
+#' matrix.
 #'
-#' @param g grid object such as a matrix or raster or vector of grid dimensions (see details)
+#' Scalar inputs to 'gdim', 'gres' are duplicated for both dimensions, and for convenience
+#' 'gdim' can be specified directly in `g` to initialize a simple grid; For example the call
+#' `pkern_grid(list(gdim=c(5,5)))` can be simplified to `pkern_grid(list(gdim=5))` or
+#' `pkern_grid(5)`.
+#'
+#' @param g raster, matrix, numeric vector, or list (see details)
 #' @param vals logical indicating to include the data vector 'gval' in return list
 #'
-#' @return named list containing 'gyx', 'gres', 'gdim', and optionally 'gval' and 'crs'
+#' @return named list containing at least 'gyx', 'gres', and 'gdim' (see details)
 #' @export
 #'
 #' @examples
 #'
 #' # simple grid construction from dimensions
 #' gdim = c(12, 10)
-#' g = pkern_grid(gdim)
+#' g = pkern_grid(g=list(gdim=gdim))
 #' str(g)
 #' str(pkern_grid(gdim, vals=FALSE))
 #'
@@ -63,15 +71,15 @@
 #' pkern_plot(g)
 #' pkern_plot(g, ij=TRUE)
 #'
-#' # set a different resolution and notice the argument is ignored if conflicting gyx supplied
+#' # gres argument is ignored if a non-conforming gyx is supplied
 #' gres_new = c(3, 4)
 #' pkern_plot(pkern_grid(g=list(gyx=lapply(gdim, seq), gres=gres_new)))
 #' pkern_plot(pkern_grid(g=list(gdim=gdim, gres=gres_new)))
 #'
 #' # shorthand for square grids
-#' all.equal(pkern_grid(g=2), pkern_grid(g=c(2,2)))
+#' all.equal(pkern_grid(2), pkern_grid(g=c(2,2)))
 #'
-#' # example with data
+#' # example with random data
 #' gdim = c(25, 25)
 #' yx = as.list(expand.grid(lapply(gdim, seq)))
 #' eg_vec = as.numeric( yx[[2]] %% yx[[1]] )
@@ -90,47 +98,73 @@
 #'
 #' # open example file as RasterLayer
 #' r_path = system.file('external/rlogo.grd', package='raster')
-#' r = raster::raster(r_path, band=1)
+#' r = raster::raster(r_path)
 #'
-#' # convert to pkern list
+#' # convert to pkern list (notice only first layer was loaded by raster)
 #' g = pkern_grid(r)
-#' pkern_plot(g)
-#' pkern_plot(g, ij=T)
-#'
-#' # open a RasterStack and notice only first band loaded
-#' r_multi = raster::stack(r_path)
-#' str(pkern_grid(r_multi))
 #' str(g)
+#' pkern_plot(g)
 #'
-#' # same with terra
+#' # open a RasterStack - gval becomes a matrix with layers in columns
+#' r_multi = raster::stack(r_path)
+#' g_multi = pkern_grid(r_multi)
+#' str(g_multi)
+#' pkern_plot(g_multi, layer=1)
+#' pkern_plot(g_multi, layer=2)
+#' pkern_plot(g_multi, layer=3)
+#'
+#' # repeat with terra
 #' if( requireNamespace('terra') ) {
 #'
-#' g = pkern_grid(terra::rast(r_path))
+#' # open example file as SpatRaster (all layers loaded by default)
+#' r_multi = terra::rast(r_path)
+#' g_multi = pkern_grid(r_multi)
+#' str(g_multi)
+#' pkern_plot(g_multi, layer=1)
+#' pkern_plot(g_multi, layer=2)
+#' pkern_plot(g_multi, layer=3)
+#'
+#' # open first layer only
+#' g = pkern_grid(r[[1]])
 #' str(g)
-#' pkern_plot(g, ij=T)
+#' pkern_plot(g)
 #'
 #' }
 #' }
 pkern_grid = function(g, vals=TRUE)
 {
-  # names for dimensional components and entries of g
+  # names for dimensional components and required entries of g, and a preferred order
   nm_dim = c('y', 'x')
   nm_g = c('gyx', 'gres', 'gdim')
+  nm_order = c('gval', 'idx_grid', 'crs', nm_g)
 
   # handle raster objects
   is_terra = any(c('SpatRaster') %in% class(g))
   is_raster = any(c('RasterLayer', 'RasterStack') %in% class(g))
   if( is_terra | is_raster )
   {
-    # copy grid dimensions then do package-specific calls
-    gdim = dim(g)[1:2]
+    # terra and raster use another ordering for vectorization
+    gdim = dim(g)[1:2] # order y, x
+    if(vals) idx_reorder = matrix(seq(prod(gdim)), gdim, byrow=TRUE)
+
+    # package-specific calls
+    gval = NULL
     if(is_terra)
     {
       # terra class
       gcrs = terra::crs(g)
       gyx = list(y=terra::yFromRow(g, seq(gdim[1])), x=terra::xFromCol(g, seq(gdim[2])))
       gres = terra::res(g)[2:1] # order dy, dx
-      if(vals) gval = terra::values(g)[ matrix(seq(prod(gdim)), gdim, byrow=TRUE) ]
+      if(vals)
+      {
+        # single layer gval is a vector
+        n_layer = terra::nlyr(g)
+        if(n_layer == 1) { gval = terra::values(g)[idx_reorder]  } else {
+
+          # multi-layer gval is a matrix
+          gval = terra::values(g)[idx_reorder,]
+        }
+      }
 
     } else {
 
@@ -138,17 +172,23 @@ pkern_grid = function(g, vals=TRUE)
       gcrs = raster::wkt(g)
       gyx = list(y=raster::yFromRow(g, seq(gdim[1])), x=raster::xFromCol(g, seq(gdim[2])))
       gres = raster::res(g)[2:1] # order dy, dx
-      if(vals) gval = raster::getValues(g)[ matrix(seq(prod(gdim)), gdim, byrow=TRUE) ]
+      if(vals)
+      {
+        # single layer gval is a vector
+        n_layer = raster::nlayers(g)
+        if(n_layer == 1) { gval = raster::getValues(g)[idx_reorder] } else {
+
+          # multi-layer gval is a matrix
+          gval = raster::getValues(g)[idx_reorder,]
+        }
+      }
     }
 
     # sort both sets of grid lines into ascending order
     gyx = lapply(gyx, sort)
 
-    # build named list and return
-    g_out = lapply(list(gyx, gres, gdim), function(r) stats::setNames(r, nm_dim))
-    g_out = c(list(crs=gcrs), stats::setNames(g_out, nm_g))
-    if( !vals ) return(g_out)
-    return( c(list(gval=as.vector(gval)), g_out) )
+    # recursive call to validate and set names
+    return( pkern_grid(list(gval=gval, crs=gcrs, gyx=gyx, gres=gres, gdim=gdim), vals=vals) )
   }
 
   # handle matrix objects
@@ -167,90 +207,97 @@ pkern_grid = function(g, vals=TRUE)
   # handle list objects
   if( is.list(g) )
   {
-    # check class of gval contents
+    # check for values
     is_gval = names(g) == 'gval'
+    is_indexed = !is.null(g[['idx_grid']])
+    if( is_indexed & !any(is_gval) ) stop('g$idx_grid supplied without g$gval')
     if( any(is_gval) )
     {
       # check for multi-layer input
-      is_indexed = !is.null(g[['idx_grid']])
       is_multi = is.matrix(g[['gval']])
 
-      # handle missing indexing vector when it is expected
-      if(is_multi & !is_indexed)
+      # create missing indexing vector when it is expected
+      if( is_multi & !is_indexed )
       {
-        warning('idx_grid not supplied. Assuming g has no missing data')
-        g[['idx_grid']] = seq(nrow(g[['gval']]))
+        # identify observed data in first layer and build an indexing vector from it
+        is_obs_first = !is.na(g[['gval']][,1L])
+        g[['idx_grid']] = match(which(is_obs_first), seq(nrow(g[['gval']])))
+
+        # handle no observed data case
+        if(length(g[['idx_grid']]) == 0) g[['idx_grid']] = rep(NA, nrow(g[['gval']]))
+
+        # keep only the non-NA rows
+        g[['gval']] = g[['gval']][is_obs_first,]
         is_indexed = TRUE
       }
 
-      # handle indexing vector
-      if(is_indexed)
-      {
-        # vector gval overwritten with 1-column matrix when indexed
-        if(!is_multi) g[['gval']] = matrix(g[['gval']], ncol=1L)
+      # vector gval overwritten with 1-column matrix when it is indexed
+      if( !is_multi & is_indexed ) g[['gval']] = matrix(g[['gval']], ncol=1L)
 
-        # remove redundant indexing vectors
-        if( (ncol(g[['gval']]) == 1) & !anyNA(g[['idx_grid']]) )
-        {
-          # overwrite gval with vector to replace matrix
-          g[['gval']] = as.vector(g[['gval']])[g[['idx_grid']]]
-          g[['idx_grid']] = NULL
-          is_indexed = FALSE
-        }
-      }
+      # if idx_grid is supplied, gval should have no NAs
+      gval_ok = ifelse(is_indexed, !anyNA(g[['gval']]), TRUE)
+      if(!gval_ok) stop('inconsistent pattern of NAs among layers')
     }
 
-    # skip further checking below when all other required names are found
-    if( all(nm_g %in% names(g)) )
+    # validate or compute gdim
+    if( is.null(g[['gdim']]) )
     {
-      # return the list
-      if(!vals) return(g[!is_gval])
-
-      # consistency check for vector lengths
-      if( !any(is_gval) ) { g[['gval']] = rep(NA, prod(g[['gdim']])) } else {
-
-        n_got = ifelse(is_indexed, nrow(g[['gval']]), length(g[['gval']]))
-        n_expect = ifelse(is_indexed, sum(!is.na(g[['idx_grid']])), prod(g[['gdim']]))
-        msg_gval = ifelse(is_indexed, 'number of rows in gval', 'length of gval')
-        msg_gdim = ifelse(is_indexed, 'number of non-NAs in idx_grid', 'prod(gdim)')
-        if(n_got != n_expect) stop(paste('mismatch between', msg_gdim, 'and', msg_gval))
-      }
-
-      return(g)
-    }
-
-    # calculate both gdim and gres from gyx when gdim is missing
-    if( !( 'gdim' %in% names(g) ) )
-    {
-      # require gyx in this case
-      if( !( 'gyx' %in% names(g) ) ) stop('gdim and gyx both missing from input grid g')
+      # require gyx when gdim missing
+      if( is.null(g[['gyx']]) ) stop('both gdim and gyx missing from input grid g')
       g[['gdim']] = sapply(g[['gyx']], length)
+
+    } else {
+
+      # coerce to integer and duplicate scalar input
+      g[['gdim']] = as.integer(g[['gdim']])
+      if( length(g[['gdim']]) == 1 ) g[['gdim']] = rep(g[['gdim']], 2)
     }
 
-    # set up default grid resolution
-    g[['gdim']] = as.integer(g[['gdim']])
+    # when grid resolution is missing calculate it from gyx or set up default
     if( is.null(g[['gres']]) )
     {
+      # compute from gyx where available (or set unit default)
       g[['gres']] = c(1, 1)
       if( !is.null(g[['gyx']]) ) g[['gres']] = as.numeric(sapply(g[['gyx']], function(r) diff(r)[1]))
 
     } else {
 
-      # resolution if it was supplied as a scalar
-      if( length(g[['gres']]) == 1 ) g[['gres']] = stats::setNames(rep(g[['gres']], 2), nm_dim)
+      # duplicate scalar input
+      if( length(g[['gres']]) == 1 ) g[['gres']] = rep(g[['gres']], 2)
     }
 
-    # set up default grid line positions
+    # set up grid line positions if they're missing
     if( is.null(g[['gyx']]) ) g[['gyx']] = Map(function(d, r) as.numeric(r*(seq(d)-1L)),
                                                d=g[['gdim']],
                                                r=g[['gres']])
 
-    # set names and add crs and grid values if they're needed before returning
-    g_out = lapply(g[nm_g], function(r) stats::setNames(r, nm_dim))
-    if( !is.null(g[['crs']]) ) g_out = c(list(crs=g[['crs']]), g_out)
-    if(!vals) return(g_out)
-    if( is.null(g[['gval']]) ) g[['gval']] = rep(NA_real_, prod(g[['gdim']]))
-    return(c(list(gval=g[['gval']]), g_out))
+    # check number of dimensions
+    if( !all(sapply(g[nm_g], length) == 2) ) stop('gdim, gres, and gyx must each have length 2')
+
+    # initialize with NAs if no data supplied
+    if( vals & !any(is_gval) ) g[['gval']] = rep(NA_real_, prod(g[['gdim']]))
+
+    # set dimension names and order of output
+    g[nm_g] = lapply(g[nm_g], function(r) stats::setNames(r, nm_dim))
+    nm_known = names(g)[ match(nm_order, names(g)) ]
+    nm_unknown = names(g)[ !(names(g) %in% nm_order) ]
+    nm_out = c(nm_unknown, nm_known[!is.na(nm_known)])
+
+    # finished if not returning grid values
+    if(!vals) return(g[nm_out])
+
+    # check that index (if any) has correct length
+    index_ok = ifelse(is_indexed, prod(g[['gdim']]) == length(g[['idx_grid']]), TRUE)
+    if(!index_ok) stop('indexing vector idx_grid must have length prod(gdim)')
+
+    # compare number of grid points found in data matrix/vector, and total expected
+    n_got = ifelse(is_indexed, nrow(g[['gval']]), length(g[['gval']]))
+    n_expect = ifelse(is_indexed, sum(!is.na(g[['idx_grid']])), prod(g[['gdim']]))
+    msg_gval = ifelse(is_indexed, 'number of rows in gval', 'length of gval')
+    msg_gdim = ifelse(is_indexed, 'number of non-NAs in idx_grid', 'prod(gdim)')
+    if(n_got != n_expect) stop(paste('mismatch between', msg_gdim, 'and', msg_gval))
+
+    return(g[nm_out])
   }
 
   # handle numeric vectors
@@ -298,14 +345,14 @@ pkern_grid = function(g, vals=TRUE)
 #' # same with terra
 #' if( requireNamespace('terra') ) {
 #'
-#' # SpatRaster is the default return class (when terra loaded)
+#' # convert all layers
 #' r = terra::rast(r_path)
 #' g = pkern_grid(r)
 #' r_from_g = pkern_export(g)
 #'
-#' # notice only the first band is loaded by pkern_grid
-#' print(r_from_g)
-#' print(r)
+#' # various metadata are lost
+#' all.equal(r_from_g, r)
+#'
 #' }
 #' }
 #'
@@ -321,6 +368,7 @@ pkern_export = function(g, template='terra')
   # load the input as pkern list
   g = pkern_grid(g)
   g[['crs']] = ifelse(is.null(g[['crs']]), '', g[['crs']])
+  n_layer = ifelse(is.null(g[['idx_grid']]), sum(!is.null(g[['gval']])), ncol(g[['gval']]))
 
   # extract grid cell boundaries as defined in raster/terra
   yx_bbox = Map(\(g, s) range(g) + (c(-1,1) * s/2), g=g[['gyx']], s=g[['gres']])
@@ -343,8 +391,17 @@ pkern_export = function(g, template='terra')
   if( template == 'terra' )
   {
     g_ext = terra::ext(do.call(c, rev(yx_bbox)))
-    r_out = terra::rast(extent=g_ext, resolution=rev(g[['gres']]), crs=g[['crs']])
-    if( !is.null(g[['gval']]) ) r_out = terra::setValues(r_out, matrix(g[['gval']], g[['gdim']]))
+    r_out = terra::rast(extent=g_ext, resolution=rev(g[['gres']]), crs=g[['crs']], nlyr=n_layer)
+    if( n_layer == 1 ) { r_out = terra::setValues(r_out, matrix(g[['gval']], g[['gdim']])) } else {
+
+      # pad with NAs to recover full grid
+      gval = g[['gval']][ g[['idx_grid']], ]
+
+      # multi-layer assignments require a different vectorization ordering!
+      gval_list = apply(gval, 2, function(x) t(matrix(x, g[['gdim']])), simplify=FALSE)
+      r_out = terra::setValues(r_out, do.call(cbind, gval_list))
+    }
+
     return(r_out)
   }
 
@@ -354,7 +411,12 @@ pkern_export = function(g, template='terra')
     # attempt to use raster if terra unavailable
     g_ext = raster::extent(do.call(c, rev(yx_bbox)))
     r_out = raster::raster(ext=g_ext, resolution=rev(g[['gres']]), crs=g[['crs']])
-    if( !is.null(g[['gval']]) ) r_out = raster::setValues(r_out, matrix(g[['gval']], g[['gdim']]))
+    if( !is.null(g[['gval']]) )
+    {
+      r_out = raster::setValues(r_out, matrix(g[['gval']], g[['gdim']]))
+
+
+    }
     return(r_out)
   }
 
