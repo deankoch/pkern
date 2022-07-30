@@ -5,36 +5,41 @@
 
 #' Column-vectorization indices
 #'
-#' Maps matrix indices to vectorization indices. The function returns the vector
-#' indices associated with the supplied matrix (i, j) indices.
+#' Maps matrix indices i, j to a single vectorized index, k
 #'
-#' Column vectorization (as in base::as.vector) builds a length(mn) vector by stacking
+#' Column vectorization (as in `base::as.vector`) builds a length(mn) vector by stacking
 #' the columns of an m X n matrix, with the leftmost column appearing first in the vector
-#' and the rightmost column last. Matrix element i,j gets mapped to element `(i + m*(j-1))`
+#' and the rightmost column last. Matrix element i,j gets mapped to element k = i + m * (j-1)
 #' in the vector. This function returns that index.
 #'
-#' `ij` can be a matrix or a list of length-n vectors "i" and "j" (in that order), or a vector
-#' representing a single point at the given row and column number. `ni` can be a vector of the
-#' form `c(ni, nj)` (the return value of `dim` for example) in which case its first element
-#' (the number of rows) is used.
+#' `ij` can be a matrix or a list of length-n vectors 'i' and 'j', or a vector
+#' representing a single point at the given row (i) and column (j) number (in that order).
+#'
+#' `gdim` should either be an integer number of rows in the matrix, or a vector of the form
+#' `c(ni, nj)` (the return value of `dim` for example) in which case its first element is used.
 #'
 #' @param ij n x 2 matrix, the row and column indices
-#' @param ni number of rows in the matrix
+#' @param gdim integer (or vector with first element equal to) the number of rows in the matrix
 #' @param simplified, if FALSE, the function returns an n x 1 matrix
 #'
-#' @return a vector of indices in the vectorized system
+#' @return integer vector, the vectorized `ij` indices
 #' @export
 #'
 #' @examples
+#' # define matrix dimensions and look up a specific index
+#' gdim = c(4, 5)
+#' ij = c(i=3, j=2)
+#' pkern_mat2vec(ij, gdim)
 #'
-#' # get column-vectorized ordering of points from matrix indices
-#' ni = 10
-#' gyx = expand.grid(i=seq(ni), j=seq(ni))
-#' pkern_mat2vec(gyx, ni)
-pkern_mat2vec = function(ij, ni, simplified=TRUE)
+#' # display all matrix indices in column-vectorized order
+#' gyx = expand.grid(i=seq(gdim[1]), j=seq(gdim[2]))
+#' result = pkern_mat2vec(gyx, gdim)
+#' data.frame(k=result, gyx)
+#'
+pkern_mat2vec = function(ij, gdim, simplified=TRUE)
 {
-  # handle vector input to ni
-  if( length(ni) > 1 ) ni = ni[1]
+  # handle vector input to gdim
+  if( length(gdim) > 1 ) gdim = gdim[1]
 
   # coerce list to matrix
   if( is.list(ij) )
@@ -44,56 +49,59 @@ pkern_mat2vec = function(ij, ni, simplified=TRUE)
   }
 
   # handle vector input (single point)
-  if( is.vector(ij) ) ij = matrix(ij, 1)
+  if( is.vector(ij) ) ij = matrix(ij, nrow=1)
 
   # coerce input to matrix
   ij = as.matrix(ij)
 
   # check for invalid input
-  if( any(ij[,1] > ni) ) stop('ij contains "i" indices exceeding ni')
+  if( any(ij[,1] > gdim) ) stop('ij contains "i" indices exceeding gdim')
 
   # return the vectorized index
-  idx = ij %*% c(1, ni) - ni
+  idx = ( ij %*% c(1, gdim) ) - gdim
   if( !simplified ) return( idx )
   return( as.vector(idx) )
 }
 
 
-#' Inverse column-vectorization indices
+#' Invert column-vectorization indices
 #'
-#' This function is for doing the inverse of `as.vector(M)` where `M` is a matrix. It returns
-#' the row and column numbers (i,j) associated with a given vector element after
-#' column-vectorization.
+#' Inverts the function `pkern_mat2vec`, returning matrix row and column numbers i, j,
+#' given the column-vectorized index `k` and matrix dimensions `gdim`.
 #'
-#' If a grid size vector `c(ni, nj)` is passed to `ni`, the function uses its first element.
+#' Output indices are returned in a matrix with columns 'i', 'j' and rows in same
+#' order as the input `k`. When `out='list'` list of vectors 'i' and 'j' (with entries
+#' in the same order) is returned instead.
 #'
-#' @param idx a vector of positive integers
-#' @param ni number of rows in the matrix
+#' The entries of `k` can be any permutation with replacement from `seq(prod(gdim))`
+#'
+#' @param k a vector of positive integers, the vector indices to look up
+#' @param gdim integer (or vector with first element equal to) the number of rows in the matrix
 #' @param out either 'matrix' or 'list'
 #'
-#' @return a two column matrix of integers (row and column numbers) with `length(idx)` rows
+#' @return a two column matrix of integers (row and column numbers) with `length(k)` rows
 #' @export
 #'
 #' @examples
 #'
 #' # show how elements are ordered in `base::matrix`
-#' ni = 5
-#' nj = 6
-#' matrix.indexing = matrix(1:prod(ni, nj), ni)
-#' print(matrix.indexing)
-#' as.vector(matrix.indexing)
+#' gdim = c(5, 6)
+#' matrix_order = matrix(1:prod(gdim), gdim)
+#' print(matrix_order)
 #'
-#' # doing the inverse
-#' pkern_vec2mat(2, ni)
-#' pkern_vec2mat(c(1,2,7), ni)
-pkern_vec2mat = function(idx, ni, out='matrix')
+#' # identify the row and column numbers for specific entry, or several
+#' pkern_vec2mat(2, gdim)
+#' pkern_vec2mat(c(2, 10, 5), gdim)
+#' pkern_vec2mat(c(2, 10, 5), gdim, out='list')
+#'
+pkern_vec2mat = function(k, gdim, out='matrix')
 {
   # handle vector input to ni
-  if( length(ni) > 1 ) ni = ni[1]
+  if( length(gdim) > 1 ) gdim = gdim[1]
 
   # compute column and row numbers
-  cnum = ceiling( idx / ni ) |> as.integer()
-  rnum = ( idx - ( ni * (cnum - 1) ) ) |> as.integer()
+  cnum = as.integer( ceiling( k / gdim ) )
+  rnum = as.integer( k - ( gdim * (cnum - 1) ) )
 
   # return as matrix
   if(out == 'matrix') return( cbind(i=rnum, j=cnum) )
@@ -103,29 +111,29 @@ pkern_vec2mat = function(idx, ni, out='matrix')
 
 #' Find column-vectorized index of a sub-grid
 #'
-#' Returns the column-vectorized index of a sub-grid with respect to the column-major
-#' vectorized order of the full grid of size `N = prod(gdim)`, based on the supplied
-#' grid line numbers `ij`. The returned length-`N` logical vector identifies points
-#' in the full grid lying at the intersections of grid lines in `ij`, a sub-grid with
-#' dimensions `gdim_sg = sapply(ij, length)`.
+#' Returns a logical vector indicating all grid points lying on the specified sub-grid.
+#' A grid point is `TRUE` only if both its i and j grid lines are found in `ij`.
 #'
-#' If `idx=TRUE`, the function returns an integer vector of length `prod(gdim_sg)`,
-#' the positions of the sub-grid points in the vectorization. This is the same as piping
-#' the default logical output to `which`; except if `nosort=FALSE`, in which case
-#' the output order depends on the ordering in `ij`: Letting `j = c(j1, j2, ..., in)` and
-#' `i = c(i1, i2, ...im)` the function returns:
+#' `ij` should be a list containing integer vectors named 'i', 'j', enumerating the
+#' i and j grid lines of the desired sub-grid. If 'i' (or 'j') is missing, the function
+#' automatically specifies all rows (or columns).
 #'
-#' (j1, i1), (j1, i2), ... (j1, im), (j2, i1), (j2, i2), ..., (j3, i1), ... (jm, in)
+#' If `idx=TRUE`, the function computes the vectorized index of the sub-grid points
+#' with respect to the full grid `gdim` (see `pkern_mat2vec`). Letting `i = c(i1, i2, ...im)`
+#' and `j = c(j1, j2, ...in)` the function orders the sub-grid points as follows:
 #'
-#' If `ij$i` is missing, the function returns results for all rows, and if `ij$j` it
-#' returns results for all columns.
+#' (i1, j1), (i2, j1), ... (im, j1), (i1, j2), (i2, j2), ..., (i1, j3), ... (in, jm)
 #'
-#' @param gdim c(ni, nj), the number rows and columns in the full grid
-#' @param ij list containing vectors "i" and "j", the sub-grid rows and columns
+#' This is the column-major vectorized order for the sub-grid (with y descending and
+#' x ascending), provided the input grid line numbers in `ij` are in ascending order.
+#' When `nosort=FALSE`, the function orders the input grid lines automatically.
+#'
+#' @param gdim integer vector, the number rows and columns in the full grid (in that order)
+#' @param ij list containing vectors "i" and "j", the sub-grid row and column numbers
 #' @param nosort logical, skips sorting the input vectors in `ij`
 #' @param idx logical, indicates to return indices (default TRUE) versus logical vector
 #'
-#' @return integer vector (length `n_sg`) or logical vector (length `n`)
+#' @return integer or logical vector
 #' @export
 #'
 #' @examples
@@ -136,16 +144,17 @@ pkern_vec2mat = function(idx, ni, out='matrix')
 #'
 #' # pkern_sub_idx returns a logical vector indexing the point (or the index itself)
 #' is_pt = pkern_sub_idx(gdim, ij_list)
-#' pkern_plot(is_pt, gdim, col_grid='white')
-#' pkern_sub_idx(gdim, ij_list, idx=TRUE)
-#' pkern_mat2vec(ij_list, gdim) # equivalent when ij_list is a single point
+#' idx_sub = pkern_sub_idx(gdim, ij_list, idx=TRUE)
+#' pkern_plot(is_pt, gdim, col_grid='white', zlab='index', breaks=c('other', idx_sub))
+#'
+#' # equivalent call when ij_list is a single point
+#' pkern_mat2vec(ij_list, gdim) == idx_sub
 #'
 #' # if i or j are omitted from ij, the function returns the full row or column
 #' is_col2 = pkern_sub_idx(gdim, ij_list['i'])
 #' is_row3 = pkern_sub_idx(gdim, ij_list['j'])
 #' pkern_plot(is_col2, gdim, col_grid='white', breaks=c('other', paste('row', ij_list['i'])))
-#' pkern_plot(is_row3, gdim, col_grid='white', breaks=c('other', paste('column', ij_list['j'])))
-#' pkern_plot(is_col2 + is_row3, gdim, col_grid='white')
+#' pkern_plot(is_row3, gdim, col_grid='white', breaks=c('other', paste('col', ij_list['j'])))
 #'
 #' # indices in column-vectorized order
 #' pkern_sub_idx(gdim, list(i=2), idx=TRUE)
@@ -157,13 +166,13 @@ pkern_vec2mat = function(idx, ni, out='matrix')
 #' gdim_sg = c(3, 4) # sub-grid dimensions (make sure this fits in gdim!)
 #' ij_list = stats::setNames(Map(\(d, o) o + seq(d) - 1, gdim_sg, origin_sg), c('i', 'j'))
 #' is_sg = pkern_sub_idx(gdim, ij=ij_list)
-#' pkern_plot(is_sg, gdim, col_grid='white')
+#' pkern_plot(is_sg, gdim, col_grid='white', zlab='sub-grid')
 #'
 #' # plot the index values: column major vectorization with y descending, x ascending
 #' idx_sg = pkern_sub_idx(gdim, ij=ij_list, idx=TRUE)
 #' vec_order = rep(NA, prod(gdim))
 #' vec_order[is_sg] = as.character(idx_sg)
-#' pkern_plot(vec_order, gdim, col_grid='black', zlab='vector index')
+#' pkern_plot(vec_order, gdim, col_grid='black', zlab='vector idx')
 #'
 #' # example with j indices supplied in reverse (descending) order
 #' ij_list_xflip = modifyList(ij_list, list(j=rev(ij_list[['j']])))
@@ -213,27 +222,33 @@ pkern_sub_idx = function(gdim, ij=NULL, idx=FALSE, nosort=FALSE)
   is_out = logical(prod(gdim))
   is_out[idx_out] = TRUE
   return(is_out)
-
 }
 
 
-#' Up-scale or down-scale a grid
+#' Up or down-scale a grid
 #'
-#' Changes the resolution of a grid by a factor of (positive integer) `up` or `down`.
+#' Changes the resolution of a grid by a factor of `up` or `down`.
 #'
-#' This constructs a new grid of based on `g`, where: if `up` is supplied, a sparser
-#' (up-scaled) version of `g` is returned, with every `up`th grid line sampled; and
-#' if `down` is supplied, a denser version of `g` is returned where every `down`th
-#' grid line is copied over from `g` (and the rest initialized to NA).
+#' Users should specify a grid `g` to re-scale and an integer scaling factor; either `up`
+#' or `down`. This effects the scaling of resolution (`g$gres`) by `up` or `1/down`.
 #'
-#' This effects the scaling of resolution (`g$gres`) by `up` (or `1/down`). It does
-#' not do any interpolation to fill new grid-points created with `up` and it does not
-#' change the bounding box of `g`.
+#' `up` (or `down`) should be a vector of two positive integers, supplying the re-scaling
+#' factors in the y and x dimensions in that order, or a single value to be used for both.
+#'
+#' When `up` is supplied, a lower resolution grid is returned comprising every `up`th grid
+#' line of `g` along each dimension. All other grid lines, and any data values lying on them,
+#' are ignored. `up` should be no greater than `g$gdim - 1`. Note that if `up` does not
+#' evenly divide this number, the bounding box will shrink slightly.
+#'
+#' When `down` is supplied, the function returns a higher resolution grid (`g_fine`) with
+#' the same bounding box as `g`. Along each dimension, every `down`th grid line of `g_fine`
+#' coincides with a grid line of `g`. Any values found in `g$gval` are copied to `g_fine`,
+#' and un-mapped grid lines in `g_fine` are initialized to `NA`. Recover `g` from `g_fine`
+#' with `pkern_rescale(g_fine, up=down)`.
 #'
 #' @param g any object accepted or returned by `pkern_grid`
-#' @param up integer > 0, an up-scaling factor
-#' @param down integer > 0, a down-scaling factor
-#' @param vals logical, indicates to return data vector as well as grid info
+#' @param up integer > 0, or vector of two, the up-scaling factor(s)
+#' @param down integer > 0, or vector of two, the down-scaling factor(s)
 #'
 #' @return a grid list of the form returned by `pkern_grid`
 #' @export
@@ -243,26 +258,32 @@ pkern_sub_idx = function(gdim, ij=NULL, idx=FALSE, nosort=FALSE)
 #' # example data
 #' gdim = c(50, 53)
 #' g = pkern_grid(gdim)
-#' gval = pkern_sim(g, modifyList(pkern_pars(g), list(eps=0)), quiet=TRUE)
+#' gval = pkern_sim(g, modifyList(pkern_pars(g), list(eps=1e-6)))
 #' g_obs = modifyList(g, list(gval=gval))
 #' pkern_plot(g_obs)
 #'
 #' # upscale
 #' pkern_plot(pkern_rescale(g=g_obs, up=1)) # does nothing
 #' pkern_plot(pkern_rescale(g=g_obs, up=2))
-#' pkern_plot(pkern_rescale(g=g_obs, up=3))
 #'
 #' # downscale
 #' pkern_plot(pkern_rescale(g=g_obs, down=1)) # does nothing
 #' pkern_plot(pkern_rescale(g=g_obs, down=2))
-#' pkern_plot(pkern_rescale(g=g_obs, down=3))
 #'
-#' # turn vals off to get grid configuration only
-#' pkern_plot(g)
-#' pkern_plot(pkern_rescale(g=g_obs, up=2, vals=FALSE))
-#' pkern_plot(pkern_rescale(g=g_obs, down=2, vals=FALSE))
+#' # length-2 vectors to rescale differently in x and y directions
+#' pkern_plot(pkern_rescale(g=g_obs, up=c(2,3)))
+#' pkern_plot(pkern_rescale(g=g_obs, down=c(2,3)))
 #'
-pkern_rescale = function(g, up=NULL, down=NULL, vals=TRUE)
+#' # invert a down-scaling
+#' g_obs_compare = pkern_rescale(pkern_rescale(g=g_obs, down=c(5,3)), up=c(5,3))
+#' identical(g_obs, g_obs_compare)
+#'
+#' # multi-layer example with missing data
+#' gval_multi = pkern_sim(g, modifyList(pkern_pars(g), list(eps=1e-6)))
+#'
+#'
+#'
+pkern_rescale = function(g, up=NULL, down=NULL)
 {
   # user has to pick one or the other
   is_up = !is.null(up)
@@ -271,9 +292,26 @@ pkern_rescale = function(g, up=NULL, down=NULL, vals=TRUE)
   if( !(is_up | is_down) ) stop('either up or down must be specified')
 
   # unpack the grid object as list
-  g = pkern_grid(g, vals)
-  vals = vals & !is.null(g[['gval']])
+  g = pkern_grid(g)
   gdim = g[['gdim']]
+
+  # multi-layer support
+  if( !is.null(g[['idx_grid']]) )
+  {
+    # make a non-sparse copy of mapping vector
+    g_first = modifyList(g, list(gval=g[['idx_grid']], idx_grid=NULL))
+    g_result = pkern_rescale(g_first, up=up, down=down)
+    idx_grid = match(which(!is.na(g_result[['gval']])), seq(prod(g_result[['gdim']])))
+
+    # identify rows of gval to keep
+    g[['idx_grid']][idx_sub]
+
+
+
+    # keep only the first layer
+    #g[['idx_grid']] =
+  }
+
 
   # up-scaling
   if(is_up)
@@ -290,7 +328,7 @@ pkern_rescale = function(g, up=NULL, down=NULL, vals=TRUE)
 
     # overwrite data vector with the subset then update other fields in g
     idx_sub = pkern_sub_idx(gdim, ij_values, idx=TRUE)
-    if(vals) g[['gval']] = g[['gval']][idx_sub]
+    g[['gval']] = g[['gval']][idx_sub]
     g[['gres']] = g[['gres']] * up
     g[['gdim']] = gdim_new
     g[['gyx']] = Map(function(yx, idx) yx[idx], yx=g[['gyx']], idx=ij_values)
@@ -305,11 +343,10 @@ pkern_rescale = function(g, up=NULL, down=NULL, vals=TRUE)
   # set up dimensions of super-grid
   gdim_new = gdim + (down - 1L) * (gdim - 1L)
   gres_new = g[['gres']] / down
-  g_new = pkern_grid(list(gdim=gdim_new, gres=gres_new), vals=FALSE)
+  g_new = pkern_grid(list(gdim=gdim_new, gres=gres_new), vals=!is.null(g[['gval']]))
   g_new[['gyx']] = Map(function(old, new) new + old[1], old=g[['gyx']], new=g_new[['gyx']])
 
   # copy data to the sub-grid of the output and return
-  if(!vals) return(g_new)
   ij_sub = stats::setNames(Map(function(d, b) seq(1, d, b), d=gdim_new, b=down), c('i', 'j'))
   idx_sub = pkern_sub_idx(gdim_new, ij=ij_sub, idx=TRUE)
   if( !is.null(g[['gval']]) ) g_new[['gval']][idx_sub] = g[['gval']]
@@ -460,17 +497,17 @@ pkern_sub_find = function(g_obs, gdim=NULL)
 
 #' Return coordinates of a grid of points in column-vectorized order
 #'
-#' Expands sets of y and x grid line locations in the column-major order i that
-#' pkern uses for grid data. This ordering sorts the data into blocks of length equal
-#' to the vertical dimension of the grid, where: y descends within blocks within blocks
-#' and x increases among blocks.
+#' Expands a set of y and x grid line numbers in the column-vectorized order returned
+#' by `pkern_grid`.
 #'
-#' This is similar to `base::expand.grid` but with the first dimension descending instead
-#' of ascending. Optionally, setting `out='sf'` builds an `sf` simple features object
-#' from the coordinates and populates it with data (if any) from `g`. This can be slow for
-#' large grids.
+#' This is similar to `base::expand.grid` but with the first dimension (y) descending
+#' instead of ascending.
 #'
-#' @param g any other object accepted/returned by `pkern_grid`
+#' `out='sf'` returns an `sf` simple features object containing points in the same order,
+#' with data (if any) copied from `g$gval` into column 'gval'. Note that `prod(g$gdim)`
+#' points are created, which can be slow for large grids.
+#'
+#' @param g any object accepted by `pkern_grid`
 #' @param out character indicating return value type, either 'list', 'matrix', or 'sf'
 #' @param corners logical, indicates to only return the corner points
 #'
@@ -478,24 +515,38 @@ pkern_sub_find = function(g_obs, gdim=NULL)
 #' @export
 #'
 #' @examples
+#' gdim = c(5,3)
+#' g_example = pkern_grid(list(gdim=gdim, gres=c(0.5, 0.7), gval=seq(prod(gdim))))
+#' pkern_coords(g_example)
+#' pkern_coords(g_example, out='list')
 #'
-#' # 5x5 grid example
-#' str( pkern_coords(5) )
-#' pkern_coords(5, out='list')
-#' pkern_coords(5, corner=TRUE)
-#' pkern_coords(5, corner=TRUE, out='list')
+#' # corner points
+#' pkern_coords(g_example, corner=TRUE)
+#' pkern_coords(g_example, corner=TRUE, out='list')
 #'
-#' # 3x2 example and sf output type
-#' pkern_coords(c(3,2))
+#' # sf output type
 #' if( requireNamespace('sf') ) {
-#' pkern_coords(c(13, 12), out='sf')
+#'
+#' # make the points
+#' sf_coords = pkern_coords(g_example, out='sf')
+#'
+#' # data are copied to variable 'gval'
+#' plot(sf_coords, pch=16)
+#'
 #' }
 #'
 pkern_coords = function(g, out='matrix', corner=FALSE)
 {
-  # unpack input and take subset of corner points if requested
+  # unpack input and slice multi-layer input
   g = pkern_grid(g)
-  if( is.null(g[['crs']]) ) g[['crs']] = ''
+  if( !is.null(g[['idx_grid']]) )
+  {
+    # keep only the first layer
+    g[['gval']] = as.vector(g[['gval']][g[['idx_grid']], 1L])
+    g[['idx_grid']] = NULL
+  }
+
+  # take subset of corner points if requested
   if(corner)
   {
     g[['gdim']] = c(y=2L, x=2L)
@@ -517,12 +568,18 @@ pkern_coords = function(g, out='matrix', corner=FALSE)
   out_mat = do.call(cbind, out_list)
   if( out == 'matrix' ) return( out_mat )
 
-  # return as sf
+  # sf return mode
   if( !startsWith(out, 'sf') ) stop('Argument `out` must be either "list", "matrix", or "sf"')
   sf_loaded = requireNamespace('sf', quietly=TRUE)
   if( !sf_loaded ) stop('sf package not loaded. Try library(sf)')
   cat(paste('processing', prod(g[['gdim']]), 'grid points...\n'))
+
+  # create the points object
+  if( is.null(g[['crs']]) ) g[['crs']] = ''
   sf_out = sf::st_as_sf(as.data.frame(out_mat), coords=c('x', 'y'), crs=g[['crs']])
+
+  # copy any data and return
+  if( !is.null(g[['gval']]) ) sf_out['gval'] = g[['gval']]
   return(sf_out)
 }
 
