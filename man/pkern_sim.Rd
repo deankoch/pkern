@@ -21,12 +21,14 @@ Generates a random draw from the multivariate Gaussian distribution for the
 covariance model \code{pars} on grid \code{g}, with mean zero.
 }
 \details{
-\code{pars} and \code{g} define the model's covariance matrix V.
+\code{pars} and \code{g} define the model's covariance matrix V. This function uses \code{base::rnorm}
+to get a vector of independent standard normal variates, which it multiplies by the square
+root of the covariance matrix, V, for the desired model (as defined by \code{pars} and \code{g}). The
+result has a multivariate normal distribution with mean zero and covariance V.
 
-The function uses \code{base::rnorm} to get a vector of independent standard normal
-variates, which it multiplies by the square root of the covariance matrix, V,
-for the desired model (as defined by \code{pars} and \code{g}). The result is has a
-multivariate normal distribution with mean zero and covariance V.
+Multiple independent draws can be computed more efficiently by reusing the factorization
+of V. This can be pre-computed with \code{pkern_var} and supplied in \code{fac}, or a multi-layer
+\code{g} can be supplied (see examples).
 }
 \examples{
 
@@ -44,13 +46,26 @@ g_sim = modifyList(g, list(gval=gval))
 pkern_plot(g_sim)
 
 # repeat with smaller nugget effect for less noisy data
-gval_smooth = pkern_sim(g, modifyList(pars, list(eps=1e-2)))
+pars_smooth = modifyList(pars_gau, list(eps=1e-2))
+gval_smooth = pkern_sim(g, pars_smooth)
 g_sim_smooth = modifyList(g, list(gval=gval_smooth))
 pkern_plot(g_sim_smooth)
 
-# the nugget effect can be very small, but avoid eps=0
-gval_smoother = pkern_sim(g, modifyList(pars, list(eps=1e-12)))
+# the nugget effect can be very small, but users should avoid eps=0
+pars_smoother = modifyList(pars_gau, list(eps=1e-12))
+gval_smoother = pkern_sim(g, pars_smoother)
 g_sim_smoother = modifyList(g, list(gval=gval_smoother))
 pkern_plot(g_sim_smoother)
+
+# multi-layer example
+n_pt = prod(gdim)
+n_layer = 3
+g_multi = pkern_grid(list(gdim=gdim, gval=matrix(NA, n_pt, n_layer)))
+gval_multi = pkern_sim(g_multi, pars_smoother)
+g_sim_multi = modifyList(g, list(gval=gval_multi))
+pkern_plot(g_sim_multi, layer=1)
+pkern_plot(g_sim_multi, layer=2)
+pkern_plot(g_sim_multi, layer=3)
+
 
 }

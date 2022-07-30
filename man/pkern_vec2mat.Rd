@@ -2,38 +2,41 @@
 % Please edit documentation in R/pkern_index.R
 \name{pkern_vec2mat}
 \alias{pkern_vec2mat}
-\title{Inverse column-vectorization indices}
+\title{Invert column-vectorization indices}
 \usage{
-pkern_vec2mat(idx, ni, out = "matrix")
+pkern_vec2mat(k, gdim, out = "matrix")
 }
 \arguments{
-\item{idx}{a vector of positive integers}
+\item{k}{a vector of positive integers, the vector indices to look up}
 
-\item{ni}{number of rows in the matrix}
+\item{gdim}{integer (or vector with first element equal to) the number of rows in the matrix}
 
 \item{out}{either 'matrix' or 'list'}
 }
 \value{
-a two column matrix of integers (row and column numbers) with \code{length(idx)} rows
+a two column matrix of integers (row and column numbers) with \code{length(k)} rows
 }
 \description{
-This function is for doing the inverse of \code{as.vector(M)} where \code{M} is a matrix. It returns
-the row and column numbers (i,j) associated with a given vector element after
-column-vectorization.
+Inverts the function \code{pkern_mat2vec}, returning matrix row and column numbers i, j,
+given the column-vectorized index \code{k} and matrix dimensions \code{gdim}.
 }
 \details{
-If a grid size vector \code{c(ni, nj)} is passed to \code{ni}, the function uses its first element.
+Output indices are returned in a matrix with columns 'i', 'j' and rows in same
+order as the input \code{k}. When \code{out='list'} list of vectors 'i' and 'j' (with entries
+in the same order) is returned instead.
+
+The entries of \code{k} can be any permutation with replacement from \code{seq(prod(gdim))}
 }
 \examples{
 
 # show how elements are ordered in `base::matrix`
-ni = 5
-nj = 6
-matrix.indexing = matrix(1:prod(ni, nj), ni)
-print(matrix.indexing)
-as.vector(matrix.indexing)
+gdim = c(5, 6)
+matrix_order = matrix(1:prod(gdim), gdim)
+print(matrix_order)
 
-# doing the inverse
-pkern_vec2mat(2, ni)
-pkern_vec2mat(c(1,2,7), ni)
+# identify the row and column numbers for specific entry, or several
+pkern_vec2mat(2, gdim)
+pkern_vec2mat(c(2, 10, 5), gdim)
+pkern_vec2mat(c(2, 10, 5), gdim, out='list')
+
 }

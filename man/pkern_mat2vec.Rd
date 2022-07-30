@@ -4,37 +4,42 @@
 \alias{pkern_mat2vec}
 \title{Column-vectorization indices}
 \usage{
-pkern_mat2vec(ij, ni, simplified = TRUE)
+pkern_mat2vec(ij, gdim, simplified = TRUE)
 }
 \arguments{
 \item{ij}{n x 2 matrix, the row and column indices}
 
-\item{ni}{number of rows in the matrix}
+\item{gdim}{integer (or vector with first element equal to) the number of rows in the matrix}
 
 \item{simplified, }{if FALSE, the function returns an n x 1 matrix}
 }
 \value{
-a vector of indices in the vectorized system
+integer vector, the vectorized \code{ij} indices
 }
 \description{
-Maps matrix indices to vectorization indices. The function returns the vector
-indices associated with the supplied matrix (i, j) indices.
+Maps matrix indices i, j to a single vectorized index, k
 }
 \details{
-Column vectorization (as in base::as.vector) builds a length(mn) vector by stacking
+Column vectorization (as in \code{base::as.vector}) builds a length(mn) vector by stacking
 the columns of an m X n matrix, with the leftmost column appearing first in the vector
-and the rightmost column last. Matrix element i,j gets mapped to element \code{(i + m*(j-1))}
+and the rightmost column last. Matrix element i,j gets mapped to element k = i + m * (j-1)
 in the vector. This function returns that index.
 
-\code{ij} can be a matrix or a list of length-n vectors "i" and "j" (in that order), or a vector
-representing a single point at the given row and column number. \code{ni} can be a vector of the
-form \code{c(ni, nj)} (the return value of \code{dim} for example) in which case its first element
-(the number of rows) is used.
+\code{ij} can be a matrix or a list of length-n vectors 'i' and 'j', or a vector
+representing a single point at the given row (i) and column (j) number (in that order).
+
+\code{gdim} should either be an integer number of rows in the matrix, or a vector of the form
+\code{c(ni, nj)} (the return value of \code{dim} for example) in which case its first element is used.
 }
 \examples{
+# define matrix dimensions and look up a specific index
+gdim = c(4, 5)
+ij = c(i=3, j=2)
+pkern_mat2vec(ij, gdim)
 
-# get column-vectorized ordering of points from matrix indices
-ni = 10
-gyx = expand.grid(i=seq(ni), j=seq(ni))
-pkern_mat2vec(gyx, ni)
+# display all matrix indices in column-vectorized order
+gyx = expand.grid(i=seq(gdim[1]), j=seq(gdim[2]))
+result = pkern_mat2vec(gyx, gdim)
+data.frame(k=result, gyx)
+
 }

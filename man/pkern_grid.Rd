@@ -7,55 +7,63 @@
 pkern_grid(g, vals = TRUE)
 }
 \arguments{
-\item{g}{grid object such as a matrix or raster or vector of grid dimensions (see details)}
+\item{g}{raster, matrix, numeric vector, or list (see details)}
 
 \item{vals}{logical indicating to include the data vector 'gval' in return list}
 }
 \value{
-named list containing 'gyx', 'gres', 'gdim', and optionally 'gval' and 'crs'
+named list containing at least 'gyx', 'gres', and 'gdim' (see details)
 }
 \description{
-Define a 2-dimensional spatial grid as a list of vectors.
+Constructs a list representing a 2-dimensional spatial grid of data
 }
 \details{
-This function accepts (in its first argument) 'RasterLayer' and 'RasterStack' objects from
-the \code{raster} package, 'SpatRaster' objects from \code{terra}, as well as any non-complex matrix,
-or a list containing the vectorization of one, or a vector of grid dimensions.
+This function constructs pkern grid list objects, accepting 'RasterLayer' and 'RasterStack'
+inputs from the \code{raster} package, 'SpatRaster' objects from \code{terra}, as well as any
+non-complex matrix, or a list containing the vectorization of one. Empty grids can be
+initialized by specifying dimensions (and or setting \code{vals=FALSE})
 
-It returns a list with the following 3-6 elements:
+The function returns a list with the following 3-6 elements:
 \itemize{
-\item gyx: \code{list(y, x)}, the coordinates of the y and x grid lines in vectors \code{y} and \code{x}
-\item gres: \code{c(y, x)}, the (numeric) y and x distances between grid lines
-\item gdim: \code{c(y, x)}, the (integer) number of y and x grid lines
-\item gval: vector or matrix, the data (if any) in column-major order with y descending, x ascending
+\item gval: the data (if any) in column-major order with y descending, x ascending
 \item crs: character, the WKT string (if available) describing coordinate reference system
-\item idx_grid: integer vector, mapping rows of \code{gval} to points on the grid
+\item idx_grid: integer vector, mapping rows of matrix \code{gval} to points on the grid
+\item gyx: a list containing the coordinates of the y and x grid lines in vectors \code{y} and \code{x}
+\item gres: the (numeric) y and x distances between grid lines
+\item gdim: the (integer) number of y and x grid lines
 }
 
-where 'crs' is included only for geo-referenced inputs from \code{raster} and \code{terra}.
+The last three elements are required to define a valid \code{pkern} grid list object.
 
-The input \code{g} can itself be a list containing a subset of these elements (including at least
-one of 'gdim' or 'gyx'), and the function will fill in missing entries with their defaults:
-If 'gval' is missing, the function sets NAs; If 'res' is missing, it is
-computed from the first two grid lines in 'gyx'. If 'gyx' is missing, it is assigned the sequence
-\code{1:n} (scaled by 'res', if available) for each \code{n} in 'gdim'; and if 'gdim' is missing, it
-is set to equal the number of grid lines specified in (each vector of) 'gyx'.
+The input \code{g} can itself be a list containing some/all of these elements (including at least
+one of 'gdim' or 'gyx'), and the function will fill in missing entries wherever possible:
+If 'gval' is missing in the single-layer case, the function sets NAs; If 'res' is missing,
+it is computed from the first two grid lines in 'gyx'. If 'gyx' is missing, it is assigned
+the sequence \code{1:n} (scaled by 'res', if available) for each \code{n} in 'gdim'; and if 'gdim'
+is missing, it is set to equal the number of grid lines specified in (each vector of) 'gyx'.
 
-\code{g} can also be a vector of the form \code{c(y, x)} defining grid dimensions y and x (as a
-shorthand for the call \code{pkern_grid(g=list(gdim=gdim))}). Note that 1-dimensional grids
-are not supported, ie. there must be at least 2 grid lines in both the x and y dimensions.
+\code{gval} can be a vector, for single-layer grids, or a matrix whose columns are a set of grid
+layers. In the matrix case, \code{gval} stores the observed data only, with NAs indicating by the
+mapping \code{idx_grid}. This mapping is assumed to be the same in all layers, but is only computed
+for the first layer. If a point is missing from one layer, it should be missing from all layers.
 
-\code{gval} may be a matrix of multiple layers, with vectorized grid data in columns. This should
-include only the subset of observed data, with NAs indicating by the mapping \code{idx_grid}.
-\code{idx_grid} is a vector of length \code{prod(gdim)} with NAs for unobserved points, and otherwise
-the row number (in \code{gval}) of the observed point  These non-NA values must comprise
-\code{seq(nrow(gval))} (ie all rows must be mapped), but they can be in any order.
+\code{idx_grid} is a length \code{prod(gdim)} integer vector with NAs for unobserved points, and
+otherwise the row number (in \code{gval}) of the observed point. These non-NA values must
+comprise \code{seq(nrow(gval))} (ie all rows must be mapped), but they can be in any order.
+If \code{gval} is a matrix but \code{idx_grid} is missing, it is computed automatically (from the
+first column); and if \code{idx_grid} is supplied, but \code{gval} is a vector, it coerced to a 1-column
+matrix.
+
+Scalar inputs to 'gdim', 'gres' are duplicated for both dimensions, and for convenience
+'gdim' can be specified directly in \code{g} to initialize a simple grid; For example the call
+\code{pkern_grid(list(gdim=c(5,5)))} can be simplified to \code{pkern_grid(list(gdim=5))} or
+\code{pkern_grid(5)}.
 }
 \examples{
 
 # simple grid construction from dimensions
 gdim = c(12, 10)
-g = pkern_grid(gdim)
+g = pkern_grid(g=list(gdim=gdim))
 str(g)
 str(pkern_grid(gdim, vals=FALSE))
 
@@ -69,15 +77,15 @@ all.equal(g, pkern_grid(g=list(gyx=lapply(gdim, function(x) seq(x)-1L))) )
 pkern_plot(g)
 pkern_plot(g, ij=TRUE)
 
-# set a different resolution and notice the argument is ignored if conflicting gyx supplied
+# gres argument is ignored if a non-conforming gyx is supplied
 gres_new = c(3, 4)
 pkern_plot(pkern_grid(g=list(gyx=lapply(gdim, seq), gres=gres_new)))
 pkern_plot(pkern_grid(g=list(gdim=gdim, gres=gres_new)))
 
 # shorthand for square grids
-all.equal(pkern_grid(g=2), pkern_grid(g=c(2,2)))
+all.equal(pkern_grid(2), pkern_grid(g=c(2,2)))
 
-# example with data
+# example with random data
 gdim = c(25, 25)
 yx = as.list(expand.grid(lapply(gdim, seq)))
 eg_vec = as.numeric( yx[[2]] \%\% yx[[1]] )
@@ -96,24 +104,36 @@ if( requireNamespace('raster') ) {
 
 # open example file as RasterLayer
 r_path = system.file('external/rlogo.grd', package='raster')
-r = raster::raster(r_path, band=1)
+r = raster::raster(r_path)
 
-# convert to pkern list
+# convert to pkern list (notice only first layer was loaded by raster)
 g = pkern_grid(r)
-pkern_plot(g)
-pkern_plot(g, ij=T)
-
-# open a RasterStack and notice only first band loaded
-r_multi = raster::stack(r_path)
-str(pkern_grid(r_multi))
 str(g)
+pkern_plot(g)
 
-# same with terra
+# open a RasterStack - gval becomes a matrix with layers in columns
+r_multi = raster::stack(r_path)
+g_multi = pkern_grid(r_multi)
+str(g_multi)
+pkern_plot(g_multi, layer=1)
+pkern_plot(g_multi, layer=2)
+pkern_plot(g_multi, layer=3)
+
+# repeat with terra
 if( requireNamespace('terra') ) {
 
-g = pkern_grid(terra::rast(r_path))
+# open example file as SpatRaster (all layers loaded by default)
+r_multi = terra::rast(r_path)
+g_multi = pkern_grid(r_multi)
+str(g_multi)
+pkern_plot(g_multi, layer=1)
+pkern_plot(g_multi, layer=2)
+pkern_plot(g_multi, layer=3)
+
+# open first layer only
+g = pkern_grid(r[[1]])
 str(g)
-pkern_plot(g, ij=T)
+pkern_plot(g)
 
 }
 }

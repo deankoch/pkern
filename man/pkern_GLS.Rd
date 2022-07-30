@@ -57,7 +57,7 @@ g = pkern_grid(gdim)
 pars = modifyList(pkern_pars(g, 'gau'), list(psill=2))
 
 # generate spatial noise
-z = pkern_sim(g, pars, quiet=TRUE)
+z = pkern_sim(g, pars)
 pkern_plot(modifyList(g, list(gval=z)))
 
 # generate some covariates and data
@@ -99,7 +99,7 @@ pkern_GLS(g_miss, pars, X=NA)
 mean(g_miss$gval, na.rm=TRUE)
 
 # generate some extra layers
-z_extra = lapply(seq(9), function(x) pkern_sim(g, pars, quiet=TRUE))
+z_extra = lapply(seq(9), function(x) pkern_sim(g, pars))
 z_multi = lm_actual + do.call(cbind, c(list(z), z_extra))
 
 # multi-layer example with sparse grid specification

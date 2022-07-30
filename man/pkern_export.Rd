@@ -40,14 +40,14 @@ all.equal(r_from_g, r)
 # same with terra
 if( requireNamespace('terra') ) {
 
-# SpatRaster is the default return class (when terra loaded)
+# convert all layers
 r = terra::rast(r_path)
 g = pkern_grid(r)
 r_from_g = pkern_export(g)
 
-# notice only the first band is loaded by pkern_grid
-print(r_from_g)
-print(r)
+# various metadata are lost
+all.equal(r_from_g, r)
+
 }
 }
 

@@ -2,57 +2,69 @@
 % Please edit documentation in R/pkern_index.R
 \name{pkern_rescale}
 \alias{pkern_rescale}
-\title{Up-scale or down-scale a grid}
+\title{Up or down-scale a grid}
 \usage{
-pkern_rescale(g, up = NULL, down = NULL, vals = TRUE)
+pkern_rescale(g, up = NULL, down = NULL)
 }
 \arguments{
 \item{g}{any object accepted or returned by \code{pkern_grid}}
 
-\item{up}{integer > 0, an up-scaling factor}
+\item{up}{integer > 0, or vector of two, the up-scaling factor(s)}
 
-\item{down}{integer > 0, a down-scaling factor}
-
-\item{vals}{logical, indicates to return data vector as well as grid info}
+\item{down}{integer > 0, or vector of two, the down-scaling factor(s)}
 }
 \value{
 a grid list of the form returned by \code{pkern_grid}
 }
 \description{
-Changes the resolution of a grid by a factor of (positive integer) \code{up} or \code{down}.
+Changes the resolution of a grid by a factor of \code{up} or \code{down}.
 }
 \details{
-This constructs a new grid of based on \code{g}, where: if \code{up} is supplied, a sparser
-(up-scaled) version of \code{g} is returned, with every \code{up}th grid line sampled; and
-if \code{down} is supplied, a denser version of \code{g} is returned where every \code{down}th
-grid line is copied over from \code{g} (and the rest initialized to NA).
+Users should specify a grid \code{g} to re-scale and an integer scaling factor; either \code{up}
+or \code{down}. This effects the scaling of resolution (\code{g$gres}) by \code{up} or \code{1/down}.
 
-This effects the scaling of resolution (\code{g$gres}) by \code{up} (or \code{1/down}). It does
-not do any interpolation to fill new grid-points created with \code{up} and it does not
-change the bounding box of \code{g}.
+\code{up} (or \code{down}) should be a vector of two positive integers, supplying the re-scaling
+factors in the y and x dimensions in that order, or a single value to be used for both.
+
+When \code{up} is supplied, a lower resolution grid is returned comprising every \code{up}th grid
+line of \code{g} along each dimension. All other grid lines, and any data values lying on them,
+are ignored. \code{up} should be no greater than \code{g$gdim - 1}. Note that if \code{up} does not
+evenly divide this number, the bounding box will shrink slightly.
+
+When \code{down} is supplied, the function returns a higher resolution grid (\code{g_fine}) with
+the same bounding box as \code{g}. Along each dimension, every \code{down}th grid line of \code{g_fine}
+coincides with a grid line of \code{g}. Any values found in \code{g$gval} are copied to \code{g_fine},
+and un-mapped grid lines in \code{g_fine} are initialized to \code{NA}. Recover \code{g} from \code{g_fine}
+with \code{pkern_rescale(g_fine, up=down)}.
 }
 \examples{
 
 # example data
 gdim = c(50, 53)
 g = pkern_grid(gdim)
-gval = pkern_sim(g, modifyList(pkern_pars(g), list(eps=0)), quiet=TRUE)
+gval = pkern_sim(g, modifyList(pkern_pars(g), list(eps=1e-6)))
 g_obs = modifyList(g, list(gval=gval))
 pkern_plot(g_obs)
 
 # upscale
 pkern_plot(pkern_rescale(g=g_obs, up=1)) # does nothing
 pkern_plot(pkern_rescale(g=g_obs, up=2))
-pkern_plot(pkern_rescale(g=g_obs, up=3))
 
 # downscale
 pkern_plot(pkern_rescale(g=g_obs, down=1)) # does nothing
 pkern_plot(pkern_rescale(g=g_obs, down=2))
-pkern_plot(pkern_rescale(g=g_obs, down=3))
 
-# turn vals off to get grid configuration only
-pkern_plot(g)
-pkern_plot(pkern_rescale(g=g_obs, up=2, vals=FALSE))
-pkern_plot(pkern_rescale(g=g_obs, down=2, vals=FALSE))
+# length-2 vectors to rescale differently in x and y directions
+pkern_plot(pkern_rescale(g=g_obs, up=c(2,3)))
+pkern_plot(pkern_rescale(g=g_obs, down=c(2,3)))
+
+# invert a down-scaling
+g_obs_compare = pkern_rescale(pkern_rescale(g=g_obs, down=c(5,3)), up=c(5,3))
+identical(g_obs, g_obs_compare)
+
+# multi-layer example with missing data
+gval_multi = pkern_sim(g, modifyList(pkern_pars(g), list(eps=1e-6)))
+
+
 
 }

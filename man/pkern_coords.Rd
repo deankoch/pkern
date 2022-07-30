@@ -7,7 +7,7 @@
 pkern_coords(g, out = "matrix", corner = FALSE)
 }
 \arguments{
-\item{g}{any other object accepted/returned by \code{pkern_grid}}
+\item{g}{any object accepted by \code{pkern_grid}}
 
 \item{out}{character indicating return value type, either 'list', 'matrix', or 'sf'}
 
@@ -17,29 +17,36 @@ pkern_coords(g, out = "matrix", corner = FALSE)
 a matrix, list, or sf POINT collection, in column vectorized order
 }
 \description{
-Expands sets of y and x grid line locations in the column-major order i that
-pkern uses for grid data. This ordering sorts the data into blocks of length equal
-to the vertical dimension of the grid, where: y descends within blocks within blocks
-and x increases among blocks.
+Expands a set of y and x grid line numbers in the column-vectorized order returned
+by \code{pkern_grid}.
 }
 \details{
-This is similar to \code{base::expand.grid} but with the first dimension descending instead
-of ascending. Optionally, setting \code{out='sf'} builds an \code{sf} simple features object
-from the coordinates and populates it with data (if any) from \code{g}. This can be slow for
-large grids.
+This is similar to \code{base::expand.grid} but with the first dimension (y) descending
+instead of ascending.
+
+\code{out='sf'} returns an \code{sf} simple features object containing points in the same order,
+with data (if any) copied from \code{g$gval} into column 'gval'. Note that \code{prod(g$gdim)}
+points are created, which can be slow for large grids.
 }
 \examples{
+gdim = c(5,3)
+g_example = pkern_grid(list(gdim=gdim, gres=c(0.5, 0.7), gval=seq(prod(gdim))))
+pkern_coords(g_example)
+pkern_coords(g_example, out='list')
 
-# 5x5 grid example
-str( pkern_coords(5) )
-pkern_coords(5, out='list')
-pkern_coords(5, corner=TRUE)
-pkern_coords(5, corner=TRUE, out='list')
+# corner points
+pkern_coords(g_example, corner=TRUE)
+pkern_coords(g_example, corner=TRUE, out='list')
 
-# 3x2 example and sf output type
-pkern_coords(c(3,2))
+# sf output type
 if( requireNamespace('sf') ) {
-pkern_coords(c(13, 12), out='sf')
+
+# make the points
+sf_coords = pkern_coords(g_example, out='sf')
+
+# data are copied to variable 'gval'
+plot(sf_coords, pch=16)
+
 }
 
 }
