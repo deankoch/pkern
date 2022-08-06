@@ -5,7 +5,7 @@
 
 #' Make a pkern grid list object
 #'
-#' Constructs a list representing a 2-dimensional spatial grid of data
+#' Constructs a list representing a 2-dimensional regular spatial grid of data
 #'
 #' This function constructs pkern grid list objects, accepting 'RasterLayer' and 'RasterStack'
 #' inputs from the `raster` package, 'SpatRaster' objects from `terra`, as well as any
@@ -21,7 +21,8 @@
 #' * gres: the (numeric) y and x distances between grid lines
 #' * gdim: the (integer) number of y and x grid lines
 #'
-#' The last three elements are required to define a valid `pkern` grid list object.
+#' The last three elements are required to define a valid `pkern` grid list object. Note that
+#' regular grids must have equally spaced grid lines in `gyx`.
 #'
 #' The input `g` can itself be a list containing some/all of these elements (including at least
 #' one of 'gdim' or 'gyx'), and the function will fill in missing entries wherever possible:
@@ -93,6 +94,24 @@
 #' # data vectors should be in R's default matrix vectorization order
 #' all.equal(eg_vec, as.vector(eg_mat))
 #' all.equal(g, pkern_grid(list(gdim=gdim, gval=as.vector(eg_mat))))
+#'
+#' # multi-layer example from matrix
+#' n_pt = prod(gdim)
+#' n_layer = 3
+#' mat_multi = matrix(rnorm(n_pt*n_layer), n_pt, n_layer)
+#' g_multi = pkern_grid(list(gdim=gdim, gval=mat_multi))
+#' str(g_multi)
+#'
+#' # repeat with missing data (note all columns must have consistent NA structure)
+#' mat_multi[sample.int(n_pt, 0.5*n_pt),] = NA
+#' g_multi_miss = pkern_grid(list(gdim=gdim, gval=mat_multi))
+#' str(g_multi_miss)
+#'
+#' # only observed data points are stored, idx_grid maps them to the full grid vector
+#' max(abs( g_multi$gval - g_multi_miss$gval[g_multi_miss$idx_grid,] ), na.rm=TRUE)
+#'
+#' # vals=FALSE drops multi-layer information
+#' pkern_grid(g=list(gdim=gdim, gval=mat_multi), vals=FALSE)
 #'
 #' if( requireNamespace('raster') ) {
 #'
@@ -221,7 +240,7 @@ pkern_grid = function(g, vals=TRUE)
       {
         # identify observed data in first layer and build an indexing vector from it
         is_obs_first = !is.na(g[['gval']][,1L])
-        g[['idx_grid']] = match(which(is_obs_first), seq(nrow(g[['gval']])))
+        g[['idx_grid']] = match(seq(nrow(g[['gval']])), which(is_obs_first))
 
         # handle no observed data case
         if(length(g[['idx_grid']]) == 0) g[['idx_grid']] = rep(NA, nrow(g[['gval']]))
@@ -267,9 +286,18 @@ pkern_grid = function(g, vals=TRUE)
     }
 
     # set up grid line positions if they're missing
-    if( is.null(g[['gyx']]) ) g[['gyx']] = Map(function(d, r) as.numeric(r*(seq(d)-1L)),
-                                               d=g[['gdim']],
-                                               r=g[['gres']])
+    if( is.null(g[['gyx']]) )
+    {
+      g[['gyx']] = Map(function(d, r) as.numeric(r*(seq(d)-1L)),
+                       d=g[['gdim']],
+                       r=g[['gres']])
+    } else {
+
+      # check that the grid is regular
+      g_spacing = lapply(g[['gyx']], function(r) diff(r) )
+      is_regular = sapply(g_spacing, function(s) max(abs(s[1] - s)) < .Machine[['double.eps']] )
+      if( any(!is_regular) ) stop('grid line positions gyx were not regular')
+    }
 
     # check number of dimensions
     if( !all(sapply(g[nm_g], length) == 2) ) stop('gdim, gres, and gyx must each have length 2')
@@ -284,7 +312,11 @@ pkern_grid = function(g, vals=TRUE)
     nm_out = c(nm_unknown, nm_known[!is.na(nm_known)])
 
     # finished if not returning grid values
-    if(!vals) return(g[nm_out])
+    if(!vals)
+    {
+      nm_out = nm_out[ !(nm_out %in% c('idx_grid', 'gval')) ]
+      return(g[nm_out])
+    }
 
     # check that index (if any) has correct length
     index_ok = ifelse(is_indexed, prod(g[['gdim']]) == length(g[['idx_grid']]), TRUE)
@@ -432,14 +464,14 @@ pkern_export = function(g, template='terra')
 #' In cases of duplicate mappings, the function returns the first matches only.
 #'
 #' `from` can be a geometry collection from packages `sf` or `sp`, or a matrix or list
-#' of y and x coordinates (and, optionally, data values to copy to the snapped grid
-#' points). When `from` is a matrix, its first two columns should by y and x, and the
-#' (optional) third the data. When `from` is a list, the function expects (two or three)
-#' vectors of equal length, ordered as above.
+#' of y and x coordinates. When `from` is a matrix, its first two columns should be the
+#' y and x coordinates (in that order), and the (optional) third column should be the
+#' data. When `from` is a list, the function expects (two or three) vectors of equal
+#' length, ordered as above.
 #'
-#' When `from` is a geometry collection with a CRS string, points are first transformed
-#' to the coordinate reference system of `g`. If one or both of `from` and `g` are missing
-#' a CRS definition, the function assumes the same one is shared in both.
+#' When `from` is a geometry collection with a coordinates reference system (CRS) string,
+#' points are first transformed to the CRS of `g`. If one or both of `from` and `g` are
+#' missing a CRS definition, the function assumes the same one is shared in both.
 #'
 #' `g` can be a raster geometry object (such as SpatRaster), in which case the function
 #' behaves like `terra::rasterize`. It can also be a matrix (supplying dimensions) or a
@@ -451,7 +483,8 @@ pkern_export = function(g, template='terra')
 #' and the snapped `from` points. If `crop_from=TRUE` and `crop_g=FALSE` the output
 #' grid will match `g` exactly. If `crop_from=FALSE` and `crop_g=TRUE` the output
 #' grid will include all snapped points, and possibly omit some or all of `g`. And if
-#' both are `TRUE`, the output grid encloses the intersection of the points and `g`.
+#' both are `TRUE`, the output grid encloses the intersection of the points with the
+#' bounding box of `g`.
 #'
 #' @param from matrix, data frame, or points object from `sp` or `sf`, the source points
 #' @param g any grid object accepted or returned by `pkern_grid`, the destination grid
@@ -485,36 +518,36 @@ pkern_export = function(g, template='terra')
 #' # add example data values and plot
 #' from[['z']] = rnorm(length(from[['y']]))
 #' pkern_plot(g, reset=FALSE)
-#' graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
+#' graphics::points(from[c('x', 'y')], pch=16, col=my_col(from[['z']]))
 #' graphics::points(from[c('x', 'y')])
 #'
-#' # snap points and plot
-#' g_snap = pkern_snap(from, g)
+#' # snap only the points overlying the input grid
+#' g_snap = pkern_snap(from, g, crop_from=TRUE)
+#' pkern_plot(g_snap, col_grid='black', reset=FALSE, leg=FALSE)
+#' graphics::points(from[c('x', 'y')], pch=16, col=my_col(from[['z']]))
+#' graphics::points(from[c('x', 'y')])
+#'
+#' # snap points with  and plot (default settings)
+#' g_snap = pkern_snap(from, g, crop_from=FALSE, crop_g=FALSE)
 #' pkern_plot(g_snap, col_grid='black', reset=FALSE)
-#' graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
+#' graphics::points(from[c('x', 'y')], pch=16, col=my_col(from[['z']]))
 #' graphics::points(from[c('x', 'y')])
 #'
 #' # find smallest subgrid enclosing all snapped grid points
 #' g_snap = pkern_snap(from, g, crop_g=TRUE)
 #' pkern_plot(g_snap, col_grid='black', reset=FALSE)
-#' graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
-#' graphics::points(from[c('x', 'y')])
-#'
-#' # snap only the points overlying the input grid
-#' g_snap = pkern_snap(from, g, crop_from=TRUE)
-#' pkern_plot(g_snap, col_grid='black', reset=FALSE)
-#' graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
+#' graphics::points(from[c('x', 'y')], pch=16, col=my_col(from[['z']]))
 #' graphics::points(from[c('x', 'y')])
 #'
 #' # create a new grid of different resolution enclosing all input points
 #' g_snap = pkern_snap(from, g=list(gres=c(0.5, 0.5)))
-#' pkern_plot(g_snap, reset=FALSE)
-#' graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
+#' pkern_plot(g_snap, reset=FALSE, col_grid='black')
+#' graphics::points(from[c('x', 'y')], pch=16, col=my_col(from[['z']]))
 #' graphics::points(from[c('x', 'y')])
 #'
 #' if( requireNamespace('sf') ) {
 #'
-#' # a different example, snapping misaligned subgrid
+#' # a different example, snapping mis-aligned subgrid
 #' g_pts = pkern_grid(list(gdim=c(15, 8), gres=1.7), vals=FALSE)
 #' g_pts[['gyx']][['y']] = g_pts[['gyx']][['y']] + 5
 #' g_pts[['gyx']][['x']] = g_pts[['gyx']][['x']] + 5
@@ -543,8 +576,8 @@ pkern_export = function(g, template='terra')
 #' pkern_plot(g_snap, ij=TRUE, reset=FALSE, col_grid='black')
 #' plot(eg_sfc, add=TRUE)
 #'
-#' # with trim=TRUE
-#' g_snap = pkern_snap(from=eg_sfc, g, trim=TRUE)
+#' # with crop_g=TRUE)
+#' g_snap = pkern_snap(from=eg_sfc, g, crop_g=TRUE)
 #' pkern_plot(g_snap, reset=FALSE, col_grid='black')
 #' plot(eg_sfc, add=TRUE)
 #'
@@ -559,16 +592,16 @@ pkern_export = function(g, template='terra')
 #'
 pkern_snap = function(from, g=NULL, crop_from=FALSE, crop_g=FALSE)
 {
-  # set up more appropriate grid lines later input g doesn't specify them
+  # set up more appropriate grid lines later when input g doesn't specify them
   gres_input = NULL
   if( is.matrix(g) ) g = list(gdim=dim(g))
-  auto_gyx = (!is.list(g) & is.vector(g)) | is.list(g) & !('gyx' %in% names(g))
+  auto_gyx = (!is.list(g) & is.vector(g)) | ( is.list(g) & !('gyx' %in% names(g)) )
 
   # set up grid dimensions later when only gres specified (set dummy dimensions now)
   auto_gdim = ifelse(auto_gyx & is.list(g), ('gres' %in% names(g)) & !('gdim' %in% names(g)), FALSE)
-  if(auto_gdim) g = modifyList(g, list(gdim=c(y=2L, x=2L)))
+  if(auto_gdim & is.list(g) ) g = modifyList(g, list(gdim=c(y=2L, x=2L)))
 
-  # unpack second argument as pkern grid list but don't copy data values
+  # unpack g as pkern grid list but don't copy data values
   g = pkern_grid(g, vals=FALSE)
   to_crs = g[['crs']]
   vals = NULL
@@ -695,15 +728,4 @@ pkern_snap = function(from, g=NULL, crop_from=FALSE, crop_g=FALSE)
   if( is.null(vals) ) { gval = from_idx } else { gval = vals[from_idx] }
   return( c(list(gval=gval), g_out) )
 }
-
-
-# convenience function for downscaling
-# automates model-fitting and kriging
-pkern_down = function(g, down, X=NA)
-{
-
-
-
-}
-
 

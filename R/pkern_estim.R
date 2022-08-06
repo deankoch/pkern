@@ -47,7 +47,7 @@
 #' pars = modifyList(pkern_pars(g, 'gau'), list(psill=2))
 #'
 #' # generate spatial noise
-#' z = pkern_sim(g, pars, quiet=TRUE)
+#' z = pkern_sim(g, pars)
 #' pkern_plot(modifyList(g, list(gval=z)))
 #'
 #' # generate some covariates and data
@@ -89,10 +89,10 @@
 #' mean(g_miss$gval, na.rm=TRUE)
 #'
 #' # generate some extra layers
-#' z_extra = lapply(seq(9), function(x) pkern_sim(g, pars, quiet=TRUE))
+#' z_extra = lapply(seq(9), function(x) pkern_sim(g, pars))
 #' z_multi = lm_actual + do.call(cbind, c(list(z), z_extra))
 #'
-#' # multi-layer example with sparse grid specification
+#' # multi-layer example with missing data
 #' is_obs = !is.na(g_miss$gval)
 #' map_sparse = match(seq(n), which(is_obs))
 #' g_sparse = modifyList(g_miss, list(gval=z_multi[is_obs,], idx_grid=map_sparse))
@@ -170,8 +170,9 @@ pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, fac_method='eigen', out='b')
   # return betas by default
   if(startsWith(out, 'b')) return(as.numeric(betas_gls))
 
-  # or return linear predictor
+  # or a list with everything, or else return linear predictor
   z_gls = as.numeric( tcrossprod(X, t(betas_gls)) )
+  if(startsWith(out, 'a')) return(list(z=z_gls, b=as.numeric(betas_gls), x=X_obs, fac_X=fac_X))
   return(z_gls)
 }
 
@@ -181,9 +182,9 @@ pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, fac_method='eigen', out='b')
 #'
 #' documentation unfinished
 #'
-#' @param g_obs
-#' @param pars
-#' @param X
+#' @param g_obs todo
+#' @param pars todo
+#' @param X todo
 #'
 #' @return
 #' @export
@@ -295,7 +296,7 @@ pkern_fit = function(g_obs, pars=NULL, X=NA, iso=TRUE, initial=NULL, quiet=FALSE
   # set initial value defaults
   nm_fitted = names(is_fitted)[is_fitted]
   nm_fixed = names(is_fitted)[!is_fitted]
-  if( is.null(initial) ) initial = pkern_bds(pars, g)[nm_fitted, 'initial']
+  if( is.null(initial) ) initial = pkern_bds(pars, g_obs)[nm_fitted, 'initial']
   pars = pkern_pars_update(pars, p_fixed, iso=iso)
 
   # fit the model
@@ -588,7 +589,7 @@ pkern_cmean = function(g_obs, pars, X=NA, fac=NULL, out='p', fac_method='chol', 
     # extract sub-grid layout and find separable covariance eigen-decomposition
     fac_method = 'eigen'
     g_obs = list(gval=z, gdim=sg[['gdim']], gres=g_obs[['gres']] * sg[['res_scale']])
-    if( is.null(fac) ) fac = pkern_var(g_obs, pars, scaled=TRUE, fac_method=fac_method, sep=is_sep)
+    if( is.null(fac) ) fac = pkern_var(g_obs, pars, scaled=TRUE, fac_method=fac_method, sep=TRUE)
     cy_obs = cy[ sg[['ij']][['y']] ]
     cx_obs = cx[ sg[['ij']][['x']] ]
 

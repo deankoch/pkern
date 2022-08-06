@@ -1,4 +1,4 @@
-# pkern_vario.R
+# pkern_sample.R
 # Dean Koch, 2022
 # sample variograms
 
@@ -66,7 +66,7 @@ pkern_vario_fun = function(pars, d=NULL)
     # compute three sets of component distances: varying x, y, and both equally
     cov_y = pkern_vario_fun( pars, list(y=d, x=d0) )
     cov_x = pkern_vario_fun( pars, list(y=d0, x=d) )
-    cov_yx = pkern_vario_fun( pars, list(y=sqrt(2)*d, x=sqrt(2)*d))
+    cov_yx = pkern_vario_fun( pars, list(y=d/sqrt(2), x=d/sqrt(2)))
 
     # compute range of theoretical semi-variogram at each test distance
     cov_min = pmin(cov_y, cov_x, cov_yx)

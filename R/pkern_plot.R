@@ -2,6 +2,8 @@
 # Dean Koch, 2022
 # graphics
 
+
+#TODO: find out why this hangs on large, integer input
 #' Plot grid data
 #'
 #' Plots a matrix or raster as a heatmap with an optional color bar legend. This is a wrapper
@@ -623,8 +625,8 @@ pkern_plot_pars = function(pars, g, simple=FALSE, ...)
 #'
 #' # different aggregation methods
 #' pkern_plot_semi(vg, fun='root_median')
-#' pkern_plot_semi(vg, fun='root_mean') # default
-#' pkern_plot_semi(vg, fun='classical')
+#' pkern_plot_semi(vg, fun='root_mean')
+#' pkern_plot_semi(vg, fun='classical') # default
 #' pkern_plot_semi(vg, fun=function(x) mean(x^2)) # same as classical
 #'
 #' # plot again with reference model and adjust distance limits, number of bins
@@ -650,7 +652,7 @@ pkern_plot_pars = function(pars, g, simple=FALSE, ...)
 #' }
 #' dev.off()
 #'
-pkern_plot_semi = function(vg, pars=NULL, add=FALSE, fun='root_mean', ...)
+pkern_plot_semi = function(vg, pars=NULL, add=FALSE, fun='classical', ...)
 {
   # flags if plotting a sample semi-variogram, adding a model function
   input_vg = is.data.frame(vg)
