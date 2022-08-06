@@ -224,6 +224,122 @@ pkern_sub_idx = function(gdim, ij=NULL, idx=FALSE, nosort=FALSE)
   return(is_out)
 }
 
+#' Return a sub-grid of a pkern grid object
+#'
+#' Removes grid lines as specified in `ij` and returns the result as a pkern grid
+#' list; If `ij` is empty, the function attempts to find a set of grid lines that forms
+#' a complete regular sub-grid of `g_obs`.
+#'
+#' `ij` can be a list of integer vectors, named `i` and `j`, specifying grid line numbers to
+#' remove, in ascending order. `ij` can also be a nested list, with the grid lines
+#' to remove in element `remove`. Alternatively, users can specify the grid lines to NOT
+#' remove in element `keep`, and the function will remove the others. If both `keep` and
+#' `remove` are specified, the function ignores `keep` and uses `remove`.
+#'
+#' Default `idx=FALSE` causes the function to return the sub-grid as a pkern grid object.
+#' If `idx=TRUE`, the function instead returns a list containing `keep` and `remove` as
+#' specified above. This can be passed back to pkern_sub when repeatedly cropping multiple
+#' grids in the same way.
+#'
+#' `mirror=TRUE` indicates to mirror the supplied selection of grid lines in `ij`
+#' about the central grid line. For example `ij_rem=list(i=1)` removes both the first
+#' (left-most) column and the last (right-most).
+#'
+#' When `ij` is an empty `list()`, the function sets `ij` automatically using a
+#' greedy algorithm that iteratively checks all (four) outer grid lines and removes
+#' the one with the highest proportion of NAs. Ties are broken in clockwise order, starting
+#' from the left vertical. The algorithm stops when the remaining sub-grid is complete.
+#'
+#'
+#'
+pkern_sub = function(g_obs, ij=list(), mirror=FALSE, idx=FALSE)
+{
+  # expected names of vectors and lists in ij
+  ij_nm = c('i', 'j')
+
+  # open grid as pkern list object
+  g_obs = pkern_grid(g_obs)
+  gdim_old = stats::setNames(g_obs[['gdim']], ij_nm)
+
+  # compute grid lines to remove from keep
+  if( 'keep' %in% names(ij) ) ij_rem = Map(function(g, i) seq(g)[!(seq(g) %in% i)],
+                                           g = gdim_old, i = ij[['keep']])
+
+  # copy remove list or set it to NA when not supplied
+  if( any(ij_nm %in% names(ij) ) ) ij = list(remove=ij)
+  if( 'remove' %in% names(ij) ) ij_rem = ij[['remove']]
+  if( !any(c('remove', 'keep') %in% names(ij)) ) ij_rem = NA
+
+  # ij_rem is specified
+  if( !anyNA(ij_rem) )
+  {
+    # validate and fill in missing ij_rem arguments
+    ij_supplied = stats::setNames(ij_nm %in% names(ij_rem), nm=ij_nm)
+    msg_ij = 'ij_rem must be a list with named element(s) i and/or j'
+    if( !is.list(ij_rem) | !any(ij_supplied) ) stop(msg_ij)
+    if( !ij_supplied['i'] ) ij_rem[['i']] = integer()
+    if( !ij_supplied['j'] ) ij_rem[['j']] = integer()
+
+    # mirror the grid lines if requested, and another validity check
+    if(mirror) ij_rem = Map(function(g, i) c(i, g - i + 1L), g=gdim_old, i=ij_rem)
+    ij_ok = Map(function(g, i) !any( (i < 1) | (i > g) ), g=gdim_old, i=ij_rem)
+    if( any(!unlist(ij_ok)) ) stop('ij_rem contained indices less than 1 or greater than gdim')
+
+    # identify the grid lines to keep
+    ij_keep = Map(function(i, g) seq(g)[!(seq(g) %in% i)], g=gdim_old, i=ij_rem)
+    gdim_new = sapply(ij_keep, length)
+    if( any( gdim_new < 1 ) ) stop('the supplied ij_rem resulted in an empty sub-grid')
+    ij_keep = stats::setNames(ij_keep, ij_nm)
+    if(idx) return( list(remove=ij_rem, keep=ij_keep) )
+
+    # modify and return the list object
+    g_obs[['gval']] = g_obs[['gval']][ pkern_sub_idx(gdim_old, ij_keep, nosort=TRUE) ]
+    g_obs[['gyx']] = Map(function(g, i) g[i], g=g_obs[['gyx']], i=ij_keep)
+    g_obs[['gdim']] = gdim_new
+    return(pkern_grid(g_obs))
+  }
+
+  is_NA_mat = matrix(is.na(g_obs[['gval']]), gdim_old)
+
+  # initialize indexing variables
+  has_NA = any(is_NA_mat)
+  ij_count = stats::setNames(lapply(gdim_old, function(g) c(1L, g)), ij_nm)
+  i_seq = seq(gdim_old[[1]])
+  j_seq = seq(gdim_old[[2]])
+
+  # loop while there are NAs in the sub-grid
+  while( has_NA )
+  {
+    # check edge grid lines for missing data
+    ni_NA = apply(is_NA_mat[ij_count[['i']], j_seq], 1, sum)
+    nj_NA = apply(is_NA_mat[i_seq ,ij_count[['j']]], 2, sum)
+
+    # score each grid line and identify the worst
+    i_score = 1 - ( ni_NA/length(j_seq) )
+    j_score = 1 - ( nj_NA/length(i_seq) )
+    dim_worst = ij_nm[ which.min(c(min(i_score), min(j_score))) ]
+    side_worst = which.min( list(i=i_score, j=j_score)[[ dim_worst ]] )
+
+    # remove the worst grid line from sub-grid and check again for NAs
+    inc = ifelse(side_worst==2, -1, 1)
+    ij_removed = ij_count[[dim_worst]][side_worst]
+    ij_count[[dim_worst]][side_worst] = inc + ij_removed
+
+    #cat(paste('\nremoved grid line', ij_removed, 'from dimension', dim_worst))
+
+    # copy the new grid line vectors
+    i_seq = seq(ij_count[['i']][1], ij_count[['i']][2])
+    j_seq = seq(ij_count[['j']][1], ij_count[['j']][2])
+    has_NA = any(is_NA_mat[i_seq, j_seq])
+  }
+
+  ij_keep = list(i=i_seq, j=j_seq)
+  ij_rem = Map(function(g, i) seq(g)[ !(seq(g) %in% i) ], g=gdim_old, i=ij_keep)
+  if(idx) return( list(remove=ij_rem, keep=ij_keep) )
+  return(pkern_sub(g_obs, ij=list(remove=ij_rem)))
+}
+
+
 
 #' Up or down-scale a grid
 #'
@@ -258,7 +374,8 @@ pkern_sub_idx = function(gdim, ij=NULL, idx=FALSE, nosort=FALSE)
 #' # example data
 #' gdim = c(50, 53)
 #' g = pkern_grid(gdim)
-#' gval = pkern_sim(g, modifyList(pkern_pars(g), list(eps=1e-6)))
+#' pars = modifyList(pkern_pars(g), list(eps=1e-6))
+#' gval = pkern_sim(g, pars)
 #' g_obs = modifyList(g, list(gval=gval))
 #' pkern_plot(g_obs)
 #'
@@ -279,9 +396,19 @@ pkern_sub_idx = function(gdim, ij=NULL, idx=FALSE, nosort=FALSE)
 #' identical(g_obs, g_obs_compare)
 #'
 #' # multi-layer example with missing data
-#' gval_multi = pkern_sim(g, modifyList(pkern_pars(g), list(eps=1e-6)))
+#' n_pt = prod(gdim)
+#' n_layer = 3
 #'
+#' # generate some data and omit 50% of it
+#' gval_multi = pkern_sim(pkern_grid(list(gdim=gdim, gval=matrix(NA, n_pt, n_layer))), pars)
+#' idx_miss = sample.int(n_pt, round(0.5*n_pt))
+#' gval_multi[idx_miss,] = NA
 #'
+#' # plot third layer, then down-scaled and up-scaled versions
+#' g_sim_multi = modifyList(g, list(gval=gval_multi))
+#' pkern_plot(g_sim_multi, layer=3)
+#' pkern_plot(pkern_rescale(g=g_sim_multi, down=2), layer=3)
+#' pkern_plot(pkern_rescale(g=g_sim_multi, up=2), layer=3)
 #'
 pkern_rescale = function(g, up=NULL, down=NULL)
 {
@@ -298,20 +425,19 @@ pkern_rescale = function(g, up=NULL, down=NULL)
   # multi-layer support
   if( !is.null(g[['idx_grid']]) )
   {
-    # make a non-sparse copy of mapping vector
+    # re-scale mapping vector to get new grid and mapping from the old
     g_first = modifyList(g, list(gval=g[['idx_grid']], idx_grid=NULL))
     g_result = pkern_rescale(g_first, up=up, down=down)
-    idx_grid = match(which(!is.na(g_result[['gval']])), seq(prod(g_result[['gdim']])))
+    is_obs_first = !is.na(g_result[['gval']])
 
-    # identify rows of gval to keep
-    g[['idx_grid']][idx_sub]
+    # copy gval, omit rows no longer mapped to grid (applies only to up-scaling)
+    idx_keep = g_result[['gval']][is_obs_first]
+    g_result[['gval']] = g[['gval']][idx_keep,]
 
-
-
-    # keep only the first layer
-    #g[['idx_grid']] =
+    # compute and copy the new indexing vector
+    g_result[['idx_grid']] = match(seq(prod(g_result[['gdim']])), which(is_obs_first))
+    return(g_result)
   }
-
 
   # up-scaling
   if(is_up)
@@ -365,10 +491,9 @@ pkern_rescale = function(g, up=NULL, down=NULL)
 #' outside the sub-grid, the function will fail to detect the sub-grid and return NULL. If no
 #' points are NA, the function returns indices for the full grid.
 #'
-#' In the special case that `g_obs` is a logical vector, it is interpreted as indicating
-#' the non-NA locations in a grid (and isn't itself checked for NAs). the argument `gdim`
-#' must be supplied in this case. When grid dimensions can otherwise be derived from
-#' `g_obs`, the function does so and overrides any argument to `gdim`.
+#' In the special case that `g_obs` is a logical vector, it should indicate the the non-NA
+#' locations in a grid with dimensions `gdim`. Otherwise, grid dimensions are extracted
+#' from `g_obs`, overriding any argument to `gdim`.
 #'
 #' @param g_obs logical vector, or any other object accepted by `pkern_grid`
 #' @param gdim integer vector, the grid dimensions (ny, nx)
@@ -382,13 +507,14 @@ pkern_rescale = function(g, up=NULL, down=NULL)
 #'
 #' # define a grid and example data
 #' gdim = c(50, 53)
-#' g = pkern_grid(gdim)
-#' gval = pkern_sim(g, modifyList(pkern_pars(g), list(eps=0)), quiet=TRUE)
-#' g_obs = modifyList(g, list(gval=gval))
+#' g_bare = pkern_grid(gdim)
+#' gval = pkern_sim(g_bare, modifyList(pkern_pars(g), list(eps=1e-12)))
+#' g_obs = modifyList(g_bare, list(gval=gval))
 #' pkern_plot(g_obs)
 #'
-#' # define a supergrid containing the original data and make sure we can find it
+#' # define a super-grid containing the original data and make sure we can find it
 #' g_obs_big = pkern_rescale(g_obs, down=3)
+#' pkern_plot(g_obs_big)
 #' str(pkern_sub_find(g_obs_big))
 #'
 #' # define a smaller sub-grid at random
@@ -400,23 +526,24 @@ pkern_rescale = function(g, up=NULL, down=NULL)
 #' ij_sg = Map(\(idx, r, n) seq(idx, by=r, length.out=n), idx=ij_first, r=spacing, n=gdim_sg)
 #' is_sg = pkern_sub_idx(gdim, ij_sg, idx=FALSE)
 #'
-#' # sub grids with side length 1 have no spacing defined along that dimension
-#' spacing[gdim_sg==1] = NA
-#'
 #' # assign values to the sub-grid points
-#' g = pkern_grid(gdim)
-#' g$gval[is_sg] = TRUE
-#' pkern_plot(g, zlab='sub-grid')
+#' g_obs_sub = g_bare
+#' g_obs_sub$gval[is_sg] = gval[is_sg]
+#' pkern_plot(g_obs)
+#' pkern_plot(g_obs_sub, zlab='sub-grid')
 #'
-#' # call the function on g and check for expected results
-#' subgrid_result = pkern_sub_find(g)
+#' # call the function and check for expected results
+#' subgrid_result = pkern_sub_find(g_obs_sub)
 #' all.equal(unname(subgrid_result$gdim), gdim_sg)
 #' all.equal(unname(subgrid_result$ij), ij_sg)
+#'
+#' # sub grids with side length 1 have no spacing defined along that dimension
+#' spacing[gdim_sg==1] = NA
 #' all.equal(unname(subgrid_result$res_scale), spacing)
 #'
 #' # or call on the vector and supply gdim separately
-#' identical(subgrid_result, pkern_sub_find(g$gval, g_obs$gdim))
-#' identical(subgrid_result, pkern_sub_find(!is.na(g$gval), g$gdim))
+#' identical(subgrid_result, pkern_sub_find(g_obs_sub$gval, g_obs_sub$gdim))
+#' identical(subgrid_result, pkern_sub_find(!is.na(g_obs_sub$gval), g_obs_sub$gdim))
 #'
 pkern_sub_find = function(g_obs, gdim=NULL)
 {
@@ -429,10 +556,8 @@ pkern_sub_find = function(g_obs, gdim=NULL)
 
   } else {
 
-    # make sure gdim doesn't get ignored for non-logical vector input
-    if( is.vector(g_obs) & !is.list(g_obs) ) g_obs = list(gval=g_obs, gdim=gdim)
-
     # open as pkern list object
+    if( is.vector(g_obs) & !is.list(g_obs) ) g_obs = list(gval=g_obs, gdim=gdim)
     g_result = pkern_grid(g_obs)
 
     # process only the first column of multi-layer input
@@ -462,7 +587,7 @@ pkern_sub_find = function(g_obs, gdim=NULL)
   # find the dimensions of the smallest sub-grid enclosing all observed points
   ij_bbox = pkern_vec2mat(c(idx_obs[1], idx_obs[n_obs]), gdim)
   gdim_bbox = apply(ij_bbox, 2, function(x) diff(x) + 1L)
-  if( !all(gdim_bbox > 1) ) return(NULL)
+  if( !all(gdim_bbox > 0) ) return(NULL)
 
   # compute number of rows in sub-grid and do first existence check
   skip_i = diff(idx_obs[1:2]) - 1L
@@ -491,7 +616,9 @@ pkern_sub_find = function(g_obs, gdim=NULL)
   if( !all( g_obs[idx_sub] ) ) return(NULL)
 
   # return sub-grid info in a list
-  return( list(ij=setNames(ij_obs, nm_dim), res_scale=res_ij, gdim=gdim) )
+  gdim_result = setNames(sapply(ij_obs, length), c('y', 'x'))
+  sub_result = list(ij=setNames(ij_obs, nm_dim), res_scale=res_ij, gdim=gdim_result)
+  return(sub_result)
 }
 
 
@@ -579,7 +706,7 @@ pkern_coords = function(g, out='matrix', corner=FALSE)
   sf_out = sf::st_as_sf(as.data.frame(out_mat), coords=c('x', 'y'), crs=g[['crs']])
 
   # copy any data and return
-  if( !is.null(g[['gval']]) ) sf_out['gval'] = g[['gval']]
+  if( !is.null(g[['gval']]) & !corner ) sf_out['gval'] = g[['gval']]
   return(sf_out)
 }
 
