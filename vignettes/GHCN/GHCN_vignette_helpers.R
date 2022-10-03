@@ -24,10 +24,42 @@ epsg_dem = 32612
 basemap_data_dir = 'D:/UYRW_data/for_Patrick'
 gchn_source_path = 'D:/ghcnd_from_John/uyrw_Jan_2017_to_Jun_2022.csv' # weather data
 
-# seasonal index
-my_season = function(d, s=0) sin( 2 * pi * (d + s) / 365 )
+# seasonal index and covariates matrix builder
+my_season = function(d, s=0, f=1) sin( 2 * pi * f * (as.integer(d) + s) / 365 )
+my_season_X = function(dates, n_points=1L)
+{
+  if(class(dates) == 'Date') dates = format(dates, '%j')
+  jday = as.integer(dates)
+  data.frame(sin_1 = rep(my_season(jday), each=n_points),
+             cos_1 = rep(my_season(jday, s=pi/2), each=n_points),
+             sin_2 = rep(my_season(jday, f=2), each=n_points),
+             cos_2 = rep(my_season(jday, s=pi/2, f=2), each=n_points))
+}
+
+# topographical covariates matrix builder
+my_elevation_X = function(elevation, n_layer=1L)
+{
+  data.frame(elevation = rep(elevation, n_layer), sqrt_elevation = rep(sqrt(elevation), n_layer))
+}
 
 
+
+
+# log adjustment constant
+log_const = 1
+
+# variable names expected (ignore snow for now) and look-up table for printing titles
+vnames = c('TMIN', 'TMAX', 'PRCP', 'LOG_PRCP')
+title_lookup = c(paste('temperature', c('min', 'max'), '(C)'), rep('precipitation (mm)', 2))
+names(title_lookup) = vnames
+
+# define plausible range for each variable (source data are in 10ths of degree, mm/10)
+reasonable_ranges = list(TMIN=c(-6e2, 4e2), TMAX=c(-5e2, 5e2), PRCP=c(0, 16e3))
+reasonable_ranges[['LOG_PRCP']] = log(log_const + reasonable_ranges[['PRCP']])
+
+# color scale to use for plotting
+my_pal = function(x) hcl.colors(x, 'Spectral', rev=TRUE)
+my_breaks = function(x) seq(min(x, na.rm=TRUE), max(x, na.rm=TRUE), length.out=1e3)
 
 #'
 #' ## LOADING SOURCE DATA
@@ -51,11 +83,11 @@ my_ghcn_dt = function(source_path=gchn_source_path)
   ghcn_dt[['year']] = format(dates, '%Y') |> as.integer()
 
   # create new log-elevation attribute
-  ghcn_dt[['log_elevation']] = log(ghcn_dt[['elevation']])
+  ghcn_dt[['sqrt_elevation']] = sqrt(ghcn_dt[['elevation']])
 
   # create log precip variable
   ghcn_add = ghcn_dt[name=='PRCP']
-  ghcn_add[['value']] = log(1 + ghcn_add[['value']])
+  ghcn_add[['value']] = log(log_const + ghcn_add[['value']])
   ghcn_add[['name']] = 'LOG_PRCP'
   ghcn_dt = rbind(ghcn_dt, ghcn_add)
 
@@ -106,7 +138,7 @@ my_base_loader = function(data_dir=basemap_data_dir, epsg_out=epsg_dem, fname=NU
 #' creates a matrix of data points with one row per station in `station_ids`
 #'
 # extract data for one of the weather variables
-my_ghcn_filter = function(ghcn_dt, vname=NULL, date_start=NULL, date_end=NULL)
+my_ghcn_filter = function(ghcn_dt, vname=NULL, date_start=NULL, date_end=NULL, clean=TRUE)
 {
   if(is.null(vname))
   {
@@ -119,6 +151,7 @@ my_ghcn_filter = function(ghcn_dt, vname=NULL, date_start=NULL, date_end=NULL)
   }
 
   # find the number of unique stations
+  cat(paste('\nreading variable: ', vname))
   n_station = ghcn_dt[['station_id']] |> unique() |> length()
 
   # filter the data table by variable
@@ -147,6 +180,18 @@ my_ghcn_filter = function(ghcn_dt, vname=NULL, date_start=NULL, date_end=NULL)
   # one row per requested date
   rownames(out_mat) = as.character(seq(n_station))
   colnames(out_mat) = as.character(date_request)
+
+  # clean up unrealistic datapoints
+  if(clean)
+  {
+    # overwrite unrealistic observations with NAs
+    is_under = out_mat < reasonable_ranges[[vname]][1]
+    is_over = out_mat > reasonable_ranges[[vname]][2]
+    n_remove = sum(is_over | is_under, na.rm=TRUE)
+    if(n_remove > 0) cat(paste('\nomitting', n_remove, 'unrealistic observation(s)\n'))
+    out_mat[is_over | is_under] = NA
+  }
+
   return(out_mat)
 }
 
@@ -168,7 +213,7 @@ my_stations = function(ghcn_dt, epsg_in=epsg_ghcnd, epsg_out=epsg_dem)
     sf::st_set_geometry('geometry')
 
   # omit non-constant attributes from the station location points object
-  nm_return = c('station_num', 'station_id', 'station_name', 'elevation', 'log_elevation', 'geometry')
+  nm_return = c('station_num', 'station_id', 'station_name', 'elevation', 'sqrt_elevation', 'geometry')
   station_sf = station_sf[, names(station_sf) %in% nm_return] |> sf::st_set_geometry('geometry')
   return(station_sf)
 }
