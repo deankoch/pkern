@@ -227,7 +227,7 @@ pkern_GLS = function(g_obs, pars, X=NA, fac=NULL, fac_method='eigen', out='b')
 #'
 #'
 pkern_fit = function(g_obs, pars=NULL, X=NA, iso=TRUE, initial=NULL, quiet=FALSE,
-                     lower=NULL, upper=NULL)
+                     lower=NULL, upper=NULL, n_max=1e3)
 {
   # unpack vectorized grid as list
   g_obs = pkern_grid(g_obs)
@@ -237,6 +237,10 @@ pkern_fit = function(g_obs, pars=NULL, X=NA, iso=TRUE, initial=NULL, quiet=FALSE
   is_obs = !is.na(g_obs[['gval']])
   if( !any(is_obs) ) stop('no data found in g_obs')
   n_all = prod(gdim)
+  n_obs = sum(is_obs)
+
+  # problem size sanity check
+  if( (n_obs < n_all) & (n_obs > n_max) ) stop('number of observed points exceeded n_max')
 
   # # handle sparse indexing
   # if( is.null(g[['idx_grid']]) )
@@ -301,8 +305,8 @@ pkern_fit = function(g_obs, pars=NULL, X=NA, iso=TRUE, initial=NULL, quiet=FALSE
 
   # fit the model
   #v = var(g[['gval']], na.rm=TRUE)
-  result_optim = pkern_optim(g_obs, pars, X=X, iso=iso, initial=initial, quiet=quiet,
-                             lower=lower, upper=upper)
+  result_optim = pkern_optim(g_obs, pars, X=X, iso=iso, quiet=quiet,
+                             lower=lower, initial=initial, upper=upper)
   pars_out = result_optim[['pars']]
 
   # # check sequence of likely psill substitutions
@@ -402,7 +406,7 @@ pkern_fit = function(g_obs, pars=NULL, X=NA, iso=TRUE, initial=NULL, quiet=FALSE
 #' pkern_optim(g_obs, pars, iso=T, quiet=TRUE)
 #'
 pkern_optim = function(g_obs, pars='gau', X=0, iso=FALSE, control=list(), quiet=FALSE,
-                       log_scale=TRUE, method='L-BFGS-B', ...)
+                       log_scale=TRUE, method='L-BFGS-B', lower=NULL, initial=NULL, upper=NULL)
 {
   # only L-BFGS-B accepts bounds, so log-scale is mandatory for other methods
   if( (method != 'L-BFGS-B' & !log_scale) )
@@ -432,6 +436,11 @@ pkern_optim = function(g_obs, pars='gau', X=0, iso=FALSE, control=list(), quiet=
 
   # get default initial values and bounds data frame
   pars_df = pkern_bds(pars_fix, g_obs)[nm_fit,]
+
+  # then overwrite with any user supplied settings
+  if( !is.null(lower) ) pars_df[['lower']] = lower
+  if( !is.null(initial) ) pars_df[['initial']] = initial
+  if( !is.null(upper) ) pars_df[['upper']] = upper
 
   # switch to log-scale if requested
   if(log_scale)
@@ -559,9 +568,11 @@ pkern_cmean = function(g_obs, pars, X=NA, fac=NULL, out='p', fac_method='chol', 
   gdim = g_obs[['gdim']]
   gres = g_obs[['gres']]
 
-  # copy non-NA data as needed
-  is_obs = !is.na(g_obs[['gval']])
+  # identify observed data points and copy their index
+  is_obs = is_obs_src = !is.na(g_obs[['gval']])
   idx_obs = which( is_obs )
+
+  # copy non-NA data
   z = g_obs[['gval']][is_obs]
   if( is.null(z) ) stop('No non-NA values found in g_obs')
   n_obs = length(z)
@@ -576,9 +587,10 @@ pkern_cmean = function(g_obs, pars, X=NA, fac=NULL, out='p', fac_method='chol', 
   cy = cy_obs = sqrt(pars[['psill']]) * pkern_corr_mat(pars[['y']], gdim[['y']], gres[['y']], i=1)
   cx = cx_obs = sqrt(pars[['psill']]) * pkern_corr_mat(pars[['x']], gdim[['x']], gres[['x']], i=1)
 
-  # set up factorization when not supplied. Variance mode forces eigen-decomposition
+  # set up factorization when it's not supplied. Variance mode forces eigen-decomposition
   if( startsWith(out, 'v') ) fac_method = 'eigen'
 
+  # check for completeness and separability
   is_sep = n == n_obs
 
   # check for sub-grid structure and substitute simpler equivalent problem if possible
@@ -595,6 +607,7 @@ pkern_cmean = function(g_obs, pars, X=NA, fac=NULL, out='p', fac_method='chol', 
 
     # g_obs should have no missing (NA) data points now
     is_obs = rep(TRUE, n_obs)
+    # (is_obs_src still contains original observed index)
 
   } else {
 
@@ -613,7 +626,7 @@ pkern_cmean = function(g_obs, pars, X=NA, fac=NULL, out='p', fac_method='chol', 
   if(use_GLS)
   {
     # make a copy of the observed locations in X
-    if( !anyNA(X) ) { X_obs = matrix(X[is_obs,], n_obs) } else {
+    if( !anyNA(X) ) { X_obs = matrix(X[is_obs_src,], n_obs) } else {
       X = NULL
       X_obs = NA
     }
@@ -626,7 +639,9 @@ pkern_cmean = function(g_obs, pars, X=NA, fac=NULL, out='p', fac_method='chol', 
     X_p_tilde = gls[['x']] |>
       pkern_var_mult(pars, fac=fac) |>
       apply(2, \(x) pkern_toep_mult(cy, x, cx, idx_obs, gdim))
-    X_p_tilde[idx_obs,] = gls[['x']]
+
+    # uncomment to get exact interpolator (and discontinuities at observations)
+    #X_p_tilde[idx_obs,] = gls[['x']]
 
     # compute trend and 'm'
     X_adj = cbind(rep(1, n), X) - X_p_tilde
@@ -674,6 +689,7 @@ pkern_cmean = function(g_obs, pars, X=NA, fac=NULL, out='p', fac_method='chol', 
   # large loop over eigen-values of covariance matrix, iteratively adding to v_rem
   v_rem = numeric(n)
   if(!quiet) pb = utils::txtProgressBar(max=n_obs, style=3)
+
   for(idx in seq(n_obs))
   {
     # update progress bar then change to reordered index
@@ -696,9 +712,6 @@ pkern_cmean = function(g_obs, pars, X=NA, fac=NULL, out='p', fac_method='chol', 
       add_yx = ( pars[['psill']] * kronecker(add_x2[, idx_yx[['j']]], add_y2[, idx_yx[['i']]]) )^2
       v_add = ev[idx] * add_yx
     }
-
-    # add to running total in v
-    v_rem[] = v_rem[] + as.numeric(v_add)
   }
   if(!quiet) close(pb)
   return(pars[['psill']] + pars[['eps']] + as.numeric(v_gls) - v_rem)
