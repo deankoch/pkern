@@ -458,7 +458,6 @@ pkern_rescale = function(g, up=NULL, down=NULL)
     g[['gres']] = g[['gres']] * up
     g[['gdim']] = gdim_new
     g[['gyx']] = Map(function(yx, idx) yx[idx], yx=g[['gyx']], idx=ij_values)
-
     return(g)
   }
 
@@ -471,6 +470,7 @@ pkern_rescale = function(g, up=NULL, down=NULL)
   gres_new = g[['gres']] / down
   g_new = pkern_grid(list(gdim=gdim_new, gres=gres_new), vals=!is.null(g[['gval']]))
   g_new[['gyx']] = Map(function(old, new) new + old[1], old=g[['gyx']], new=g_new[['gyx']])
+  g_new[['crs']] = g[['crs']]
 
   # copy data to the sub-grid of the output and return
   ij_sub = stats::setNames(Map(function(d, b) seq(1, d, b), d=gdim_new, b=down), c('i', 'j'))
@@ -662,7 +662,7 @@ pkern_sub_find = function(g_obs, gdim=NULL)
 #'
 #' }
 #'
-pkern_coords = function(g, out='matrix', corner=FALSE)
+pkern_coords = function(g, out='matrix', corner=FALSE, quiet=FALSE)
 {
   # unpack input and slice multi-layer input
   g = pkern_grid(g)
@@ -699,7 +699,7 @@ pkern_coords = function(g, out='matrix', corner=FALSE)
   if( !startsWith(out, 'sf') ) stop('Argument `out` must be either "list", "matrix", or "sf"')
   sf_loaded = requireNamespace('sf', quietly=TRUE)
   if( !sf_loaded ) stop('sf package not loaded. Try library(sf)')
-  cat(paste('processing', prod(g[['gdim']]), 'grid points...\n'))
+  if( !quiet ) cat(paste('processing', prod(g[['gdim']]), 'grid points...\n'))
 
   # create the points object
   if( is.null(g[['crs']]) ) g[['crs']] = ''
@@ -707,6 +707,6 @@ pkern_coords = function(g, out='matrix', corner=FALSE)
 
   # copy any data and return
   if( !is.null(g[['gval']]) & !corner ) sf_out['gval'] = g[['gval']]
-  return(sf_out)
+  return(sf_out[2:1])
 }
 
