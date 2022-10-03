@@ -102,7 +102,7 @@ mean(g_miss$gval, na.rm=TRUE)
 z_extra = lapply(seq(9), function(x) pkern_sim(g, pars))
 z_multi = lm_actual + do.call(cbind, c(list(z), z_extra))
 
-# multi-layer example with sparse grid specification
+# multi-layer example with missing data
 is_obs = !is.na(g_miss$gval)
 map_sparse = match(seq(n), which(is_obs))
 g_sparse = modifyList(g_miss, list(gval=z_multi[is_obs,], idx_grid=map_sparse))

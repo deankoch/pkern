@@ -4,7 +4,7 @@
 \alias{pkern_snap}
 \title{Snap a set of points to a grid}
 \usage{
-pkern_snap(from, g = NULL, crop_from = FALSE, crop_g = FALSE)
+pkern_snap(from, g = NULL, crop_from = FALSE, crop_g = FALSE, quiet = FALSE)
 }
 \arguments{
 \item{from}{matrix, data frame, or points object from \code{sp} or \code{sf}, the source points}
@@ -27,14 +27,14 @@ In cases of duplicate mappings, the function returns the first matches only.
 }
 \details{
 \code{from} can be a geometry collection from packages \code{sf} or \code{sp}, or a matrix or list
-of y and x coordinates (and, optionally, data values to copy to the snapped grid
-points). When \code{from} is a matrix, its first two columns should by y and x, and the
-(optional) third the data. When \code{from} is a list, the function expects (two or three)
-vectors of equal length, ordered as above.
+of y and x coordinates. When \code{from} is a matrix, its first two columns should be the
+y and x coordinates (in that order), and the (optional) third column should be the
+data. When \code{from} is a list, the function expects (two or three) vectors of equal
+length, ordered as above.
 
-When \code{from} is a geometry collection with a CRS string, points are first transformed
-to the coordinate reference system of \code{g}. If one or both of \code{from} and \code{g} are missing
-a CRS definition, the function assumes the same one is shared in both.
+When \code{from} is a geometry collection with a coordinates reference system (CRS) string,
+points are first transformed to the CRS of \code{g}. If one or both of \code{from} and \code{g} are
+missing a CRS definition, the function assumes the same one is shared in both.
 
 \code{g} can be a raster geometry object (such as SpatRaster), in which case the function
 behaves like \code{terra::rasterize}. It can also be a matrix (supplying dimensions) or a
@@ -46,7 +46,8 @@ lines is derived, centered under the bounding box of the points.
 and the snapped \code{from} points. If \code{crop_from=TRUE} and \code{crop_g=FALSE} the output
 grid will match \code{g} exactly. If \code{crop_from=FALSE} and \code{crop_g=TRUE} the output
 grid will include all snapped points, and possibly omit some or all of \code{g}. And if
-both are \code{TRUE}, the output grid encloses the intersection of the points and \code{g}.
+both are \code{TRUE}, the output grid encloses the intersection of the points with the
+bounding box of \code{g}.
 }
 \examples{
 
@@ -70,36 +71,36 @@ from[['x']] = from[['x']] + 15
 # add example data values and plot
 from[['z']] = rnorm(length(from[['y']]))
 pkern_plot(g, reset=FALSE)
-graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
+graphics::points(from[c('x', 'y')], pch=16, col=my_col(from[['z']]))
 graphics::points(from[c('x', 'y')])
 
-# snap points and plot
-g_snap = pkern_snap(from, g)
+# snap only the points overlying the input grid
+g_snap = pkern_snap(from, g, crop_from=TRUE)
+pkern_plot(g_snap, col_grid='black', reset=FALSE, leg=FALSE)
+graphics::points(from[c('x', 'y')], pch=16, col=my_col(from[['z']]))
+graphics::points(from[c('x', 'y')])
+
+# snap points with  and plot (default settings)
+g_snap = pkern_snap(from, g, crop_from=FALSE, crop_g=FALSE)
 pkern_plot(g_snap, col_grid='black', reset=FALSE)
-graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
+graphics::points(from[c('x', 'y')], pch=16, col=my_col(from[['z']]))
 graphics::points(from[c('x', 'y')])
 
 # find smallest subgrid enclosing all snapped grid points
 g_snap = pkern_snap(from, g, crop_g=TRUE)
 pkern_plot(g_snap, col_grid='black', reset=FALSE)
-graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
-graphics::points(from[c('x', 'y')])
-
-# snap only the points overlying the input grid
-g_snap = pkern_snap(from, g, crop_from=TRUE)
-pkern_plot(g_snap, col_grid='black', reset=FALSE)
-graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
+graphics::points(from[c('x', 'y')], pch=16, col=my_col(from[['z']]))
 graphics::points(from[c('x', 'y')])
 
 # create a new grid of different resolution enclosing all input points
 g_snap = pkern_snap(from, g=list(gres=c(0.5, 0.5)))
-pkern_plot(g_snap, reset=FALSE)
-graphics::points(from[c('x', 'y')], pch=16, col=my_col((from[['z']])))
+pkern_plot(g_snap, reset=FALSE, col_grid='black')
+graphics::points(from[c('x', 'y')], pch=16, col=my_col(from[['z']]))
 graphics::points(from[c('x', 'y')])
 
 if( requireNamespace('sf') ) {
 
-# a different example, snapping misaligned subgrid
+# a different example, snapping mis-aligned subgrid
 g_pts = pkern_grid(list(gdim=c(15, 8), gres=1.7), vals=FALSE)
 g_pts[['gyx']][['y']] = g_pts[['gyx']][['y']] + 5
 g_pts[['gyx']][['x']] = g_pts[['gyx']][['x']] + 5
@@ -128,8 +129,8 @@ g_snap = pkern_snap(from=eg_sfc, g)
 pkern_plot(g_snap, ij=TRUE, reset=FALSE, col_grid='black')
 plot(eg_sfc, add=TRUE)
 
-# with trim=TRUE
-g_snap = pkern_snap(from=eg_sfc, g, trim=TRUE)
+# with crop_g=TRUE)
+g_snap = pkern_snap(from=eg_sfc, g, crop_g=TRUE)
 pkern_plot(g_snap, reset=FALSE, col_grid='black')
 plot(eg_sfc, add=TRUE)
 

@@ -28,22 +28,22 @@ of the NAs; eg if a single point missing from the sub-grid, or a single non-NA p
 outside the sub-grid, the function will fail to detect the sub-grid and return NULL. If no
 points are NA, the function returns indices for the full grid.
 
-In the special case that \code{g_obs} is a logical vector, it is interpreted as indicating
-the non-NA locations in a grid (and isn't itself checked for NAs). the argument \code{gdim}
-must be supplied in this case. When grid dimensions can otherwise be derived from
-\code{g_obs}, the function does so and overrides any argument to \code{gdim}.
+In the special case that \code{g_obs} is a logical vector, it should indicate the the non-NA
+locations in a grid with dimensions \code{gdim}. Otherwise, grid dimensions are extracted
+from \code{g_obs}, overriding any argument to \code{gdim}.
 }
 \examples{
 
 # define a grid and example data
 gdim = c(50, 53)
-g = pkern_grid(gdim)
-gval = pkern_sim(g, modifyList(pkern_pars(g), list(eps=0)), quiet=TRUE)
-g_obs = modifyList(g, list(gval=gval))
+g_bare = pkern_grid(gdim)
+gval = pkern_sim(g_bare, modifyList(pkern_pars(g), list(eps=1e-12)))
+g_obs = modifyList(g_bare, list(gval=gval))
 pkern_plot(g_obs)
 
-# define a supergrid containing the original data and make sure we can find it
+# define a super-grid containing the original data and make sure we can find it
 g_obs_big = pkern_rescale(g_obs, down=3)
+pkern_plot(g_obs_big)
 str(pkern_sub_find(g_obs_big))
 
 # define a smaller sub-grid at random
@@ -55,22 +55,23 @@ ij_first = sapply(gdim - ( spacing * gdim_sg ), function(x) sample.int(x, 1))
 ij_sg = Map(\(idx, r, n) seq(idx, by=r, length.out=n), idx=ij_first, r=spacing, n=gdim_sg)
 is_sg = pkern_sub_idx(gdim, ij_sg, idx=FALSE)
 
-# sub grids with side length 1 have no spacing defined along that dimension
-spacing[gdim_sg==1] = NA
-
 # assign values to the sub-grid points
-g = pkern_grid(gdim)
-g$gval[is_sg] = TRUE
-pkern_plot(g, zlab='sub-grid')
+g_obs_sub = g_bare
+g_obs_sub$gval[is_sg] = gval[is_sg]
+pkern_plot(g_obs)
+pkern_plot(g_obs_sub, zlab='sub-grid')
 
-# call the function on g and check for expected results
-subgrid_result = pkern_sub_find(g)
+# call the function and check for expected results
+subgrid_result = pkern_sub_find(g_obs_sub)
 all.equal(unname(subgrid_result$gdim), gdim_sg)
 all.equal(unname(subgrid_result$ij), ij_sg)
+
+# sub grids with side length 1 have no spacing defined along that dimension
+spacing[gdim_sg==1] = NA
 all.equal(unname(subgrid_result$res_scale), spacing)
 
 # or call on the vector and supply gdim separately
-identical(subgrid_result, pkern_sub_find(g$gval, g_obs$gdim))
-identical(subgrid_result, pkern_sub_find(!is.na(g$gval), g$gdim))
+identical(subgrid_result, pkern_sub_find(g_obs_sub$gval, g_obs_sub$gdim))
+identical(subgrid_result, pkern_sub_find(!is.na(g_obs_sub$gval), g_obs_sub$gdim))
 
 }

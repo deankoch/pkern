@@ -4,7 +4,7 @@
 \alias{pkern_coords}
 \title{Return coordinates of a grid of points in column-vectorized order}
 \usage{
-pkern_coords(g, out = "matrix", corner = FALSE)
+pkern_coords(g, out = "matrix", corner = FALSE, quiet = FALSE)
 }
 \arguments{
 \item{g}{any object accepted by \code{pkern_grid}}

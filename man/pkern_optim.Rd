@@ -13,7 +13,9 @@ pkern_optim(
   quiet = FALSE,
   log_scale = TRUE,
   method = "L-BFGS-B",
-  ...
+  lower = NULL,
+  initial = NULL,
+  upper = NULL
 )
 }
 \arguments{
@@ -30,9 +32,6 @@ pkern_optim(
 \item{quiet}{logical, indicating to suppress console output}
 
 \item{...}{named arguments to pass to \code{pkern_bds}}
-}
-\value{
-
 }
 \description{
 documentation unfinished

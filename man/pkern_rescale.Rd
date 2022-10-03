@@ -42,7 +42,8 @@ with \code{pkern_rescale(g_fine, up=down)}.
 # example data
 gdim = c(50, 53)
 g = pkern_grid(gdim)
-gval = pkern_sim(g, modifyList(pkern_pars(g), list(eps=1e-6)))
+pars = modifyList(pkern_pars(g), list(eps=1e-6))
+gval = pkern_sim(g, pars)
 g_obs = modifyList(g, list(gval=gval))
 pkern_plot(g_obs)
 
@@ -63,8 +64,18 @@ g_obs_compare = pkern_rescale(pkern_rescale(g=g_obs, down=c(5,3)), up=c(5,3))
 identical(g_obs, g_obs_compare)
 
 # multi-layer example with missing data
-gval_multi = pkern_sim(g, modifyList(pkern_pars(g), list(eps=1e-6)))
+n_pt = prod(gdim)
+n_layer = 3
 
+# generate some data and omit 50\% of it
+gval_multi = pkern_sim(pkern_grid(list(gdim=gdim, gval=matrix(NA, n_pt, n_layer))), pars)
+idx_miss = sample.int(n_pt, round(0.5*n_pt))
+gval_multi[idx_miss,] = NA
 
+# plot third layer, then down-scaled and up-scaled versions
+g_sim_multi = modifyList(g, list(gval=gval_multi))
+pkern_plot(g_sim_multi, layer=3)
+pkern_plot(pkern_rescale(g=g_sim_multi, down=2), layer=3)
+pkern_plot(pkern_rescale(g=g_sim_multi, up=2), layer=3)
 
 }

@@ -4,7 +4,7 @@
 \alias{pkern_plot_semi}
 \title{Plot a semi-variogram}
 \usage{
-pkern_plot_semi(vg, pars = NULL, add = FALSE, fun = "root_mean", ...)
+pkern_plot_semi(vg, pars = NULL, add = FALSE, fun = "classical", ...)
 }
 \arguments{
 \item{vg}{data frame of sample absolute differences, with columns 'dabs', 'd' (and 'bin')}
@@ -118,8 +118,8 @@ pkern_plot_semi(vg)
 
 # different aggregation methods
 pkern_plot_semi(vg, fun='root_median')
-pkern_plot_semi(vg, fun='root_mean') # default
-pkern_plot_semi(vg, fun='classical')
+pkern_plot_semi(vg, fun='root_mean')
+pkern_plot_semi(vg, fun='classical') # default
 pkern_plot_semi(vg, fun=function(x) mean(x^2)) # same as classical
 
 # plot again with reference model and adjust distance limits, number of bins

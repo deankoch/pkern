@@ -12,14 +12,16 @@ pkern_fit(
   initial = NULL,
   quiet = FALSE,
   lower = NULL,
-  upper = NULL
+  upper = NULL,
+  n_max = 1000
 )
 }
 \arguments{
-\item{X}{}
-}
-\value{
+\item{g_obs}{todo}
 
+\item{pars}{todo}
+
+\item{X}{todo}
 }
 \description{
 An automated model fitting procedure

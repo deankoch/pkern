@@ -15,7 +15,7 @@ pkern_grid(g, vals = TRUE)
 named list containing at least 'gyx', 'gres', and 'gdim' (see details)
 }
 \description{
-Constructs a list representing a 2-dimensional spatial grid of data
+Constructs a list representing a 2-dimensional regular spatial grid of data
 }
 \details{
 This function constructs pkern grid list objects, accepting 'RasterLayer' and 'RasterStack'
@@ -33,7 +33,8 @@ The function returns a list with the following 3-6 elements:
 \item gdim: the (integer) number of y and x grid lines
 }
 
-The last three elements are required to define a valid \code{pkern} grid list object.
+The last three elements are required to define a valid \code{pkern} grid list object. Note that
+regular grids must have equally spaced grid lines in \code{gyx}.
 
 The input \code{g} can itself be a list containing some/all of these elements (including at least
 one of 'gdim' or 'gyx'), and the function will fill in missing entries wherever possible:
@@ -99,6 +100,24 @@ pkern_plot(g, xlab='x = j', ylab='y = 26 - i', zlab='j mod i')
 # data vectors should be in R's default matrix vectorization order
 all.equal(eg_vec, as.vector(eg_mat))
 all.equal(g, pkern_grid(list(gdim=gdim, gval=as.vector(eg_mat))))
+
+# multi-layer example from matrix
+n_pt = prod(gdim)
+n_layer = 3
+mat_multi = matrix(rnorm(n_pt*n_layer), n_pt, n_layer)
+g_multi = pkern_grid(list(gdim=gdim, gval=mat_multi))
+str(g_multi)
+
+# repeat with missing data (note all columns must have consistent NA structure)
+mat_multi[sample.int(n_pt, 0.5*n_pt),] = NA
+g_multi_miss = pkern_grid(list(gdim=gdim, gval=mat_multi))
+str(g_multi_miss)
+
+# only observed data points are stored, idx_grid maps them to the full grid vector
+max(abs( g_multi$gval - g_multi_miss$gval[g_multi_miss$idx_grid,] ), na.rm=TRUE)
+
+# vals=FALSE drops multi-layer information
+pkern_grid(g=list(gdim=gdim, gval=mat_multi), vals=FALSE)
 
 if( requireNamespace('raster') ) {
 
