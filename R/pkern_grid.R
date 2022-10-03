@@ -207,6 +207,7 @@ pkern_grid = function(g, vals=TRUE)
     gyx = lapply(gyx, sort)
 
     # recursive call to validate and set names
+    pkern_grid(list(gval=gval, crs=gcrs, gyx=gyx, gres=gres, gdim=gdim), vals=vals)
     return( pkern_grid(list(gval=gval, crs=gcrs, gyx=gyx, gres=gres, gdim=gdim), vals=vals) )
   }
 
@@ -293,10 +294,11 @@ pkern_grid = function(g, vals=TRUE)
                        r=g[['gres']])
     } else {
 
+      # TODO: figure out a better threshold or produce a more informative warning
       # check that the grid is regular
       g_spacing = lapply(g[['gyx']], function(r) diff(r) )
       is_regular = sapply(g_spacing, function(s) max(abs(s[1] - s)) < .Machine[['double.eps']] )
-      if( any(!is_regular) ) stop('grid line positions gyx were not regular')
+      #if( any(!is_regular) ) warning('grid line positions gyx were not regular')
     }
 
     # check number of dimensions
@@ -590,7 +592,7 @@ pkern_export = function(g, template='terra')
 #'
 #' }
 #'
-pkern_snap = function(from, g=NULL, crop_from=FALSE, crop_g=FALSE)
+pkern_snap = function(from, g=NULL, crop_from=FALSE, crop_g=FALSE, quiet=FALSE)
 {
   # set up more appropriate grid lines later when input g doesn't specify them
   gres_input = NULL
@@ -711,16 +713,27 @@ pkern_snap = function(from, g=NULL, crop_from=FALSE, crop_g=FALSE)
   if( !is.null(to_crs) ) g_out[['crs']] = to_crs
 
   # find cross-distance matrices for point coordinates and grid lines
-  d_yx_all = Map(function(a, b) abs( outer(a, b, '-'))^2, a=from_yx, b=to_yx)
+  d_yx_all = Map(function(a, b) outer(a, b, '-')^2, a=from_yx, b=to_yx)
 
-  # find minimum distance mappings
+  # find minimum distance mappings in each dimension
   ij_min = stats::setNames(lapply(d_yx_all, function(d) max.col(-d, ties.method='f')), c('i', 'j'))
+
+  # print maximum snapping distance
+  if(!quiet)
+  {
+    # find component squared distances then print the maximum
+    dy = mapply(function(i, j) d_yx_all[['y']][i, j], i=seq_along(ij_min[['i']]), j=ij_min[['i']])
+    dx = mapply(function(i, j) d_yx_all[['x']][i, j], i=seq_along(ij_min[['j']]), j=ij_min[['j']])
+    cat(paste('maximum snapping distance:', max(sqrt(dx+dy)), '\n'))
+  }
+
+  # reflect indexing of vertical axis for pkern
   ij_min[['i']] = g_out[['gdim']]['y'] + 1L - ij_min[['i']]
   to_idx = pkern_mat2vec(ij_min, g_out[['gdim']])
 
   # handle multiple points mapping to a single grid-point
   is_dupe = duplicated(to_idx)
-  if( any(is_dupe) ) warning( paste('omitting', sum(is_dupe), 'duplicate mapping(s)') )
+  if( !quiet & any(is_dupe) ) warning( paste('omitting', sum(is_dupe), 'duplicate mapping(s)') )
 
   # match magic to get NAs at unassigned grid points
   to_all = seq( prod(g_out[['gdim']]) )
