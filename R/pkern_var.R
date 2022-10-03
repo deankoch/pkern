@@ -747,7 +747,7 @@ pkern_toep_mult = function(y, z=NULL, x=NULL, idx_obs=NULL, gdim=NULL)
 
   # find amount of zero padding needed to get next highest composite dimension
   n_y = length(y)
-  n_pad = stats::nextn(n_y) - n_y
+  n_pad = 2*( stats::nextn(n_y) - n_y )
   z_pad = rep(0, n_y + n_pad)
 
   # normalization constant for inverse fft
