@@ -7,6 +7,11 @@ an R package for modeling Gaussian processes on grids
 <img src="https://raw.githubusercontent.com/deankoch/pkern/main/vignettes/meuse_vignette_files/figure-gfm/predictor_plot-1.png" width="30%"></img>
 <img src="https://raw.githubusercontent.com/deankoch/pkern/main/vignettes/meuse_vignette_files/figure-gfm/variance_plot-1.png" width="30%"></img>
 
+# Update October 2023
+
+pkern is no longer in development. Last year, I rebranded it as snapKrig and released it on [CRAN](https://cran.r-project.org/package=snapKrig). 
+
+Head over to my [snapKrig project page](https://github.com/deankoch/snapKrig) to get started.
 
 # Update June 2022
 
